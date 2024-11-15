@@ -15,7 +15,10 @@ def ingest_gml_files():
             '-progress',
             '-lco', 'GEOMETRY_NAME=geometry',
             '-skipfailures',
-            '-nlt', 'PROMOTE_TO_MULTI',
+            '-nlt', 'CONVERT_TO_LINEAR',
+            '-nlt', 'MULTIPOLYGON',
+            '-s_srs', 'EPSG:25832',
+            '-t_srs', 'EPSG:4326',
             DATABASE_URL,
             gml_file
         ]
