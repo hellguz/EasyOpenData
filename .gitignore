@@ -1,0 +1,19 @@
+# Ignore local data files
+data_local/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Other ignores
+*.so
+
+*.gml
+*.gfs
+
+#venv
+venv/
+.venv/

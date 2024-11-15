@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary
+sqlalchemy
+geoalchemy2
+gdal
+# Additional dependencies
+python-multipart  # For handling form data if needed
