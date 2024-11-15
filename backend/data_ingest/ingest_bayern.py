@@ -13,6 +13,9 @@ def ingest_gml_files():
             '-f', 'PostgreSQL',
             '-overwrite',
             '-progress',
+            '-lco', 'GEOMETRY_NAME=geometry',
+            '-skipfailures',
+            '-nlt', 'PROMOTE_TO_MULTI',
             DATABASE_URL,
             gml_file
         ]

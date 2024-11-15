@@ -9,5 +9,4 @@ class Building(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    geom = Column(Geometry('GEOMETRYZ', srid=4326))  # Adjust geometry type as needed
-
+    geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
