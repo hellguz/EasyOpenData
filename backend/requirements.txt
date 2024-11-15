@@ -7,4 +7,6 @@ geoalchemy2
 # Additional dependencies
 python-multipart
 geojson
-
+anyio
+pydantic
+packaging

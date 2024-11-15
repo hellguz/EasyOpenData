@@ -2,49 +2,83 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>EasyOpenData - Nürnberg 3D Buildings</title>
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.97/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.97/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <title>EasyOpenData - Nürnberg Buildings</title>
+    <!-- Leaflet CSS -->
+    <link 
+        rel="stylesheet" 
+        href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" 
+    />
     <style>
-        html, body, #cesiumContainer {
-            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+        html, body, #map {
+            width: 100%; 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-    <div id="cesiumContainer"></div>
+    <div id="map"></div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script>
-        // Initialize the Cesium Viewer
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            terrainProvider: Cesium.createWorldTerrain()
-        });
+        document.addEventListener("DOMContentLoaded", function() {
+            console.log("DOM fully loaded and parsed");
 
-        // Center the view on Nürnberg
-        viewer.camera.setView({
-            destination : Cesium.Cartesian3.fromDegrees(11.074, 49.45, 10000.0)
-        });
+            // Initialize the Leaflet map
+            try {
+                const map = L.map('map').setView([49.4497, 11.0683], 14); // Centered on Nürnberg
+                console.log("Leaflet map initialized");
 
-        // Fetch the building data from the backend
-        fetch('http://localhost:8000/buildings/nuremberg')
-            .then(response => response.json())
-            .then(data => {
-                // Load the GeoJSON data into Cesium
-                viewer.dataSources.add(Cesium.GeoJsonDataSource.load(data, {
-                    clampToGround: true
-                })).then(function(dataSource) {
-                    // Adjust the style of the buildings
-                    const entities = dataSource.entities.values;
-                    for (let i = 0; i < entities.length; i++) {
-                        const entity = entities[i];
-                        entity.polygon.material = Cesium.Color.ORANGE.withAlpha(0.5);
-                        entity.polygon.extrudedHeight = 50; // Example height
+                // Add CartoDB Dark Matter tile layer
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(map);
+                console.log("Dark Matter tile layer added to map");
+
+                // Function to fetch and display buildings
+                async function loadBuildings() {
+                    console.log("Fetching building data...");
+                    try {
+                        const response = await fetch('http://localhost:8000/buildings/nuremberg');
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const data = await response.json();
+                        console.log("Building data fetched:", data);
+
+                        // Define a GeoJSON layer
+                        const buildingsLayer = L.geoJSON(data, {
+                            style: function(feature) {
+                                // You can style based on properties, e.g., building height
+                                return {
+                                    color: 'orange',
+                                    weight: 1,
+                                    fillColor: 'darkorange',
+                                    fillOpacity: 0.6
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                if (feature.properties && feature.properties.name) {
+                                    layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+                                }
+                            }
+                        }).addTo(map);
+                        console.log("Buildings layer added to map");
+                    } catch (error) {
+                        console.error('Error fetching building data:', error);
                     }
-                });
-            })
-            .catch(error => {
-                console.error('Error fetching building data:', error);
-            });
+                }
+
+                // Load buildings on map load
+                loadBuildings();
+            } catch (error) {
+                console.error("Error initializing Leaflet map:", error);
+            }
+        });
     </script>
 </body>
 </html>
-

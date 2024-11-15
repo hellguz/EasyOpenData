@@ -16,3 +16,6 @@ This is a simple frontend HTML page that displays 3D buildings of Nürnberg usin
 
    ```bash
    uvicorn main:app --reload
+
+
+python -m http.server 8080
