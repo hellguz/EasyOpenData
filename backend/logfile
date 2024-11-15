@@ -1,0 +1,172 @@
+2024-11-15 18:38:11.265 CET [7184] LOG:  starting PostgreSQL 17.1 on x86_64-windows, compiled by msvc-19.29.30154, 64-bit
+2024-11-15 18:38:11.270 CET [7184] LOG:  listening on IPv6 address "::1", port 5432
+2024-11-15 18:38:11.270 CET [7184] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2024-11-15 18:38:11.369 CET [62672] LOG:  database system was interrupted; last known up at 2024-11-15 18:20:51 CET
+2024-11-15 18:38:14.055 CET [62672] LOG:  database system was not properly shut down; automatic recovery in progress
+2024-11-15 18:38:14.063 CET [62672] LOG:  redo starts at 0/33536A0
+2024-11-15 18:38:14.063 CET [62672] LOG:  invalid record length at 0/33537E0: expected at least 24, got 0
+2024-11-15 18:38:14.063 CET [62672] LOG:  redo done at 0/33537A8 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2024-11-15 18:38:14.073 CET [2136] LOG:  checkpoint starting: end-of-recovery immediate wait
+2024-11-15 18:38:14.091 CET [2136] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.004 s, sync=0.004 s, total=0.023 s; sync files=2, longest=0.002 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/33537E0, redo lsn=0/33537E0
+2024-11-15 18:38:14.114 CET [7184] LOG:  database system is ready to accept connections
+2024-11-15 18:38:41.601 CET [47912] FATAL:  role "user" does not exist
+2024-11-15 18:39:17.215 CET [54572] ERROR:  could not access file "$libdir/postgis-3": No such file or directory at character 71
+2024-11-15 18:39:17.215 CET [54572] STATEMENT:  
+	CREATE TABLE buildings (
+		id SERIAL NOT NULL, 
+		name VARCHAR, 
+		geom geometry(MULTIPOLYGONZ,4326), 
+		PRIMARY KEY (id)
+	)
+	
+	
+2024-11-15 18:39:21.532 CET [74188] ERROR:  could not access file "$libdir/postgis-3": No such file or directory at character 71
+2024-11-15 18:39:21.532 CET [74188] STATEMENT:  
+	CREATE TABLE buildings (
+		id SERIAL NOT NULL, 
+		name VARCHAR, 
+		geom geometry(MULTIPOLYGONZ,4326), 
+		PRIMARY KEY (id)
+	)
+	
+	
+2024-11-15 18:43:58.372 CET [20628] FATAL:  role "barcelona" does not exist
+2024-11-15 18:43:58.431 CET [62368] FATAL:  role "barcelona" does not exist
+2024-11-15 18:45:03.075 CET [46308] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:45:03.075 CET [46308] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:45:03.075 CET [46308] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:45:12.000 CET [46308] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:45:12.000 CET [46308] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:45:12.000 CET [46308] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:45:29.992 CET [46308] ERROR:  extension "postgis" already exists
+2024-11-15 18:45:29.992 CET [46308] STATEMENT:  CREATE EXTENSION postgis;
+	
+	
+2024-11-15 18:45:35.309 CET [46308] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:45:35.309 CET [46308] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:45:35.309 CET [46308] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:45:53.160 CET [46308] ERROR:  extension "postgis" already exists
+2024-11-15 18:45:53.160 CET [46308] STATEMENT:  CREATE EXTENSION postgis;
+	
+2024-11-15 18:46:05.005 CET [46308] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:46:05.005 CET [46308] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:46:05.005 CET [46308] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:48:14.108 CET [2136] LOG:  checkpoint starting: time
+2024-11-15 18:48:14.344 CET [2136] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.218 s, sync=0.004 s, total=0.237 s; sync files=2, longest=0.002 s, average=0.002 s; distance=3 kB, estimate=3 kB; lsn=0/3354720, redo lsn=0/33546C8
+2024-11-15 18:50:14.717 CET [69312] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:50:14.717 CET [69312] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:50:14.717 CET [69312] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:50:18.954 CET [69312] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:50:18.954 CET [69312] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:50:18.954 CET [69312] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:50:48.436 CET [69312] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:50:48.436 CET [69312] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:50:48.436 CET [69312] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:50:49.348 CET [69312] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:50:49.348 CET [69312] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:50:49.348 CET [69312] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:50:50.975 CET [69312] ERROR:  could not access file "$libdir/postgis-3": No such file or directory
+2024-11-15 18:50:50.975 CET [69312] CONTEXT:  SQL statement "SELECT public.postgis_lib_version()"
+	PL/pgSQL function postgis_full_version() line 28 at SQL statement
+2024-11-15 18:50:50.975 CET [69312] STATEMENT:  SELECT PostGIS_full_version();
+	
+2024-11-15 18:52:08.061 CET [69312] ERROR:  extension "postgis" is not available
+2024-11-15 18:52:08.061 CET [69312] DETAIL:  Could not open extension control file "C:/Users/Egor Gavrilov/miniconda3/Library/share/extension/postgis.control": No such file or directory.
+2024-11-15 18:52:08.061 CET [69312] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+2024-11-15 18:52:08.061 CET [69312] STATEMENT:  DROP EXTENSION IF EXISTS postgis CASCADE;
+	CREATE EXTENSION postgis;
+	
+2024-11-15 19:01:12.336 CET [68052] LOG:  starting PostgreSQL 17.1 on x86_64-windows, compiled by msvc-19.29.30154, 64-bit
+2024-11-15 19:01:12.340 CET [68052] LOG:  listening on IPv6 address "::1", port 5432
+2024-11-15 19:01:12.341 CET [68052] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2024-11-15 19:01:12.424 CET [13612] LOG:  database system was interrupted; last known up at 2024-11-15 18:48:14 CET
+2024-11-15 19:01:14.293 CET [13612] LOG:  database system was not properly shut down; automatic recovery in progress
+2024-11-15 19:01:14.301 CET [13612] LOG:  redo starts at 0/33546C8
+2024-11-15 19:01:14.326 CET [13612] LOG:  invalid record length at 0/34B6CB8: expected at least 24, got 0
+2024-11-15 19:01:14.326 CET [13612] LOG:  redo done at 0/34B6C80 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.02 s
+2024-11-15 19:01:14.333 CET [61076] LOG:  checkpoint starting: end-of-recovery immediate wait
+2024-11-15 19:01:14.427 CET [61076] LOG:  checkpoint complete: wrote 162 buffers (1.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.020 s, sync=0.061 s, total=0.096 s; sync files=31, longest=0.007 s, average=0.002 s; distance=1417 kB, estimate=1417 kB; lsn=0/34B6CB8, redo lsn=0/34B6CB8
+2024-11-15 19:01:14.457 CET [68052] LOG:  database system is ready to accept connections
+2024-11-15 19:05:44.601 CET [68052] LOG:  server process (PID 47488) was terminated by exception 0xC0000135
+2024-11-15 19:05:44.601 CET [68052] HINT:  See C include file "ntstatus.h" for a description of the hexadecimal value.
+2024-11-15 19:05:44.601 CET [68052] LOG:  terminating any other active server processes
+2024-11-15 19:05:44.619 CET [68052] LOG:  all server processes terminated; reinitializing
+2024-11-15 19:05:44.690 CET [68052] LOG:  startup process (PID 4600) was terminated by exception 0xC0000135
+2024-11-15 19:05:44.690 CET [68052] HINT:  See C include file "ntstatus.h" for a description of the hexadecimal value.
+2024-11-15 19:05:44.690 CET [68052] LOG:  aborting startup due to startup process failure
+2024-11-15 19:05:44.694 CET [68052] LOG:  database system is shut down
+2024-11-15 19:07:32.367 CET [21984] LOG:  starting PostgreSQL 17.1 on x86_64-windows, compiled by msvc-19.29.30154, 64-bit
+2024-11-15 19:07:32.371 CET [21984] LOG:  listening on IPv6 address "::1", port 5432
+2024-11-15 19:07:32.371 CET [21984] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2024-11-15 19:07:32.459 CET [79992] LOG:  database system was interrupted; last known up at 2024-11-15 19:01:14 CET
+2024-11-15 19:07:34.035 CET [79992] LOG:  database system was not properly shut down; automatic recovery in progress
+2024-11-15 19:07:34.042 CET [79992] LOG:  redo starts at 0/34B6D30
+2024-11-15 19:07:34.043 CET [79992] LOG:  invalid record length at 0/34B6D68: expected at least 24, got 0
+2024-11-15 19:07:34.043 CET [79992] LOG:  redo done at 0/34B6D30 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2024-11-15 19:07:34.052 CET [33124] LOG:  checkpoint starting: end-of-recovery immediate wait
+2024-11-15 19:07:34.073 CET [33124] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.004 s, sync=0.004 s, total=0.024 s; sync files=2, longest=0.003 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/34B6D68, redo lsn=0/34B6D68
+2024-11-15 19:07:34.100 CET [21984] LOG:  database system is ready to accept connections
+2024-11-15 19:07:37.903 CET [75428] FATAL:  terminating connection due to administrator command
+2024-11-15 19:07:38.010 CET [33124] LOG:  checkpoint starting: immediate force wait
+2024-11-15 19:07:38.069 CET [33124] LOG:  checkpoint complete: wrote 20 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.008 s, sync=0.038 s, total=0.059 s; sync files=11, longest=0.018 s, average=0.004 s; distance=12 kB, estimate=12 kB; lsn=0/34BA188, redo lsn=0/34BA130
+2024-11-15 19:07:58.172 CET [24616] ERROR:  could not access file "$libdir/postgis-3": No such file or directory at character 71
+2024-11-15 19:07:58.172 CET [24616] STATEMENT:  
+	CREATE TABLE buildings (
+		id SERIAL NOT NULL, 
+		name VARCHAR, 
+		geom geometry(MULTIPOLYGONZ,4326), 
+		PRIMARY KEY (id)
+	)
+	
+	
+2024-11-15 19:08:02.588 CET [24328] ERROR:  could not access file "$libdir/postgis-3": No such file or directory at character 71
+2024-11-15 19:08:02.588 CET [24328] STATEMENT:  
+	CREATE TABLE buildings (
+		id SERIAL NOT NULL, 
+		name VARCHAR, 
+		geom geometry(MULTIPOLYGONZ,4326), 
+		PRIMARY KEY (id)
+	)
+	
+	
+2024-11-15 19:14:26.906 CET [42640] LOG:  starting PostgreSQL 17.1 on x86_64-windows, compiled by msvc-19.29.30154, 64-bit
+2024-11-15 19:14:26.910 CET [42640] LOG:  listening on IPv6 address "::1", port 5432
+2024-11-15 19:14:26.911 CET [42640] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2024-11-15 19:14:27.008 CET [21164] LOG:  database system was interrupted; last known up at 2024-11-15 19:07:38 CET
+2024-11-15 19:14:28.504 CET [21164] LOG:  database system was not properly shut down; automatic recovery in progress
+2024-11-15 19:14:28.513 CET [21164] LOG:  redo starts at 0/34BA130
+2024-11-15 19:14:28.514 CET [21164] WARNING:  could not open directory "base/16385": No such file or directory
+2024-11-15 19:14:28.514 CET [21164] CONTEXT:  WAL redo at 0/34BA200 for Database/DROP: dir 1663/16385
+2024-11-15 19:14:28.514 CET [21164] WARNING:  some useless files may be left behind in old database directory "base/16385"
+2024-11-15 19:14:28.514 CET [21164] CONTEXT:  WAL redo at 0/34BA200 for Database/DROP: dir 1663/16385
+2024-11-15 19:14:28.515 CET [21164] LOG:  invalid record length at 0/34BA2D8: expected at least 24, got 0
+2024-11-15 19:14:28.516 CET [21164] LOG:  redo done at 0/34BA2A0 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2024-11-15 19:14:28.525 CET [69072] LOG:  checkpoint starting: end-of-recovery immediate wait
+2024-11-15 19:14:28.548 CET [69072] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.004 s, sync=0.005 s, total=0.027 s; sync files=2, longest=0.003 s, average=0.003 s; distance=0 kB, estimate=0 kB; lsn=0/34BA2D8, redo lsn=0/34BA2D8
+2024-11-15 19:14:28.573 CET [42640] LOG:  database system is ready to accept connections
+2024-11-15 19:14:39.680 CET [35108] ERROR:  could not access file "$libdir/postgis-3": No such file or directory at character 71
+2024-11-15 19:14:39.680 CET [35108] STATEMENT:  
+	CREATE TABLE buildings (
+		id SERIAL NOT NULL, 
+		name VARCHAR, 
+		geom geometry(MULTIPOLYGONZ,4326), 
+		PRIMARY KEY (id)
+	)
+	
+	

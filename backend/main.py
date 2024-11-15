@@ -2,9 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import async_session, init_db
 from models import Building
-from typing import List
 from sqlalchemy.future import select
-from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromGeoJSON
+from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromEWKT
 import json
 
 app = FastAPI()
@@ -21,19 +20,17 @@ async def get_db():
 async def read_root():
     return {"message": "Hello World"}
 
-@app.post("/buildings")
-async def get_buildings(geometry: dict, db: AsyncSession = Depends(get_db)):
+@app.get("/buildings/nuremberg")
+async def get_buildings_nuremberg(db: AsyncSession = Depends(get_db)):
     """
-    Get buildings within the given boundary.
-
-    :param geometry: GeoJSON geometry defining the boundary.
+    Get buildings within the predefined boundary of Nürnberg.
     """
     try:
-        # Convert input geometry (GeoJSON) to a string
-        geometry_geojson = json.dumps(geometry)
+        # Define the bounding box for Nürnberg (approximate coordinates)
+        nuremberg_bbox = 'POLYGON((11.0 49.4, 11.2 49.4, 11.2 49.6, 11.0 49.6, 11.0 49.4))'
 
-        # Create a geometry object from the GeoJSON
-        geom = ST_GeomFromGeoJSON(geometry_geojson)
+        # Convert WKT polygon to geometry
+        geom = ST_GeomFromEWKT(f'SRID=4326;{nuremberg_bbox}')
 
         # Build the query
         query = select(
