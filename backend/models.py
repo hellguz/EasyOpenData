@@ -5,8 +5,8 @@ from geoalchemy2 import Geometry
 Base = declarative_base()
 
 class Building(Base):
-    __tablename__ = 'buildings'
+    __tablename__ = 'building'
 
-    id = Column(Integer, primary_key=True)
+    ogc_fid = Column(Integer, primary_key=True)
     name = Column(String)
-    geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
+    geometry = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
