@@ -1,0 +1,16 @@
+&&& FILE: ./backend/setup_database.md
+&&& CONTENT:
+
+# Database Setup Instructions
+
+Follow these steps to create the PostgreSQL database with the PostGIS extension:
+
+---
+
+## 1. Install PostgreSQL and PostGIS
+
+### **Ubuntu/Debian**
+
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib postgis
