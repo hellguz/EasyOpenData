@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>View Local 3D Tiles</title>
+    <meta property="og:description" content="View local 3D GeoJSON without server upload." />
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- MapLibre GL JS CSS -->
+    <link rel='stylesheet' href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css' />
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- MapLibre GL JS -->
+    <script src='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js'></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        html, body, #map { height: 100%; }
+        /* Style for file input */
+        #file {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="file">
+        <input type="file" id="geojson-file" accept=".geojson,application/json" />
+    </div>
+    <div id="map"></div>
+    <script>
+        // Initialize the MapLibre map
+        const map = new maplibregl.Map({
+            container: 'map',
+            style:
+            'https://api.maptiler.com/maps/streets/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL',
+        center: [11.084444, 50.879444],
+            zoom: 12,
+            pitch: 0, // Enable pitch for better 3D visualization
+            bearing: -17.6,
+            antialias: true // Enable antialiasing for smoother edges
+        });
+
+        // Add navigation controls to the map (zoom and rotation)
+        map.addControl(new maplibregl.NavigationControl());
+
+        // Wait for the map to load
+        map.on('load', () => {
+            console.log("MapLibre map initialized");
+
+            // Add a custom 3D tiles layer
+            map.addLayer({
+                id: '3d-buildings',
+                type: 'custom',
+                renderingMode: '3d',
+                onAdd: function (map, gl) {
+                    this.camera = new THREE.Camera();
+                    this.scene = new THREE.Scene();
+
+                    // Set up Three.js renderer
+                    this.renderer = new THREE.WebGLRenderer({
+                        canvas: map.getCanvas(),
+                        context: gl,
+                        antialias: true
+                    });
+                    this.renderer.autoClear = false;
+
+                    // Add ambient light
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    this.scene.add(ambientLight);
+
+                    // Add directional light
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(0, -70, 100).normalize();
+                    this.scene.add(directionalLight);
+                },
+                render: function (gl, matrix) {
+                    const rotationX = new THREE.Matrix4().makeRotationAxis(
+                        new THREE.Vector3(1, 0, 0),
+                        Math.PI / 2
+                    );
+                    const m = new THREE.Matrix4().fromArray(matrix);
+                    this.camera.projectionMatrix = m.multiply(rotationX);
+                    this.renderer.state.reset();
+                    this.renderer.render(this.scene, this.camera);
+                    map.triggerRepaint();
+                }
+            });
+
+            // Function to load and add 3D tiles
+            function add3DTiles(z, x, y) {
+                const tileUrl = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
+                fetch(tileUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.arrayBuffer();
+                    })
+                    .then(arrayBuffer => {
+                        // Parse the b3dm tile and add to Three.js scene
+                        // Note: Parsing b3dm is non-trivial and typically requires a library.
+                        // For demonstration, we'll log the received data.
+                        console.log('Received b3dm tile data:', arrayBuffer);
+                        // TODO: Implement b3dm parsing and add to Three.js scene
+                    })
+                    .catch(error => {
+                        console.error('Error loading 3D tile:', error);
+                    });
+            }
+
+            // Example: Load a specific tile
+            add3DTiles(12, 1201, 1535);
+
+            // Implement logic to load tiles based on viewport
+            // This is a simplified example and would need to be expanded for full tile management
+            map.on('moveend', () => {
+                const center = map.getCenter();
+                const zoom = Math.floor(map.getZoom());
+                const tile = long2tile(center.lng, center.lat, zoom);
+                console.log(`Current tile: z=${zoom}, x=${tile.x}, y=${tile.y}`);
+                add3DTiles(zoom, tile.x, tile.y);
+            });
+
+            // Utility function to convert longitude and latitude to tile numbers
+            function long2tile(lon, lat, zoom) {
+                const n = Math.pow(2, zoom);
+                const xtile = Math.floor((lon + 180) / 360 * n);
+                const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+                return { x: xtile, y: ytile };
+            }
+        });
+    </script>
+</body>
+</html>
