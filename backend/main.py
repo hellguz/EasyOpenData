@@ -74,7 +74,7 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
     try:
         tile_key = f"{z}/{x}/{y}"
         cached_data = redis_client.get(tile_key)
-        if cached_data:
+        if cached_data and False:
             geojson = json.loads(cached_data)
             headers = {
                 "Cache-Control": "public, max-age=86400"
