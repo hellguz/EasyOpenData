@@ -30,7 +30,7 @@
         console.log("DOM fully loaded and parsed");
 
         // Initialize the Leaflet map
-        const map = L.map("map").setView([49.4497, 11.0683], 14); // Centered on Nürnberg
+        const map = L.map("map").setView([49.4497, 11.0683], 18); // Centered on Nürnberg
         console.log("Leaflet map initialized");
 
         // Add CartoDB Dark Matter tile layer
@@ -47,6 +47,8 @@
 
         // Layer Group to manage building layers
         const buildingsLayerGroup = L.layerGroup().addTo(map);
+
+        let currentZoom = map.getZoom(); // Track the current zoom level
 
         // Debounce function to limit the rate of tile loading
         function debounce(func, delay) {
@@ -78,28 +80,84 @@
 
         // Fetch and render building data for visible tiles
         async function loadBuildings() {
+          console.log("Loading buildings...");
           const bounds = map.getBounds();
           const zoom = map.getZoom();
 
-          // Determine tile range for current bounds
           const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
           const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
 
           for (let x = nwTile.x; x <= seTile.x; x++) {
             for (let y = nwTile.y; y <= seTile.y; y++) {
-              await fetchTileData(x, y, zoom); // Fetch only missing tiles
+              await fetchTileData(x, y, zoom); // Fetch only new tiles
             }
           }
+          console.log("Building tiles loaded.");
+        }
+
+        function clearAllTiles() {
+          console.log("Clearing all tiles...");
+          buildingsLayerGroup.clearLayers(); // Remove all map layers
+          Object.keys(fetchedTiles).forEach((key) => {
+            fetchedTiles[key] = false; // Reset cache for all tiles
+          });
         }
 
         const fetchedTiles = {}; // Cache to track loaded tiles
 
+        // Remove tiles outside the current viewport
+        function removeOutdatedTiles() {
+          const bounds = map.getBounds();
+          for (const tileKey in fetchedTiles) {
+            const [z, x, y] = tileKey.split("/").map(Number);
+            const tileBounds = getTileBounds(x, y, z);
+
+            // If tile is outside the current viewport, remove it
+            if (!bounds.intersects(tileBounds)) {
+              console.log(
+                `Removing tile ${tileKey} as it's outside the viewport.`
+              );
+              fetchedTiles[tileKey] = false; // Mark as no longer loaded
+              buildingsLayerGroup.eachLayer((layer) => {
+                if (layer.tileKey === tileKey)
+                  buildingsLayerGroup.removeLayer(layer);
+              });
+            }
+          }
+        }
+
+        // Dynamically calculate bounds for a tile
+        function getTileBounds(x, y, z) {
+          const [minLon, minLat, maxLon, maxLat] = tile_bbox(x, y, z);
+          return L.latLngBounds([minLat, minLon], [maxLat, maxLon]);
+        }
+
+        // Calculate the bounding box for a given tile in EPSG:4326
+        function tile_bbox(x, y, z) {
+          const n = Math.pow(2, z);
+          const lon_deg_min = (x / n) * 360.0 - 180.0;
+          const lat_rad_min = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+          const lat_deg_min = (lat_rad_min * 180.0) / Math.PI;
+
+          const lon_deg_max = ((x + 1) / n) * 360.0 - 180.0;
+          const lat_rad_max = Math.atan(
+            Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))
+          );
+          const lat_deg_max = (lat_rad_max * 180.0) / Math.PI;
+
+          return [lon_deg_min, lat_deg_min, lon_deg_max, lat_deg_max];
+        }
+
+        // Fetch tiles only if not in cache
         async function fetchTileData(x, y, z) {
           const tileKey = `${z}/${x}/${y}`;
-          if (fetchedTiles[tileKey]) return; // Skip if already fetched
+          if (fetchedTiles[tileKey]) {
+            console.log(`Tile ${tileKey} already fetched.`);
+            return; // Skip if already fetched
+          }
 
-          fetchedTiles[tileKey] = true; // Mark tile as fetched
-
+          console.log(`Fetching tile ${tileKey}...`);
+          fetchedTiles[tileKey] = true; // Mark as fetched
           const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
           try {
             const response = await fetch(url);
@@ -107,30 +165,16 @@
               throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
 
-            // Add GeoJSON data to the map
+            // Add to map and tag with tileKey
             const geojsonLayer = L.geoJSON(data, {
-              style: function (feature) {
-                return {
-                  color: "yellow",
-                  weight: 1,
-                  fillColor: "yellow",
-                  fillOpacity: 0.2,
-                };
-              },
-              onEachFeature: function (feature, layer) {
-                if (feature.properties && feature.properties.name) {
-                  layer.bindPopup(
-                    `<strong>${feature.properties.name}</strong><br>Height: ${feature.properties.height} m`
-                  );
-                }
-              },
+              style: { color: "yellow", weight: 1 },
             });
-
+            geojsonLayer.tileKey = tileKey; // Tag layer with tileKey
             buildingsLayerGroup.addLayer(geojsonLayer);
-            console.log(`Loaded tile ${tileKey}`);
+            console.log(`Tile ${tileKey} loaded and added to map.`);
           } catch (error) {
             console.error(`Error fetching tile ${tileKey}:`, error);
-            fetchedTiles[tileKey] = false; // Allow retry if the fetch failed
+            fetchedTiles[tileKey] = false; // Allow retry if fetch failed
           }
         }
 
@@ -138,13 +182,30 @@
         loadBuildings();
 
         // Load buildings on map move end with debounce
+        // Updated moveend handler with debounce and cleanup
         map.on(
           "moveend",
-          debounce(function () {
-            // buildingsLayerGroup.clearLayers(); // Clear existing layers
-            loadBuildings(); // Load new visible tiles
+          debounce(() => {
+            console.log("Map moved. Updating visible tiles...");
+            removeOutdatedTiles();
+            loadBuildings();
           }, 300)
-        ); // Adjust debounce delay as needed
+        );
+
+        map.on(
+          "zoomend",
+          debounce(() => {
+            const newZoom = map.getZoom();
+            if (newZoom !== currentZoom) {
+              console.log(
+                `Zoom level changed from ${currentZoom} to ${newZoom}. Clearing and reloading tiles.`
+              );
+              clearAllTiles();
+              currentZoom = newZoom;
+              loadBuildings();
+            }
+          }, 300)
+        );
       });
     </script>
   </body>

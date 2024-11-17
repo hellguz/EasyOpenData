@@ -4,11 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import async_session, init_db
 from models import Building
 from sqlalchemy.future import select
-from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText
+from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import json
 import math
+# import redis  # Commented out Redis import
+
+# redis_client = redis.Redis(host='localhost', port=6379, db=0)  # Commented out Redis client
 
 app = FastAPI()
 
@@ -68,6 +71,15 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
     Get buildings within the bounding box of a specific tile.
     """
     try:
+        # tile_key = f"{z}/{x}/{y}"
+        # cached_data = redis_client.get(tile_key)
+        # if cached_data:
+        #     geojson = json.loads(cached_data)
+        #     headers = {
+        #         "Cache-Control": "public, max-age=86400"
+        #     }
+        #     return JSONResponse(content=geojson, headers=headers)
+
         # Calculate bounding box for the tile
         bbox = tile_bbox(x, y, z)
         bbox_wkt = f'POLYGON(({bbox[0]} {bbox[1]}, {bbox[0]} {bbox[3]}, {bbox[2]} {bbox[3]}, {bbox[2]} {bbox[1]}, {bbox[0]} {bbox[1]}))'
@@ -79,7 +91,7 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
         query = select(
             Building.ogc_fid,
             Building.name,
-            ST_AsGeoJSON(Building.geometry).label('geometry')
+            ST_AsGeoJSON(ST_SimplifyPreserveTopology(Building.geometry, tolerance)).label('geometry')
         ).where(
             ST_Intersects(Building.geometry, ST_GeomFromText(bbox_wkt, 4326))
         )
@@ -110,6 +122,10 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
         headers = {
             "Cache-Control": "public, max-age=86400"  # Cache for 1 day
         }
+
+        # # After generating geojson
+        # redis_client.set(tile_key, json.dumps(geojson), ex=86400)  # Cache for 1 day
+
         return JSONResponse(content=geojson, headers=headers)
 
     except Exception as e:

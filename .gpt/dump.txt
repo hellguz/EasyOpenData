@@ -224,6 +224,29 @@ For questions, feedback, or support, contact us at:
 DATABASE_URL=postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database
 
 
+&&& FILE: ./backend\.gitignore
+&&& CONTENT:
+# Ignore local data files
+data_local/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Other ignores
+*.so
+
+*.gml
+*.gfs
+
+#venv
+venv/
+.venv/
+
+
 &&& FILE: ./backend\database.py
 &&& CONTENT:
 import os
@@ -253,11 +276,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import async_session, init_db
 from models import Building
 from sqlalchemy.future import select
-from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText
+from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import json
 import math
+# import redis  # Commented out Redis import
+
+# redis_client = redis.Redis(host='localhost', port=6379, db=0)  # Commented out Redis client
 
 app = FastAPI()
 
@@ -317,6 +343,15 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
     Get buildings within the bounding box of a specific tile.
     """
     try:
+        # tile_key = f"{z}/{x}/{y}"
+        # cached_data = redis_client.get(tile_key)
+        # if cached_data:
+        #     geojson = json.loads(cached_data)
+        #     headers = {
+        #         "Cache-Control": "public, max-age=86400"
+        #     }
+        #     return JSONResponse(content=geojson, headers=headers)
+
         # Calculate bounding box for the tile
         bbox = tile_bbox(x, y, z)
         bbox_wkt = f'POLYGON(({bbox[0]} {bbox[1]}, {bbox[0]} {bbox[3]}, {bbox[2]} {bbox[3]}, {bbox[2]} {bbox[1]}, {bbox[0]} {bbox[1]}))'
@@ -328,7 +363,7 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
         query = select(
             Building.ogc_fid,
             Building.name,
-            ST_AsGeoJSON(Building.geometry).label('geometry')
+            ST_AsGeoJSON(ST_SimplifyPreserveTopology(Building.geometry, tolerance)).label('geometry')
         ).where(
             ST_Intersects(Building.geometry, ST_GeomFromText(bbox_wkt, 4326))
         )
@@ -359,6 +394,10 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
         headers = {
             "Cache-Control": "public, max-age=86400"  # Cache for 1 day
         }
+
+        # # After generating geojson
+        # redis_client.set(tile_key, json.dumps(geojson), ex=86400)  # Cache for 1 day
+
         return JSONResponse(content=geojson, headers=headers)
 
     except Exception as e:
@@ -434,6 +473,7 @@ geojson
 anyio
 pydantic
 packaging
+redis
 
 &&& FILE: ./backend\setup_database.md
 &&& CONTENT:
@@ -958,133 +998,178 @@ services:
 &&& CONTENT:
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="utf-8">
+  <head>
+    <meta charset="utf-8" />
     <title>EasyOpenData - Nürnberg Buildings</title>
     <!-- Leaflet CSS -->
-    <link 
-        rel="stylesheet" 
-        href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" 
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
     />
     <style>
-        html, body, #map {
-            width: 100%; 
-            height: 100%; 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden;
-            background-color: #2e2e2e; /* Optional: Dark background */
-        }
+      html,
+      body,
+      #map {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #2e2e2e; /* Optional: Dark background */
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div id="map"></div>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            console.log("DOM fully loaded and parsed");
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("DOM fully loaded and parsed");
 
-            // Initialize the Leaflet map
-            const map = L.map('map').setView([49.4497, 11.0683], 14); // Centered on Nürnberg
-            console.log("Leaflet map initialized");
+        // Initialize the Leaflet map
+        const map = L.map("map").setView([49.4497, 11.0683], 14); // Centered on Nürnberg
+        console.log("Leaflet map initialized");
 
-            // Add CartoDB Dark Matter tile layer
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
-            }).addTo(map);
-            console.log("Dark Matter tile layer added to map");
+        // Add CartoDB Dark Matter tile layer
+        L.tileLayer(
+          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+          {
+            attribution:
+              '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: "abcd",
+            maxZoom: 19,
+          }
+        ).addTo(map);
+        console.log("Dark Matter tile layer added to map");
 
-            // Layer Group to manage building layers
-            const buildingsLayerGroup = L.layerGroup().addTo(map);
+        // Layer Group to manage building layers
+        const buildingsLayerGroup = L.layerGroup().addTo(map);
 
-            // Debounce function to limit the rate of tile loading
-            function debounce(func, delay) {
-                let debounceTimer;
-                return function() {
-                    const context = this;
-                    const args = arguments;
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => func.apply(context, args), delay);
-                }
+        // Debounce function to limit the rate of tile loading
+        function debounce(func, delay) {
+          let debounceTimer;
+          return function () {
+            const context = this;
+            const args = arguments;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(context, args), delay);
+          };
+        }
+
+        // Convert longitude to tile number
+        function long2tile(lon, lat, zoom) {
+          const n = Math.pow(2, zoom);
+          const xtile = Math.floor(((lon + 180) / 360) * n);
+          const ytile = Math.floor(
+            ((1 -
+              Math.log(
+                Math.tan((lat * Math.PI) / 180) +
+                  1 / Math.cos((lat * Math.PI) / 180)
+              ) /
+                Math.PI) /
+              2) *
+              n
+          );
+          return { x: xtile, y: ytile };
+        }
+
+        // Fetch and render building data for visible tiles
+        async function loadBuildings() {
+          const bounds = map.getBounds();
+          const zoom = map.getZoom();
+
+          // Determine tile range for current bounds
+          const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
+          const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
+
+          for (let x = nwTile.x; x <= seTile.x; x++) {
+            for (let y = nwTile.y; y <= seTile.y; y++) {
+              await fetchTileData(x, y, zoom); // Fetch only missing tiles
             }
+          }
+        }
 
-            // Convert longitude to tile number
-            function long2tile(lon, lat, zoom) {
-                const n = Math.pow(2, zoom);
-                const xtile = Math.floor((lon + 180) / 360 * n);
-                const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
-                return {x: xtile, y: ytile};
+        const fetchedTiles = {}; // Cache to track loaded tiles
+
+        // Remove tiles outside the current viewport
+        function removeOutdatedTiles() {
+          const bounds = map.getBounds();
+          for (const tileKey in fetchedTiles) {
+            const [z, x, y] = tileKey.split("/").map(Number);
+            const tileBounds = getTileBounds(x, y, z);
+            if (!bounds.intersects(tileBounds)) {
+              fetchedTiles[tileKey] = false; // Allow re-fetch if needed
+              buildingsLayerGroup.eachLayer((layer) => {
+                if (layer.tileKey === tileKey)
+                  buildingsLayerGroup.removeLayer(layer);
+              });
             }
+          }
+        }
 
-            // Fetch and render building data for visible tiles
-            async function loadBuildings() {
-                const bounds = map.getBounds();
-                const zoom = map.getZoom();
+        // Dynamically calculate bounds for a tile
+        function getTileBounds(x, y, z) {
+          const [minLon, minLat, maxLon, maxLat] = tile_bbox(x, y, z);
+          return L.latLngBounds([minLat, minLon], [maxLat, maxLon]);
+        }
 
-                const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
-                const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
+        // Calculate the bounding box for a given tile in EPSG:4326
+        function tile_bbox(x, y, z) {
+          const n = Math.pow(2, z);
+          const lon_deg_min = (x / n) * 360.0 - 180.0;
+          const lat_rad_min = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+          const lat_deg_min = (lat_rad_min * 180.0) / Math.PI;
 
-                for (let x = nwTile.x; x <= seTile.x; x++) {
-                    for (let y = nwTile.y; y <= seTile.y; y++) {
-                        fetchTileData(x, y, zoom);
-                    }
-                }
-            }
+          const lon_deg_max = ((x + 1) / n) * 360.0 - 180.0;
+          const lat_rad_max = Math.atan(
+            Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))
+          );
+          const lat_deg_max = (lat_rad_max * 180.0) / Math.PI;
 
-            // Client-side caching to avoid redundant requests
-            const fetchedTiles = {};
+          return [lon_deg_min, lat_deg_min, lon_deg_max, lat_deg_max];
+        }
 
-            // Fetch building data for a specific tile
-            async function fetchTileData(x, y, z) {
-                const tileKey = `${z}/${x}/${y}`;
-                if (fetchedTiles[tileKey]) return; // Skip if already fetched
+        // Fetch tiles only if not in cache
+        async function fetchTileData(x, y, z) {
+          const tileKey = `${z}/${x}/${y}`;
+          if (fetchedTiles[tileKey]) return; // Skip if already fetched
 
-                fetchedTiles[tileKey] = true; // Mark as fetched
+          fetchedTiles[tileKey] = true; // Mark as fetched
+          const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
+          try {
+            const response = await fetch(url);
+            if (!response.ok)
+              throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
 
-                const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const data = await response.json();
+            // Add to map and track tileKey for removal
+            const geojsonLayer = L.geoJSON(data, {
+              style: { color: "yellow", weight: 1 },
+            });
+            geojsonLayer.tileKey = tileKey; // Tag layer with tileKey
+            buildingsLayerGroup.addLayer(geojsonLayer);
+          } catch (error) {
+            console.error(`Error fetching tile ${tileKey}:`, error);
+            fetchedTiles[tileKey] = false; // Allow retry if failed
+          }
+        }
 
-                    // Create GeoJSON layer
-                    const geojsonLayer = L.geoJSON(data, {
-                        style: function(feature) {
-                            return {
-                                color: 'yellow',
-                                weight: 1,
-                                fillColor: 'yellow',
-                                fillOpacity: 0.2
-                            };
-                        },
-                        onEachFeature: function(feature, layer) {
-                            if (feature.properties && feature.properties.name) {
-                                layer.bindPopup(`<strong>${feature.properties.name}</strong><br>Height: ${feature.properties.height} m`);
-                            }
-                        }
-                    });
+        // Initial load
+        loadBuildings();
 
-                    buildingsLayerGroup.addLayer(geojsonLayer);
-                    console.log(`Loaded tile ${tileKey}`);
-                } catch (error) {
-                    console.error(`Error fetching tile ${tileKey}:`, error);
-                }
-            }
-
-            // Initial load
+        // Load buildings on map move end with debounce
+        // Updated moveend handler with debounce and cleanup
+        map.on(
+          "moveend",
+          debounce(() => {
+            removeOutdatedTiles();
             loadBuildings();
-
-            // Load buildings on map move end with debounce
-            map.on('moveend', debounce(function() {
-                buildingsLayerGroup.clearLayers(); // Clear existing layers
-                loadBuildings(); // Load new visible tiles
-            }, 500)); // Adjust debounce delay as needed
-        });
+          }, 300)
+        );
+      });
     </script>
-</body>
+  </body>
 </html>
 
 

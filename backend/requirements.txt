@@ -10,3 +10,4 @@ geojson
 anyio
 pydantic
 packaging
+redis
