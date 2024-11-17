@@ -25,7 +25,11 @@
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        console.log("DOM fully loaded and parsed");
+
         const map = L.map("map").setView([49.4497, 11.0683], 18);
+        console.log("Leaflet map initialized");
+
         L.tileLayer(
           "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
           {
@@ -35,8 +39,11 @@
             maxZoom: 19,
           }
         ).addTo(map);
+        console.log("Dark Matter tile layer added to map");
 
         const buildingsLayerGroup = L.layerGroup().addTo(map);
+        console.log("Building layer group added");
+
         let currentZoom = map.getZoom();
         const fetchedTiles = {};
         const tileQueue = [];
@@ -69,15 +76,23 @@
         }
 
         function loadBuildings() {
+          console.log("Loading buildings...");
           const bounds = map.getBounds();
           const zoom = map.getZoom();
+          console.log(`Current map bounds: ${bounds.toBBoxString()}`);
+          console.log(`Current zoom level: ${zoom}`);
+
           const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
           const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
+          console.log(
+            `Tile range: NW (${nwTile.x}, ${nwTile.y}) to SE (${seTile.x}, ${seTile.y})`
+          );
 
           for (let x = nwTile.x; x <= seTile.x; x++) {
             for (let y = nwTile.y; y <= seTile.y; y++) {
               const tileKey = `${zoom}/${x}/${y}`;
               if (!fetchedTiles[tileKey]) {
+                console.log(`Queueing tile ${tileKey}`);
                 tileQueue.push({ x, y, zoom });
               }
             }
@@ -91,11 +106,13 @@
         function processQueue() {
           if (tileQueue.length === 0) {
             isProcessingQueue = false;
+            console.log("Tile queue processing completed");
             return;
           }
 
           isProcessingQueue = true;
           const { x, y, zoom } = tileQueue.shift();
+          console.log(`Processing tile: ${zoom}/${x}/${y}`);
           fetchTileData(x, y, zoom).then(() => {
             setTimeout(processQueue, 50); // Add a small delay between tile loads
           });
@@ -103,34 +120,27 @@
 
         async function fetchTileData(x, y, z) {
           const tileKey = `${z}/${x}/${y}`;
-          if (fetchedTiles[tileKey]) return;
+          if (fetchedTiles[tileKey]) {
+            console.log(`Tile ${tileKey} already fetched`);
+            return;
+          }
 
           fetchedTiles[tileKey] = true;
           const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
+          console.log(`Fetching tile data from ${url}`);
+
           try {
             const response = await fetch(url);
             if (!response.ok)
               throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
 
-            // Use Web Worker for processing GeoJSON data
-            const worker = new Worker("geojson-worker.js");
-            worker.postMessage({ data, tileKey, zoom: z });
-            worker.onmessage = function (e) {
-              const geojsonLayer = L.geoJSON(e.data.processedData, {
-                style: { color: "yellow", weight: 1 },
-                filter: function (feature) {
-                  // Only show buildings above a certain size on the screen
-                  const bounds = L.geoJSON(feature).getBounds();
-                  const nw = map.latLngToContainerPoint(bounds.getNorthWest());
-                  const se = map.latLngToContainerPoint(bounds.getSouthEast());
-                  const size = Math.abs((nw.x - se.x) * (nw.y - se.y));
-                  return size > 0; // Adjust this threshold as needed
-                },
-              });
-              geojsonLayer.tileKey = tileKey;
-              buildingsLayerGroup.addLayer(geojsonLayer);
-            };
+            const geojsonLayer = L.geoJSON(data, {
+              style: { color: "yellow", weight: 1 },
+            });
+            geojsonLayer.tileKey = tileKey;
+            buildingsLayerGroup.addLayer(geojsonLayer);
+            console.log(`Tile ${tileKey} loaded and added to map`);
           } catch (error) {
             console.error(`Error fetching tile ${tileKey}:`, error);
             fetchedTiles[tileKey] = false;
@@ -138,6 +148,7 @@
         }
 
         function clearAllTiles() {
+          console.log("Clearing all tiles...");
           buildingsLayerGroup.clearLayers();
           Object.keys(fetchedTiles).forEach((key) => {
             fetchedTiles[key] = false;
@@ -145,38 +156,31 @@
           tileQueue.length = 0; // Clear the queue
         }
 
-        // Function to remove outdated tiles
         function removeOutdatedTiles() {
+          console.log("Removing outdated tiles...");
           try {
             const bounds = map.getBounds();
+            console.log(`Current viewport bounds: ${bounds.toBBoxString()}`);
             const layersToRemove = [];
 
             buildingsLayerGroup.eachLayer((layer) => {
-              // Check if the layer has the getBounds method
-              if (typeof layer.getBounds === "function") {
+              if (layer.getBounds && typeof layer.getBounds === "function") {
                 const layerBounds = layer.getBounds();
                 if (!bounds.intersects(layerBounds)) {
                   layersToRemove.push(layer);
                 }
               } else {
-                console.warn(
-                  "Layer does not have getBounds method:",
-                  layer
-                );
+                console.warn("Layer without getBounds method:", layer);
               }
             });
 
-            // Remove layers after iteration to avoid modifying the group during iteration
             layersToRemove.forEach((layer) => {
               if (layer.tileKey) {
                 console.log(`Removing tile ${layer.tileKey}`);
                 buildingsLayerGroup.removeLayer(layer);
                 fetchedTiles[layer.tileKey] = false;
               } else {
-                console.warn(
-                  "Layer does not have a tileKey property:",
-                  layer
-                );
+                console.warn("Layer without tileKey property:", layer);
               }
             });
           } catch (error) {
@@ -189,6 +193,7 @@
         map.on(
           "moveend",
           debounce(() => {
+            console.log("Map moveend event triggered");
             removeOutdatedTiles();
             loadBuildings();
           }, 300)
@@ -198,6 +203,7 @@
           "zoomend",
           debounce(() => {
             const newZoom = map.getZoom();
+            console.log(`Zoom changed from ${currentZoom} to ${newZoom}`);
             if (newZoom !== currentZoom) {
               clearAllTiles();
               currentZoom = newZoom;
