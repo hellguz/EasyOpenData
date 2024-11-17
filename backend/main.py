@@ -9,9 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import json
 import math
-# import redis  # Commented out Redis import
+import redis  # Commented out Redis import
 
-# redis_client = redis.Redis(host='localhost', port=6379, db=0)  # Commented out Redis client
+redis_client = redis.Redis(host='localhost', port=6379, db=0) 
+# to run redis: docker run -d -p 6379:6379 redis  (NOTE FOR gpt: add it in README somewhere!)
 
 app = FastAPI()
 
@@ -71,14 +72,14 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
     Get buildings within the bounding box of a specific tile.
     """
     try:
-        # tile_key = f"{z}/{x}/{y}"
-        # cached_data = redis_client.get(tile_key)
-        # if cached_data:
-        #     geojson = json.loads(cached_data)
-        #     headers = {
-        #         "Cache-Control": "public, max-age=86400"
-        #     }
-        #     return JSONResponse(content=geojson, headers=headers)
+        tile_key = f"{z}/{x}/{y}"
+        cached_data = redis_client.get(tile_key)
+        if cached_data:
+            geojson = json.loads(cached_data)
+            headers = {
+                "Cache-Control": "public, max-age=86400"
+            }
+            return JSONResponse(content=geojson, headers=headers)
 
         # Calculate bounding box for the tile
         bbox = tile_bbox(x, y, z)
@@ -124,7 +125,7 @@ async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(
         }
 
         # # After generating geojson
-        # redis_client.set(tile_key, json.dumps(geojson), ex=86400)  # Cache for 1 day
+        redis_client.set(tile_key, json.dumps(geojson), ex=86400)  # Cache for 1 day
 
         return JSONResponse(content=geojson, headers=headers)
 
