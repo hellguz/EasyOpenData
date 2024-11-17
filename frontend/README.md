@@ -2,20 +2,14 @@
 
 ## Overview
 
-This is a simple frontend HTML page that displays 3D buildings of Nürnberg using CesiumJS. It fetches building data from the backend and renders them on a 3D map.
+This is a simple frontend HTML page that displays 2D buildings of Nürnberg using Leaflet. It fetches building data from the backend and renders them on an interactive map.
 
 ## Setup
 
-1. **Install Dependencies**
+1. **Serve the Frontend**
 
-   No installation is required. The frontend uses CDN links for CesiumJS.
-
-2. **Run the Backend**
-
-   Ensure the backend server is running:
+   Use Python's HTTP server to serve the frontend files.
 
    ```bash
-   uvicorn main:app --reload
-
-
-python -m http.server 8080
+   cd frontend
+   python -m http.server 8080
