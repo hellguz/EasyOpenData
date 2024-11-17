@@ -1,148 +1,211 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <meta charset="utf-8" />
     <title>EasyOpenData - Nürnberg Buildings</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    />
     <style>
-        html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #2e2e2e; }
+      html,
+      body,
+      #map {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #2e2e2e;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const map = L.map("map").setView([49.4497, 11.0683], 18);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
-            }).addTo(map);
+      document.addEventListener("DOMContentLoaded", function () {
+        const map = L.map("map").setView([49.4497, 11.0683], 18);
+        L.tileLayer(
+          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+          {
+            attribution:
+              '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: "abcd",
+            maxZoom: 19,
+          }
+        ).addTo(map);
 
-            const buildingsLayerGroup = L.layerGroup().addTo(map);
-            let currentZoom = map.getZoom();
-            const fetchedTiles = {};
-            const tileQueue = [];
-            let isProcessingQueue = false;
+        const buildingsLayerGroup = L.layerGroup().addTo(map);
+        let currentZoom = map.getZoom();
+        const fetchedTiles = {};
+        const tileQueue = [];
+        let isProcessingQueue = false;
 
-            function debounce(func, delay) {
-                let debounceTimer;
-                return function () {
-                    const context = this;
-                    const args = arguments;
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => func.apply(context, args), delay);
-                };
+        function debounce(func, delay) {
+          let debounceTimer;
+          return function () {
+            const context = this;
+            const args = arguments;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(context, args), delay);
+          };
+        }
+
+        function long2tile(lon, lat, zoom) {
+          const n = Math.pow(2, zoom);
+          const xtile = Math.floor(((lon + 180) / 360) * n);
+          const ytile = Math.floor(
+            ((1 -
+              Math.log(
+                Math.tan((lat * Math.PI) / 180) +
+                  1 / Math.cos((lat * Math.PI) / 180)
+              ) /
+                Math.PI) /
+              2) *
+              n
+          );
+          return { x: xtile, y: ytile };
+        }
+
+        function loadBuildings() {
+          const bounds = map.getBounds();
+          const zoom = map.getZoom();
+          const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
+          const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
+
+          for (let x = nwTile.x; x <= seTile.x; x++) {
+            for (let y = nwTile.y; y <= seTile.y; y++) {
+              const tileKey = `${zoom}/${x}/${y}`;
+              if (!fetchedTiles[tileKey]) {
+                tileQueue.push({ x, y, zoom });
+              }
             }
+          }
 
-            function long2tile(lon, lat, zoom) {
-                const n = Math.pow(2, zoom);
-                const xtile = Math.floor(((lon + 180) / 360) * n);
-                const ytile = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2) * n);
-                return { x: xtile, y: ytile };
-            }
+          if (!isProcessingQueue) {
+            processQueue();
+          }
+        }
 
-            function loadBuildings() {
-                const bounds = map.getBounds();
-                const zoom = map.getZoom();
-                const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
-                const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
+        function processQueue() {
+          if (tileQueue.length === 0) {
+            isProcessingQueue = false;
+            return;
+          }
 
-                for (let x = nwTile.x; x <= seTile.x; x++) {
-                    for (let y = nwTile.y; y <= seTile.y; y++) {
-                        const tileKey = `${zoom}/${x}/${y}`;
-                        if (!fetchedTiles[tileKey]) {
-                            tileQueue.push({ x, y, zoom });
-                        }
-                    }
+          isProcessingQueue = true;
+          const { x, y, zoom } = tileQueue.shift();
+          fetchTileData(x, y, zoom).then(() => {
+            setTimeout(processQueue, 50); // Add a small delay between tile loads
+          });
+        }
+
+        async function fetchTileData(x, y, z) {
+          const tileKey = `${z}/${x}/${y}`;
+          if (fetchedTiles[tileKey]) return;
+
+          fetchedTiles[tileKey] = true;
+          const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
+          try {
+            const response = await fetch(url);
+            if (!response.ok)
+              throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+
+            // Use Web Worker for processing GeoJSON data
+            const worker = new Worker("geojson-worker.js");
+            worker.postMessage({ data, tileKey, zoom: z });
+            worker.onmessage = function (e) {
+              const geojsonLayer = L.geoJSON(e.data.processedData, {
+                style: { color: "yellow", weight: 1 },
+                filter: function (feature) {
+                  // Only show buildings above a certain size on the screen
+                  const bounds = L.geoJSON(feature).getBounds();
+                  const nw = map.latLngToContainerPoint(bounds.getNorthWest());
+                  const se = map.latLngToContainerPoint(bounds.getSouthEast());
+                  const size = Math.abs((nw.x - se.x) * (nw.y - se.y));
+                  return size > 0; // Adjust this threshold as needed
+                },
+              });
+              geojsonLayer.tileKey = tileKey;
+              buildingsLayerGroup.addLayer(geojsonLayer);
+            };
+          } catch (error) {
+            console.error(`Error fetching tile ${tileKey}:`, error);
+            fetchedTiles[tileKey] = false;
+          }
+        }
+
+        function clearAllTiles() {
+          buildingsLayerGroup.clearLayers();
+          Object.keys(fetchedTiles).forEach((key) => {
+            fetchedTiles[key] = false;
+          });
+          tileQueue.length = 0; // Clear the queue
+        }
+
+        // Function to remove outdated tiles
+        function removeOutdatedTiles() {
+          try {
+            const bounds = map.getBounds();
+            const layersToRemove = [];
+
+            buildingsLayerGroup.eachLayer((layer) => {
+              // Check if the layer has the getBounds method
+              if (typeof layer.getBounds === "function") {
+                const layerBounds = layer.getBounds();
+                if (!bounds.intersects(layerBounds)) {
+                  layersToRemove.push(layer);
                 }
+              } else {
+                console.warn(
+                  "Layer does not have getBounds method:",
+                  layer
+                );
+              }
+            });
 
-                if (!isProcessingQueue) {
-                    processQueue();
-                }
-            }
+            // Remove layers after iteration to avoid modifying the group during iteration
+            layersToRemove.forEach((layer) => {
+              if (layer.tileKey) {
+                console.log(`Removing tile ${layer.tileKey}`);
+                buildingsLayerGroup.removeLayer(layer);
+                fetchedTiles[layer.tileKey] = false;
+              } else {
+                console.warn(
+                  "Layer does not have a tileKey property:",
+                  layer
+                );
+              }
+            });
+          } catch (error) {
+            console.error("Error in removeOutdatedTiles:", error);
+          }
+        }
 
-            function processQueue() {
-                if (tileQueue.length === 0) {
-                    isProcessingQueue = false;
-                    return;
-                }
+        loadBuildings();
 
-                isProcessingQueue = true;
-                const { x, y, zoom } = tileQueue.shift();
-                fetchTileData(x, y, zoom).then(() => {
-                    setTimeout(processQueue, 50); // Add a small delay between tile loads
-                });
-            }
-
-            async function fetchTileData(x, y, z) {
-                const tileKey = `${z}/${x}/${y}`;
-                if (fetchedTiles[tileKey]) return;
-
-                fetchedTiles[tileKey] = true;
-                const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const data = await response.json();
-
-                    // Use Web Worker for processing GeoJSON data
-                    const worker = new Worker('geojson-worker.js');
-                    worker.postMessage({ data, tileKey, zoom: z });
-                    worker.onmessage = function(e) {
-                        const geojsonLayer = L.geoJSON(e.data.processedData, {
-                            style: { color: "yellow", weight: 1 },
-                            filter: function(feature) {
-                                // Only show buildings above a certain size on the screen
-                                const bounds = L.geoJSON(feature).getBounds();
-                                const nw = map.latLngToContainerPoint(bounds.getNorthWest());
-                                const se = map.latLngToContainerPoint(bounds.getSouthEast());
-                                const size = Math.abs((nw.x - se.x) * (nw.y - se.y));
-                                return size > 100; // Adjust this threshold as needed
-                            }
-                        });
-                        geojsonLayer.tileKey = tileKey;
-                        buildingsLayerGroup.addLayer(geojsonLayer);
-                    };
-                } catch (error) {
-                    console.error(`Error fetching tile ${tileKey}:`, error);
-                    fetchedTiles[tileKey] = false;
-                }
-            }
-
-            function clearAllTiles() {
-                buildingsLayerGroup.clearLayers();
-                Object.keys(fetchedTiles).forEach(key => { fetchedTiles[key] = false; });
-                tileQueue.length = 0; // Clear the queue
-            }
-
-            function removeOutdatedTiles() {
-                const bounds = map.getBounds();
-                buildingsLayerGroup.eachLayer(layer => {
-                    if (layer.getBounds && !bounds.intersects(layer.getBounds())) {
-                        buildingsLayerGroup.removeLayer(layer);
-                        fetchedTiles[layer.tileKey] = false;
-                    }
-                });
-            }
-
+        map.on(
+          "moveend",
+          debounce(() => {
+            removeOutdatedTiles();
             loadBuildings();
+          }, 300)
+        );
 
-            map.on('moveend', debounce(() => {
-                removeOutdatedTiles();
-                loadBuildings();
-            }, 300));
-
-            map.on('zoomend', debounce(() => {
-                const newZoom = map.getZoom();
-                if (newZoom !== currentZoom) {
-                    clearAllTiles();
-                    currentZoom = newZoom;
-                    loadBuildings();
-                }
-            }, 300));
-        });
+        map.on(
+          "zoomend",
+          debounce(() => {
+            const newZoom = map.getZoom();
+            if (newZoom !== currentZoom) {
+              clearAllTiles();
+              currentZoom = newZoom;
+              loadBuildings();
+            }
+          }, 300)
+        );
+      });
     </script>
-</body>
+  </body>
 </html>
