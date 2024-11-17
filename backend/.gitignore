@@ -1,5 +1,3 @@
-&&& FILE: ./backend\.gitignore
-&&& CONTENT:
 # Ignore local data files
 data_local/
 
