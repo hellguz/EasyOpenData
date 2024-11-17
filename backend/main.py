@@ -54,7 +54,7 @@ async def get_buildings_nuremberg(db: AsyncSession = Depends(get_db)):
             Building.name,
             ST_AsGeoJSON(Building.geometry).label('geometry')
         ).where(
-            Building.ogc_fid < 100
+            Building.ogc_fid < 10000
         )
          #   ST_Intersects(Building.geometry, geometry)
         #)

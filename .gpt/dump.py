@@ -8,7 +8,7 @@ exclude_folders = ['node_modules', 'venv','.venv', '.github', 'tests', 'bin', 'o
 
 # Allowed file extensions
 #allowed_extensions = ('.py', '.js', '.jsx', '.ts', '.tsx', '.env', '.ini', '.txt', '.yml')
-not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson')
+not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson', 'dump.txt')
 
 def generate_tree(directory, prefix=''):
     """
