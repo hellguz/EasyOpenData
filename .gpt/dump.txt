@@ -247,15 +247,31 @@ async def init_db():
 
 &&& FILE: ./backend\main.py
 &&& CONTENT:
+# ./backend/main.py
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import async_session, init_db
 from models import Building
 from sqlalchemy.future import select
 from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromEWKT
+from fastapi.middleware.cors import CORSMiddleware
 import json
 
 app = FastAPI()
+
+# Configure CORS
+origins = [
+    "http://localhost:8080",  # Frontend origin
+    # Add other origins if needed
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],    # Allow all HTTP methods
+    allow_headers=["*"],    # Allow all headers
+)
 
 @app.on_event("startup")
 async def on_startup():
@@ -279,19 +295,23 @@ async def get_buildings_nuremberg(db: AsyncSession = Depends(get_db)):
         nuremberg_bbox = 'POLYGON((11.0 49.4, 11.2 49.4, 11.2 49.6, 11.0 49.6, 11.0 49.4))'
 
         # Convert WKT polygon to geometry
-        geom = ST_GeomFromEWKT(f'SRID=4326;{nuremberg_bbox}')
+        geometry = ST_GeomFromEWKT(f'SRID=4326;{nuremberg_bbox}')
 
         # Build the query
         query = select(
-            Building.id,
-            ST_AsGeoJSON(Building.geom).label('geometry')
+            Building.ogc_fid,
+            Building.name,
+            ST_AsGeoJSON(Building.geometry).label('geometry')
         ).where(
-            ST_Intersects(Building.geom, geom)
+            Building.ogc_fid < 10000
         )
+         #   ST_Intersects(Building.geometry, geometry)
+        #)
 
         # Execute the query
         result = await db.execute(query)
         buildings = result.fetchall()
+        #return json.dumps(len(buildings), indent=4)
 
         # Construct GeoJSON response
         features = []
@@ -300,7 +320,8 @@ async def get_buildings_nuremberg(db: AsyncSession = Depends(get_db)):
                 "type": "Feature",
                 "geometry": json.loads(building.geometry),
                 "properties": {
-                    "id": building.id
+                    "id": building.ogc_fid,
+                    "name": building.name
                 }
             }
             features.append(feature)
@@ -316,7 +337,6 @@ async def get_buildings_nuremberg(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 &&& FILE: ./backend\models.py
 &&& CONTENT:
 from sqlalchemy import Column, Integer, String
@@ -326,11 +346,11 @@ from geoalchemy2 import Geometry
 Base = declarative_base()
 
 class Building(Base):
-    __tablename__ = 'buildings'
+    __tablename__ = 'building'
 
-    id = Column(Integer, primary_key=True)
+    ogc_fid = Column(Integer, primary_key=True)
     name = Column(String)
-    geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
+    geometry = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
 
 
 &&& FILE: ./backend\requirements.txt
@@ -344,8 +364,9 @@ geoalchemy2
 # Additional dependencies
 python-multipart
 geojson
-
-
+anyio
+pydantic
+packaging
 
 &&& FILE: ./backend\setup_database.md
 &&& CONTENT:
@@ -636,7 +657,10 @@ def ingest_gml_files():
             '-progress',
             '-lco', 'GEOMETRY_NAME=geometry',
             '-skipfailures',
-            '-nlt', 'PROMOTE_TO_MULTI',
+            '-nlt', 'CONVERT_TO_LINEAR',
+            '-nlt', 'MULTIPOLYGON',
+            '-s_srs', 'EPSG:25832',
+            '-t_srs', 'EPSG:4326',
             DATABASE_URL,
             gml_file
         ]
@@ -646,6 +670,184 @@ if __name__ == '__main__':
     ingest_gml_files()
 
 
+
+
+&&& FILE: ./backend\data_ingest\ingest_thuringia
+&&& CONTENT:
+import os
+import glob
+import subprocess
+
+DATA_DIR = 'backend/data_local/thuringia'
+DATABASE_URL = os.getenv('DATABASE_URL', 'PG:dbname=easyopendata_database user=postgres password=barcelona')
+
+def ingest_gml_files():
+    gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
+    for gml_file in gml_files:
+        cmd = [
+            'ogr2ogr',
+            '-f', 'PostgreSQL',
+            '-overwrite',
+            '-progress',
+            '-lco', 'GEOMETRY_NAME=geometry',
+            '-skipfailures',
+            '-nlt', 'CONVERT_TO_LINEAR',
+            '-nlt', 'MULTIPOLYGON',
+            '-s_srs', 'EPSG:25832',
+            '-t_srs', 'EPSG:4326',
+            DATABASE_URL,
+            gml_file
+        ]
+        subprocess.run(cmd)
+
+if __name__ == '__main__':
+    ingest_gml_files()
+
+
+
+
+&&& FILE: ./backend\data_ingest\transform_gml.py
+&&& CONTENT:
+#!/usr/bin/env python3
+"""
+transform_gml.py
+
+A script to transform a CityGML file by embedding polygon geometries directly within
+lod2Solid's surfaceMember elements, removing external xlink references.
+
+Usage:
+    python transform_gml.py input.gml output.gml
+"""
+
+### python .\transform_gml.py .\..\data_local\bayern\raw\650_5478.gml .\..\data_local\bayern\650_5478_trs.gml
+
+
+import sys
+import os
+from lxml import etree
+
+def get_all_namespaces(gml_tree):
+    """
+    Extracts all namespaces from the GML tree and assigns a unique prefix to the default namespace.
+
+    Args:
+        gml_tree (etree.ElementTree): Parsed GML tree.
+
+    Returns:
+        dict: Namespace prefix to URI mapping.
+    """
+    nsmap = gml_tree.getroot().nsmap.copy()
+    # Handle default namespace (None key)
+    if None in nsmap:
+        nsmap['default'] = nsmap.pop(None)
+    # Ensure 'xlink' is included
+    if 'xlink' not in nsmap:
+        # Attempt to find the xlink namespace
+        for prefix, uri in nsmap.items():
+            if uri == 'http://www.w3.org/1999/xlink':
+                nsmap['xlink'] = uri
+                break
+        else:
+            # If not found, add it manually
+            nsmap['xlink'] = 'http://www.w3.org/1999/xlink'
+    return nsmap
+
+def transform_gml(input_file, output_file):
+    """
+    Transforms the input GML file by embedding polygons into surfaceMember elements.
+
+    Args:
+        input_file (str): Path to the input GML file.
+        output_file (str): Path to the output transformed GML file.
+    """
+    # Parse the GML file
+    print(f"Parsing input GML file: {input_file}")
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(input_file, parser)
+    root = tree.getroot()
+
+    # Extract all namespaces
+    namespaces = get_all_namespaces(tree)
+    print("Namespaces detected:")
+    for prefix, uri in namespaces.items():
+        print(f"  Prefix: '{prefix}' => URI: '{uri}'")
+
+    # Build a dictionary of gml:id to Polygon elements for quick lookup
+    print("Indexing all <gml:Polygon> elements by gml:id...")
+    polygon_dict = {}
+    for polygon in root.xpath('.//gml:Polygon', namespaces=namespaces):
+        polygon_id = polygon.get('{http://www.opengis.net/gml}id')
+        if polygon_id:
+            polygon_dict[polygon_id] = polygon
+    print(f"Indexed {len(polygon_dict)} polygons.")
+
+    # Find all <gml:surfaceMember> elements with xlink:href
+    print("Finding all <gml:surfaceMember> elements with xlink:href...")
+    surface_members = root.xpath('.//gml:surfaceMember[@xlink:href]', namespaces=namespaces)
+    print(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
+
+    for sm in surface_members:
+        href = sm.get('{http://www.w3.org/1999/xlink}href')
+        if not href:
+            continue
+        # Extract the referenced polygon ID (remove the '#' prefix)
+        polygon_id = href.lstrip('#')
+        print(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
+        polygon = polygon_dict.get(polygon_id)
+        if not polygon:
+            print(f"Warning: Polygon with gml:id='{polygon_id}' not found. Skipping.")
+            continue
+        # Deep copy the polygon element
+        polygon_copy = etree.fromstring(etree.tostring(polygon))
+        # Remove any existing 'gml:id' to avoid duplicate IDs
+        polygon_copy.attrib.pop('{http://www.opengis.net/gml}id', None)
+        # Replace the surfaceMember's xlink:href attribute with the actual Polygon
+        sm.clear()  # Remove existing children and attributes
+        sm.append(polygon_copy)
+        print(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
+
+    # Optionally, remove standalone <gml:Polygon> elements that were referenced
+    print("Removing standalone <gml:Polygon> elements that were referenced...")
+    removed_count = 0
+    # for polygon_id in polygon_dict.keys():
+    #     # Find and remove the standalone polygon
+    #     polygons_to_remove = root.xpath(f'.//gml:Polygon[@gml:id="{polygon_id}"]', namespaces=namespaces)
+    #     for polygon in polygons_to_remove:
+    #         parent = polygon.getparent()
+    #         if parent is not None:
+    #             parent.remove(polygon)
+    #             removed_count += 1
+    #             print(f"Removed standalone Polygon ID: {polygon_id}.")
+    # print(f"Removed {removed_count} standalone polygons.")
+
+    # Write the transformed GML to the output file
+    print(f"Writing transformed GML to: {output_file}")
+    tree.write(output_file, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    print("Transformation complete.")
+
+def main():
+    if len(sys.argv) != 3:
+        print("Usage: python transform_gml.py input.gml output.gml")
+        sys.exit(1)
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+
+    if not os.path.isfile(input_file):
+        print(f"Error: Input file '{input_file}' does not exist.")
+        sys.exit(1)
+
+    try:
+        transform_gml(input_file, output_file)
+    except etree.XMLSyntaxError as e:
+        print(f"XML Syntax Error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"An error occurred during transformation: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
 
 
 &&& FILE: ./backend\data_local\README.md
@@ -700,52 +902,86 @@ services:
 <html>
 <head>
     <meta charset="utf-8">
-    <title>EasyOpenData - Nürnberg 3D Buildings</title>
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.97/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.97/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <title>EasyOpenData - Nürnberg Buildings</title>
+    <!-- Leaflet CSS -->
+    <link 
+        rel="stylesheet" 
+        href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" 
+    />
     <style>
-        html, body, #cesiumContainer {
-            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+        html, body, #map {
+            width: 100%; 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-    <div id="cesiumContainer"></div>
+    <div id="map"></div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
     <script>
-        // Initialize the Cesium Viewer
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            terrainProvider: Cesium.createWorldTerrain()
-        });
+        document.addEventListener("DOMContentLoaded", function() {
+            console.log("DOM fully loaded and parsed");
 
-        // Center the view on Nürnberg
-        viewer.camera.setView({
-            destination : Cesium.Cartesian3.fromDegrees(11.074, 49.45, 10000.0)
-        });
+            // Initialize the Leaflet map
+            try {
+                const map = L.map('map').setView([49.4497, 11.0683], 14); // Centered on Nürnberg
+                console.log("Leaflet map initialized");
 
-        // Fetch the building data from the backend
-        fetch('http://localhost:8000/buildings/nuremberg')
-            .then(response => response.json())
-            .then(data => {
-                // Load the GeoJSON data into Cesium
-                viewer.dataSources.add(Cesium.GeoJsonDataSource.load(data, {
-                    clampToGround: true
-                })).then(function(dataSource) {
-                    // Adjust the style of the buildings
-                    const entities = dataSource.entities.values;
-                    for (let i = 0; i < entities.length; i++) {
-                        const entity = entities[i];
-                        entity.polygon.material = Cesium.Color.ORANGE.withAlpha(0.5);
-                        entity.polygon.extrudedHeight = 50; // Example height
+                // Add CartoDB Dark Matter tile layer
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(map);
+                console.log("Dark Matter tile layer added to map");
+
+                // Function to fetch and display buildings
+                async function loadBuildings() {
+                    console.log("Fetching building data...");
+                    try {
+                        const response = await fetch('http://localhost:8000/buildings/nuremberg');
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const data = await response.json();
+                        console.log("Building data fetched:", data);
+
+                        // Define a GeoJSON layer
+                        const buildingsLayer = L.geoJSON(data, {
+                            style: function(feature) {
+                                // You can style based on properties, e.g., building height
+                                return {
+                                    color: 'orange',
+                                    weight: 1,
+                                    fillColor: 'darkorange',
+                                    fillOpacity: 0.6
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                if (feature.properties && feature.properties.name) {
+                                    layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+                                }
+                            }
+                        }).addTo(map);
+                        console.log("Buildings layer added to map");
+                    } catch (error) {
+                        console.error('Error fetching building data:', error);
                     }
-                });
-            })
-            .catch(error => {
-                console.error('Error fetching building data:', error);
-            });
+                }
+
+                // Load buildings on map load
+                loadBuildings();
+            } catch (error) {
+                console.error("Error initializing Leaflet map:", error);
+            }
+        });
     </script>
 </body>
 </html>
-
 
 
 &&& FILE: ./frontend\README.md
@@ -769,6 +1005,8 @@ This is a simple frontend HTML page that displays 3D buildings of Nürnberg usin
    ```bash
    uvicorn main:app --reload
 
+
+python -m http.server 8080
 
 &&& FILE: ./utils\small-portion.py
 &&& CONTENT:
