@@ -13,7 +13,7 @@ def ingest_gml_files():
             '-f', 'PostgreSQL',
             '-overwrite',
             '-progress',
-            '-lco', 'GEOMETRY_NAME=geometry',
+            '-lco', 'GEOMETRY_NAME=geom',
             '-skipfailures',
             #'-nlt', 'CONVERT_TO_LINEAR',
             '-nlt', 'MULTIPOLYGON',
