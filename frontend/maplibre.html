@@ -1,42 +1,38 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>3D Tiles Example with MapLibre Basemap</title>
-    
-    <!-- MapLibre GL JS CSS -->
-    <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
-    
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-      }
-      /* Map Container */
-      #map {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 100%;
-      }
-    </style>
-  </head>
-  <body>
-    <!-- Map Container -->
-    <div id="map"></div>
-    
-    <!-- Include Libraries via CDN -->
-    <!-- Loaders.gl Core -->
-    <script src="https://unpkg.com/@loaders.gl/core@3.4.10/dist/dist.min.js"></script>
-    <!-- Loaders.gl 3D Tiles -->
-    <script src="https://unpkg.com/@loaders.gl/3d-tiles@3.4.10/dist/dist.min.js"></script>
-    <!-- Deck.gl -->
-    <script src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
-    <!-- MapLibre GL JS -->
-    <script src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
-    
-    <!-- Initialize the Application -->
-    <script src="./app.js"></script>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Tiles Example with MapLibre Basemap</title>
+  
+  <!-- MapLibre GL JS CSS -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    /* Map Container */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Map Container -->
+  <div id="map"></div>
+  
+  <!-- Include Libraries via CDN with defer -->
+  <script  src="https://unpkg.com/@loaders.gl/core@3.4.10/dist/dist.min.js"></script>
+  <script  src="https://unpkg.com/@loaders.gl/3d-tiles@3.4.10/dist/dist.min.js"></script>
+  <script  src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
+  <script  src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
+  
+  <!-- Initialize the Application -->
+  <script  src="./app.js"></script>
+</body>
 </html>

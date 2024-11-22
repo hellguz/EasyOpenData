@@ -1,6 +1,11 @@
 // app.js
 
-function initializeDeck() {
+// Ensure that the script runs after all libraries have loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initializeMap();
+});
+
+function initializeMap() {
   // Initialize MapLibre Map
   const map = new maplibregl.Map({
     container: 'map',
@@ -10,29 +15,52 @@ function initializeDeck() {
     pitch: 45,
     bearing: 0,
     minZoom: 10,
-    maxZoom: 20,
-    antialias: false, // Enables smoother rendering for 3D layers
+    maxZoom: 18, // Reduced maxZoom for performance
+    antialias: false, // Disables antialiasing for better performance
+    renderWorldCopies: false, // Prevents rendering multiple copies of the world
   });
 
+  map.addControl(new maplibregl.NavigationControl(), 'top-right'); // Optional: Add navigation controls
+
   map.on('load', () => {
-    // Create a Deck instance
+    // Create a Deck instance as a MapboxOverlay
     const deckOverlay = new deck.MapboxOverlay({
       layers: [
         new deck.Tile3DLayer({
           id: 'tile-3d-layer',
           data: 'http://localhost:8000/cache/tileset.json', // Replace with your tileset URL
-          pointSize: 2,
-          onTilesetLoad: (tileset) => {
-            const { cartographicCenter, zoom } = tileset;
+          // loader: deck.loaders3DTiles, // Specify the loader explicitly
+          onTileLoad: handleTileLoad, // Optional: Handle tile load events
+          onTileError: handleTileError, // Optional: Handle tile load errors
+          maxZoom: 18, // Align with map's maxZoom
+          minZoom: 10, // Align with map's minZoom
+          cull: true, // Enable frustum culling
+          dynamic: true, // Enable dynamic rendering
+          loadOptions: {
+            workers: 4, // Number of worker threads
+            useDraco: true, // Enable Draco compression if supported by tileset
           },
+          pickable: false, // Disable picking for performance if not needed
         })
-      ]
+      ],
+      parameters: {
+        depthTest: true,
+        blend: true,
+      },
+      //viewState: map.getFreeCameraOptions(), // Sync Deck.gl view with MapLibre
     });
 
-    // Add the Deck overlay to the map as a control
+    // Add the Deck overlay to the map
     map.addControl(deckOverlay);
   });
 }
 
-// Initialize the map and Deck.gl layer
-initializeDeck();
+// Optional: Handle tile load success
+function handleTileLoad(tile) {
+  console.log(`Tile loaded: ${tile.url}`);
+}
+
+// Optional: Handle tile load errors
+function handleTileError(error, tile) {
+  console.error(`Error loading tile ${tile.url}:`, error);
+}
