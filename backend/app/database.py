@@ -1,7 +1,7 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from models import Base
+from app.models import Base
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database')
 

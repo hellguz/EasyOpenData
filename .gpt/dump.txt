@@ -20,6 +20,8 @@ __pycache__/
 venv/
 .venv/
 
+node_modules/
+
 &&& FILE: ./commands.md
 &&& CONTENT:
 ### Generate Backend
@@ -233,6 +235,9 @@ data_local/
 __pycache__/
 *.pyc
 
+temp/
+cache/
+
 # Environment variables
 .env
 
@@ -271,6 +276,7 @@ async def init_db():
 &&& FILE: ./backend\main.py
 &&& CONTENT:
 # ./backend/main.py
+
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import async_session, init_db
@@ -278,14 +284,25 @@ from models import Building
 from sqlalchemy.future import select
 from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import json
 import math
-# import redis  # Commented out Redis import
+import redis
+import subprocess
+import os
+import logging
+from fastapi.staticfiles import StaticFiles
 
-# redis_client = redis.Redis(host='localhost', port=6379, db=0)  # Commented out Redis client
+import shutil
+
+# Configure Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Initialize Redis client
+redis_client = redis.Redis(host='localhost', port=6379, db=0) 
 
 # Configure CORS
 origins = [
@@ -295,7 +312,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Allowed origins
+    allow_origins=["*"],  # Allowed origins
     allow_credentials=True,
     allow_methods=["*"],    # Allow all HTTP methods
     allow_headers=["*"],    # Allow all headers
@@ -335,113 +352,52 @@ def tile_bbox(x: int, y: int, z: int):
     lat_rad_max = math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n)))
     lat_deg_max = math.degrees(lat_rad_max)
 
+    logger.debug(f"tile_bbox({z}, {x}, {y}) = ({lon_deg_min}, {lat_deg_min}, {lon_deg_max}, {lat_deg_max})")
+    
     return (lon_deg_min, lat_deg_min, lon_deg_max, lat_deg_max)
 
-@app.get("/buildings/tiles/{z}/{x}/{y}")
+app.mount("/cache", StaticFiles(directory="cache"), name="cache")
+
+@app.get("/buildings/tiles/{z}/{x}/{y}.b3dm")
 async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(get_db)):
-    """
-    Get buildings within the bounding box of a specific tile.
-    """
+    tile_key = f"{z}/{x}/{y}"
+    output_dir = f"./cache/tiles/{tile_key}"
+    os.makedirs(output_dir, exist_ok=True)
+
+    cmd = [
+        "C:\\PostgreSQL\\pg2b3dm\\pg2b3dm.exe",
+        "-h", "localhost",
+        "-U", "postgres",
+        "-d", "easyopendata_database",
+        "-t", "building",
+        "-c", "geometry",
+        "-a", "gml_id",
+        "-o", output_dir,
+        # "-q", query_str,  # Uncomment and modify if using spatial filtering
+    ]
+
+    env = os.environ.copy()
+    env['PGPASSWORD'] = 'barcelona'  # Replace with your actual password
+
+    logger.info(f"Running pg2b3dm command for tile {tile_key}: {' '.join(cmd)}")
     try:
-        # tile_key = f"{z}/{x}/{y}"
-        # cached_data = redis_client.get(tile_key)
-        # if cached_data:
-        #     geojson = json.loads(cached_data)
-        #     headers = {
-        #         "Cache-Control": "public, max-age=86400"
-        #     }
-        #     return JSONResponse(content=geojson, headers=headers)
+        subprocess.run(cmd, check=True, env=env)
+    except FileNotFoundError:
+        logger.error("pg2b3dm executable not found.")
+        raise HTTPException(status_code=500, detail="pg2b3dm executable not found.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error generating tile {tile_key}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating tile: {str(e)}")
 
-        # Calculate bounding box for the tile
-        bbox = tile_bbox(x, y, z)
-        bbox_wkt = f'POLYGON(({bbox[0]} {bbox[1]}, {bbox[0]} {bbox[3]}, {bbox[2]} {bbox[3]}, {bbox[2]} {bbox[1]}, {bbox[0]} {bbox[1]}))'
-
-        # Determine simplification tolerance based on zoom level
-        tolerance = get_simplification_tolerance(z)
-
-        # Query buildings within the bounding box with simplification
-        query = select(
-            Building.ogc_fid,
-            Building.name,
-            ST_AsGeoJSON(ST_SimplifyPreserveTopology(Building.geometry, tolerance)).label('geometry')
-        ).where(
-            ST_Intersects(Building.geometry, ST_GeomFromText(bbox_wkt, 4326))
-        )
-
-        result = await db.execute(query)
-        buildings = result.fetchall()
-
-        # Construct GeoJSON FeatureCollection
-        features = []
-        for building in buildings:
-            geometry = json.loads(building.geometry)
-            feature = {
-                "type": "Feature",
-                "geometry": geometry,
-                "properties": {
-                    "id": building.ogc_fid,
-                    "name": building.name,
-                    "height": calculate_building_height(geometry)  # Function to calculate height
-                }
-            }
-            features.append(feature)
-
-        geojson = {
-            "type": "FeatureCollection",
-            "features": features
-        }
-
-        headers = {
-            "Cache-Control": "public, max-age=86400"  # Cache for 1 day
-        }
-
-        # # After generating geojson
-        # redis_client.set(tile_key, json.dumps(geojson), ex=86400)  # Cache for 1 day
-
-        return JSONResponse(content=geojson, headers=headers)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-def get_simplification_tolerance(z: int):
-    """Determine simplification tolerance based on zoom level."""
-    if z < 10:
-        return 0.01
-    elif z < 14:
-        return 0.005
+    # Adjust the tile path as per pg2b3dm output
+    tile_path = f"{output_dir}/tiles/0/0/0.b3dm"
+    if os.path.exists(tile_path):
+        logger.info(f"Tile {tile_key} generated and cached at {tile_path}")
+        return FileResponse(tile_path, media_type="application/octet-stream")
     else:
-        return 0.001
-
-def calculate_building_height(geometry_geojson):
-    """
-    Calculate the height of a building from its geometry.
-
-    Args:
-        geometry_geojson (dict): GeoJSON geometry.
-
-    Returns:
-        float: Height in meters.
-    """
-    # Assuming geometry is a MultiPolygonZ or PolygonZ
-    # Extract Z values and calculate height
-    z_values = []
-    if geometry_geojson['type'] == 'MultiPolygon':
-        for polygon in geometry_geojson['coordinates']:
-            for ring in polygon:
-                for coord in ring:
-                    if len(coord) == 3:
-                        z_values.append(coord[2])
-    elif geometry_geojson['type'] == 'Polygon':
-        for ring in geometry_geojson['coordinates']:
-            for coord in ring:
-                if len(coord) == 3:
-                    z_values.append(coord[2])
-
-    if z_values:
-        return max(z_values) - min(z_values)
-    else:
-        return 30.0  # Default height if Z is not available
-
+        logger.error(f"Tile not found after generation: {tile_path}")
+        raise HTTPException(status_code=404, detail="Tile not found after generation")
+    
 
 &&& FILE: ./backend\models.py
 &&& CONTENT:
@@ -712,11 +668,204 @@ print(response.json())
 
 
 
-&&& FILE: ./backend\start_postgres.bat
+&&& FILE: ./backend\cache\tileset.json
 &&& CONTENT:
-pg_ctl -D "C:\PostgreSQL\17.1\data" -l logfile start
-pause
+{
+  "asset": {
+    "generator": "pg2b3dm 2.18.1.0",
+    "version": "1.1"
+  },
+  "geometricError": 2000.0,
+  "root": {
+    "children": [
+      {
+        "geometricError": 250.0,
+        "boundingVolume": {
+          "region": [
+            0.19335084626674875,
+            0.8879755736299798,
+            0.19343239663189357,
+            0.8880238359358005,
+            0.0,
+            9.347000000000037
+          ]
+        },
+        "content": {
+          "uri": "content/1_0_1.glb"
+        }
+      },
+      {
+        "geometricError": 250.0,
+        "boundingVolume": {
+          "region": [
+            0.1934285068159936,
+            0.8879999251690178,
+            0.19350155212587686,
+            0.8880488462888476,
+            0.0,
+            11.625
+          ]
+        },
+        "content": {
+          "uri": "content/1_1_1.glb"
+        }
+      },
+      {
+        "geometricError": 62.5,
+        "boundingVolume": {
+          "region": [
+            0.19316303457999523,
+            0.862
+................................
 
+&&& FILE: ./backend\cache\tileset_3_1_0.json
+&&& CONTENT:
+{
+  "asset": {
+    "generator": "pg2b3dm 2.18.1.0",
+    "version": "1.1"
+  },
+  "geometricError": 250.0,
+  "root": {
+    "children": [
+      {
+        "geometricError": 31.25,
+        "boundingVolume": {
+          "region": [
+            0.19321727834592198,
+            0.8628205103745168,
+            0.19327583246781574,
+            0.8631369096418604,
+            0.0,
+            31.202999999999975
+          ]
+        },
+        "content": {
+          "uri": "content/4_2_0.glb"
+        }
+      },
+      {
+        "geometricError": 31.25,
+        "boundingVolume": {
+          "region": [
+            0.1932425398220154,
+            0.8628227918877767,
+            0.1933280939844969,
+            0.8631366747549941,
+            0.0,
+            36.910000000000025
+          ]
+        },
+        "content": {
+          "uri": "content/4_3_0.glb"
+        }
+      }
+    ],
+    "transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+     
+................................
+
+&&& FILE: ./backend\cache\tileset_3_3_0.json
+&&& CONTENT:
+{
+  "asset": {
+    "generator": "pg2b3dm 2.18.1.0",
+    "version": "1.1"
+  },
+  "geometricError": 250.0,
+  "root": {
+    "children": [
+      {
+        "geometricError": 31.25,
+        "boundingVolume": {
+          "region": [
+            0.19335067706996617,
+            0.8628197361372054,
+            0.19339999419207324,
+            0.8631331520889401,
+            0.0,
+            42.360000000000014
+          ]
+        },
+        "content": {
+          "uri": "content/4_6_0.glb"
+        }
+      },
+      {
+        "geometricError": 31.25,
+        "boundingVolume": {
+          "region": [
+            0.1933905682822639,
+            0.8628197362076032,
+            0.19344847960349917,
+            0.8631343633226729,
+            0.0,
+            40.56
+          ]
+        },
+        "content": {
+          "uri": "content/4_7_0.glb"
+        }
+      }
+    ],
+    "transform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      
+................................
+
+&&& FILE: ./backend\cache\content\1_0_1.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa4 in position 9: invalid start byte
+
+&&& FILE: ./backend\cache\content\1_1_1.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xb0 in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\3_0_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 12: invalid start byte
+
+&&& FILE: ./backend\cache\content\3_2_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xf4 in position 8: invalid continuation byte
+
+&&& FILE: ./backend\cache\content\3_4_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xd0 in position 8: invalid continuation byte
+
+&&& FILE: ./backend\cache\content\3_5_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte
+
+&&& FILE: ./backend\cache\content\3_6_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x98 in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\3_7_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xf8 in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\4_2_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xfc in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\4_3_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x80 in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\4_6_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa0 in position 8: invalid start byte
+
+&&& FILE: ./backend\cache\content\4_7_0.glb
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x8c in position 8: invalid start byte
 
 &&& FILE: ./backend\data_ingest\ingest_baden_wuerttemberg.py
 &&& CONTENT:
@@ -750,9 +899,11 @@ if __name__ == '__main__':
 import os
 import glob
 import subprocess
+import psycopg2
+from urllib.parse import urlparse
 
 DATA_DIR = 'backend/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'PG:dbname=easyopendata_database user=postgres password=barcelona')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
 
 def ingest_gml_files():
     gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
@@ -760,33 +911,61 @@ def ingest_gml_files():
         cmd = [
             'ogr2ogr',
             '-f', 'PostgreSQL',
-            '-overwrite',
+            #'-overwrite',
             '-progress',
-            '-lco', 'GEOMETRY_NAME=geometry',
+            '-lco', 'GEOMETRY_NAME=geom',
             '-skipfailures',
-            '-nlt', 'CONVERT_TO_LINEAR',
+            #'-nlt', 'CONVERT_TO_LINEAR',
             '-nlt', 'MULTIPOLYGON',
+            '-dim', 'XYZ',
             '-s_srs', 'EPSG:25832',
-            '-t_srs', 'EPSG:4326',
+            '-t_srs', 'EPSG:3857',
             DATABASE_URL,
             gml_file
         ]
         subprocess.run(cmd)
 
+    
+
+def put_buildings_on_ground():
+    # Parse the DATABASE_URL to get connection parameters
+    url = urlparse(DATABASE_URL)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    
+    with conn.cursor() as cur:
+        # Update the geometries to put them on ground level
+        cur.execute("""
+            UPDATE building
+            SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
+            WHERE ST_ZMin(geom) != 0;
+        """)
+        
+        conn.commit()
+    
+    conn.close()
+
 if __name__ == '__main__':
     ingest_gml_files()
+    put_buildings_on_ground()
 
 
 
-
-&&& FILE: ./backend\data_ingest\ingest_thuringia
+&&& FILE: ./backend\data_ingest\ingest_thuringia.py
 &&& CONTENT:
 import os
 import glob
 import subprocess
+import psycopg2
+from urllib.parse import urlparse
 
 DATA_DIR = 'backend/data_local/thuringia'
-DATABASE_URL = os.getenv('DATABASE_URL', 'PG:dbname=easyopendata_database user=postgres password=barcelona')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
 
 def ingest_gml_files():
     gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
@@ -794,22 +973,48 @@ def ingest_gml_files():
         cmd = [
             'ogr2ogr',
             '-f', 'PostgreSQL',
-            '-overwrite',
+            #'-overwrite',
             '-progress',
-            '-lco', 'GEOMETRY_NAME=geometry',
+            '-lco', 'GEOMETRY_NAME=geom',
             '-skipfailures',
-            '-nlt', 'CONVERT_TO_LINEAR',
+            #'-nlt', 'CONVERT_TO_LINEAR',
             '-nlt', 'MULTIPOLYGON',
+            '-dim', 'XYZ',
             '-s_srs', 'EPSG:25832',
-            '-t_srs', 'EPSG:4326',
+            '-t_srs', 'EPSG:3857',
             DATABASE_URL,
             gml_file
         ]
         subprocess.run(cmd)
 
+    
+
+def put_buildings_on_ground():
+    # Parse the DATABASE_URL to get connection parameters
+    url = urlparse(DATABASE_URL)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    
+    with conn.cursor() as cur:
+        # Update the geometries to put them on ground level
+        cur.execute("""
+            UPDATE building
+            SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
+            WHERE ST_ZMin(geom) != 0;
+        """)
+        
+        conn.commit()
+    
+    conn.close()
+
 if __name__ == '__main__':
     ingest_gml_files()
-
+    put_buildings_on_ground()
 
 
 
@@ -972,6 +1177,101 @@ Ensure the directory structure matches the Bundesland names used in the data_ing
 
 
 
+&&& FILE: ./backend\data_local\bayern\650_5478_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryElementPath>
+    <!--POLYHEDRALSURFACEZ-->
+    <GeometryType>1015</GeometryType>
+    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
+    <DatasetSpecificInfo>
+      <FeatureCount>6831</FeatureCount>
+      <ExtentXMin>649850.69500</ExtentXMin>
+      <ExtentXMax>652050.86000</ExtentXMax>
+      <ExtentYMin>5477946.35000</ExtentYMin>
+      <ExtentYMax>5480010.49000</ExtentYMax>
+    </DatasetSpecificInfo>
+    <PropertyDefn>
+      <Name>name</Name>
+      <ElementPath>name</ElementPath>
+      <Type>String</Type>
+      <Width>71</Width>
+    </PropertyDefn>
+    <PropertyDefn>
+      <Name>creationDate</Name>
+      <ElementPath>creationDate</ElementPath>
+      <Type>String</Type>
+      <Width>10</Width>
+    </PropertyDefn>
+    <PropertyDefn>
+      <Name>informationSystem</Name>
+      <ElementPa
+................................
+
+&&& FILE: ./backend\data_local\bayern\650_5478_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/1.0" xmlns:base="http://www.citygml.org/citygml/profiles/base/1.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:wtr="http://www.opengis.net/citygml/waterbody/1.0" xmlns:dem="http://www.opengis.net/citygml/relief/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:app="http://www.opengis.net/citygml/appearance/1.0" xmlns:frn="http://www.opengis.net/citygml/cityfurniture/1.0" xmlns:smil20="http://www.w3.org/2001/SMIL20/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:smil20lang="http://www.w3.org/2001/SMIL20/Language" xmlns:xAL="
+................................
+
+&&& FILE: ./backend\data_local\bayern\raw\650_5478.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/1.0" xmlns:base="http://www.citygml.org/citygml/profiles/base/1.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:wtr="http://www.opengis.net/citygml/waterbody/1.0" xmlns:dem="http://www.opengis.net/citygml/relief/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:app="http://www.opengis.net/citygml/appearance/1.0" xmlns:frn="http://www.opengis.net/citygml/cityfurniture/1.0" xmlns:smil20="http://www.w3.org/2001/SMIL20/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:smil20lang="http://www.w3.org/2001/SMIL20/Language" xmlns:xAL="
+................................
+
+&&& FILE: ./backend\data_local\thuringia\LoD1_32_646_5638_2_TH.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <!--POLYHEDRALSURFACEZ-->
+    <GeometryType>1015</GeometryType>
+    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
+    <DatasetSpecificInfo>
+      <FeatureCount>239</FeatureCount>
+      <ExtentXMin>646203.33900</ExtentXMin>
+      <ExtentXMax>646800.64500</ExtentXMax>
+      <ExtentYMin>5638232.56300</ExtentYMin>
+      <ExtentYMax>5638712.02800</ExtentYMax>
+    </DatasetSpecificInfo>
+    <PropertyDefn>
+      <Name>creationDate</Name>
+      <ElementPath>creationDate</ElementPath>
+      <Type>String</Type>
+      <Width>10</Width>
+    </PropertyDefn>
+    <PropertyDefn>
+      <Name>informationSystem</Name>
+      <ElementPath>externalReference|informationSystem</ElementPath>
+      <Type>String</Type>
+      <Width>66</Width>
+    </PropertyDefn>
+    <PropertyDefn>
+      <Name>name</Name>
+      <ElementPath>externalReference|externalObject|name</ElementPath>
+      <Type>Str
+................................
+
+&&& FILE: ./backend\data_local\thuringia\LoD1_32_646_5638_2_TH.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<core:CityModel xmlns:xal="urn:oasis:names:tc:ciq:xsdschema:xAL:2.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:gml="http://www.opengis.net/gml" xmlns:core="http://www.opengis.net/citygml/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/citygml/building/1.0 http://repository.gdi-de.org/schemas/adv/citygml/building/1.0/buildingLoD1.xsd http://www.opengis.net/citygml/1.0 http://repository.gdi-de.org/schemas/adv/citygml/1.0/cityGMLBaseLoD1.xsd http://www.opengis.net/citygml/generics/1.0 http://repository.gdi-de.org/schemas/adv/citygml/generics/1.0/genericsLoD1.xsd">
+  <gml:name>LoD1_32_646_5638_2_TH</gml:name>
+  <gml:boundedBy>
+    <gml:Envelope srsName="urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH">
+      <gml:lowerCorner srsDimension="3">646000.0 5638000.0 326.779</gm
+................................
+
+&&& FILE: ./backend\data_sources\here i will put files with links to gml files
+&&& CONTENT:
+
+
 &&& FILE: ./backend\postgis_docker\docker-compose.yml
 &&& CONTENT:
 
@@ -994,182 +1294,115 @@ services:
       POSTGRES_PASSWORD: barcelona
 
 
+&&& FILE: ./frontend\app.js
+&&& CONTENT:
+// app.js
+
+// Ensure that the script runs after all libraries have loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initializeMap();
+});
+
+function initializeMap() {
+  // Initialize MapLibre Map
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://api.maptiler.com/maps/basic/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL', // Basemap style
+    center: [11.0767, 49.4521], // Nürnberg coordinates [lng, lat]
+    zoom: 15,
+    pitch: 45,
+    bearing: 0,
+    minZoom: 10,
+    maxZoom: 18, // Reduced maxZoom for performance
+    antialias: false, // Disables antialiasing for better performance
+    renderWorldCopies: false, // Prevents rendering multiple copies of the world
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), 'top-right'); // Optional: Add navigation controls
+
+  map.on('load', () => {
+    // Create a Deck instance as a MapboxOverlay
+    const deckOverlay = new deck.MapboxOverlay({
+      layers: [
+        new deck.Tile3DLayer({
+          id: 'tile-3d-layer',
+          data: 'http://localhost:8000/cache/tileset.json', // Replace with your tileset URL
+          // loader: deck.loaders3DTiles, // Specify the loader explicitly
+          onTileLoad: handleTileLoad, // Optional: Handle tile load events
+          onTileError: handleTileError, // Optional: Handle tile load errors
+          maxZoom: 18, // Align with map's maxZoom
+          minZoom: 10, // Align with map's minZoom
+          cull: true, // Enable frustum culling
+          dynamic: true, // Enable dynamic rendering
+          loadOptions: {
+            workers: 4, // Number of worker threads
+            useDraco: true, // Enable Draco compression if supported by tileset
+          },
+          pickable: false, // Disable picking for performance if not needed
+        })
+      ],
+      parameters: {
+        depthTest: true,
+        blend: true,
+      },
+      //viewState: map.getFreeCameraOptions(), // Sync Deck.gl view with MapLibre
+    });
+
+    // Add the Deck overlay to the map
+    map.addControl(deckOverlay);
+  });
+}
+
+// Optional: Handle tile load success
+function handleTileLoad(tile) {
+  console.log(`Tile loaded: ${tile.url}`);
+}
+
+// Optional: Handle tile load errors
+function handleTileError(error, tile) {
+  console.error(`Error loading tile ${tile.url}:`, error);
+}
+
+
 &&& FILE: ./frontend\index.html
 &&& CONTENT:
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>EasyOpenData - Nürnberg Buildings</title>
-    <!-- Leaflet CSS -->
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
-    />
-    <style>
-      html,
-      body,
-      #map {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background-color: #2e2e2e; /* Optional: Dark background */
-      }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        console.log("DOM fully loaded and parsed");
-
-        // Initialize the Leaflet map
-        const map = L.map("map").setView([49.4497, 11.0683], 14); // Centered on Nürnberg
-        console.log("Leaflet map initialized");
-
-        // Add CartoDB Dark Matter tile layer
-        L.tileLayer(
-          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-          {
-            attribution:
-              '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: "abcd",
-            maxZoom: 19,
-          }
-        ).addTo(map);
-        console.log("Dark Matter tile layer added to map");
-
-        // Layer Group to manage building layers
-        const buildingsLayerGroup = L.layerGroup().addTo(map);
-
-        // Debounce function to limit the rate of tile loading
-        function debounce(func, delay) {
-          let debounceTimer;
-          return function () {
-            const context = this;
-            const args = arguments;
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => func.apply(context, args), delay);
-          };
-        }
-
-        // Convert longitude to tile number
-        function long2tile(lon, lat, zoom) {
-          const n = Math.pow(2, zoom);
-          const xtile = Math.floor(((lon + 180) / 360) * n);
-          const ytile = Math.floor(
-            ((1 -
-              Math.log(
-                Math.tan((lat * Math.PI) / 180) +
-                  1 / Math.cos((lat * Math.PI) / 180)
-              ) /
-                Math.PI) /
-              2) *
-              n
-          );
-          return { x: xtile, y: ytile };
-        }
-
-        // Fetch and render building data for visible tiles
-        async function loadBuildings() {
-          const bounds = map.getBounds();
-          const zoom = map.getZoom();
-
-          // Determine tile range for current bounds
-          const nwTile = long2tile(bounds.getWest(), bounds.getNorth(), zoom);
-          const seTile = long2tile(bounds.getEast(), bounds.getSouth(), zoom);
-
-          for (let x = nwTile.x; x <= seTile.x; x++) {
-            for (let y = nwTile.y; y <= seTile.y; y++) {
-              await fetchTileData(x, y, zoom); // Fetch only missing tiles
-            }
-          }
-        }
-
-        const fetchedTiles = {}; // Cache to track loaded tiles
-
-        // Remove tiles outside the current viewport
-        function removeOutdatedTiles() {
-          const bounds = map.getBounds();
-          for (const tileKey in fetchedTiles) {
-            const [z, x, y] = tileKey.split("/").map(Number);
-            const tileBounds = getTileBounds(x, y, z);
-            if (!bounds.intersects(tileBounds)) {
-              fetchedTiles[tileKey] = false; // Allow re-fetch if needed
-              buildingsLayerGroup.eachLayer((layer) => {
-                if (layer.tileKey === tileKey)
-                  buildingsLayerGroup.removeLayer(layer);
-              });
-            }
-          }
-        }
-
-        // Dynamically calculate bounds for a tile
-        function getTileBounds(x, y, z) {
-          const [minLon, minLat, maxLon, maxLat] = tile_bbox(x, y, z);
-          return L.latLngBounds([minLat, minLon], [maxLat, maxLon]);
-        }
-
-        // Calculate the bounding box for a given tile in EPSG:4326
-        function tile_bbox(x, y, z) {
-          const n = Math.pow(2, z);
-          const lon_deg_min = (x / n) * 360.0 - 180.0;
-          const lat_rad_min = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
-          const lat_deg_min = (lat_rad_min * 180.0) / Math.PI;
-
-          const lon_deg_max = ((x + 1) / n) * 360.0 - 180.0;
-          const lat_rad_max = Math.atan(
-            Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))
-          );
-          const lat_deg_max = (lat_rad_max * 180.0) / Math.PI;
-
-          return [lon_deg_min, lat_deg_min, lon_deg_max, lat_deg_max];
-        }
-
-        // Fetch tiles only if not in cache
-        async function fetchTileData(x, y, z) {
-          const tileKey = `${z}/${x}/${y}`;
-          if (fetchedTiles[tileKey]) return; // Skip if already fetched
-
-          fetchedTiles[tileKey] = true; // Mark as fetched
-          const url = `http://localhost:8000/buildings/tiles/${z}/${x}/${y}`;
-          try {
-            const response = await fetch(url);
-            if (!response.ok)
-              throw new Error(`HTTP error! status: ${response.status}`);
-            const data = await response.json();
-
-            // Add to map and track tileKey for removal
-            const geojsonLayer = L.geoJSON(data, {
-              style: { color: "yellow", weight: 1 },
-            });
-            geojsonLayer.tileKey = tileKey; // Tag layer with tileKey
-            buildingsLayerGroup.addLayer(geojsonLayer);
-          } catch (error) {
-            console.error(`Error fetching tile ${tileKey}:`, error);
-            fetchedTiles[tileKey] = false; // Allow retry if failed
-          }
-        }
-
-        // Initial load
-        loadBuildings();
-
-        // Load buildings on map move end with debounce
-        // Updated moveend handler with debounce and cleanup
-        map.on(
-          "moveend",
-          debounce(() => {
-            removeOutdatedTiles();
-            loadBuildings();
-          }, 300)
-        );
-      });
-    </script>
-  </body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Tiles Example with MapLibre Basemap</title>
+  
+  <!-- MapLibre GL JS CSS -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    /* Map Container */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Map Container -->
+  <div id="map"></div>
+  
+  <!-- Include Libraries via CDN with defer -->
+  <script  src="https://unpkg.com/@loaders.gl/core@3.4.10/dist/dist.min.js"></script>
+  <script  src="https://unpkg.com/@loaders.gl/3d-tiles@3.4.10/dist/dist.min.js"></script>
+  <script  src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
+  <script  src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
+  
+  <!-- Initialize the Application -->
+  <script  src="./app.js"></script>
+</body>
 </html>
 
 
@@ -1191,65 +1424,4 @@ This is a simple frontend HTML page that displays 2D buildings of Nürnberg usin
    cd frontend
    python -m http.server 8080
 
-
-&&& FILE: ./utils\small-portion.py
-&&& CONTENT:
-import json
-
-# Path to the large GeoJSON file
-input_file = r"output_dir\650_5478_repr.geojson"
-
-# Path for the output smaller GeoJSON file
-output_file = "650_5478_repr_small.geojson"
-
-# Desired size of the output file in bytes (50 MB)
-desired_size = 1 * 1024 * 1024
-
-def extract_small_geojson(input_file, output_file, max_size):
-    try:
-        with open(input_file, 'r', encoding='utf-8') as infile:
-            # Initialize variables to construct the new GeoJSON
-            small_data = {
-                "type": "FeatureCollection",
-                "features": []
-            }
-            
-            # Read the opening part of the GeoJSON file
-            line = infile.readline()
-            while line.strip() != '"features": [':
-                line = infile.readline()
-
-            # Read features one by one
-            current_size = 0
-            for line in infile:
-                if line.strip() == ']':
-                    break  # End of features list
-
-                # Remove trailing comma if present
-                feature_str = line.rstrip(',\n')
-                
-                # Parse feature JSON
-                feature = json.loads(feature_str)
-                
-                # Add feature to the new collection
-                small_data["features"].append(feature)
-                
-                # Update current size
-                current_size += len(feature_str.encode('utf-8'))
-                
-                # Stop if the current size exceeds or reaches the desired size
-                if current_size >= max_size:
-                    break
-
-            # Write closing brackets for the JSON structure
-            with open(output_file, 'w', encoding='utf-8') as outfile:
-                json.dump(small_data, outfile, ensure_ascii=False, indent=2)
-            
-            print(f"Extracted {len(small_data['features'])} features into {output_file}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-# Run the function to extract a smaller GeoJSON file
-extract_small_geojson(input_file, output_file, desired_size)
 
