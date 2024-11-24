@@ -1,27 +1,23 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Map } from "react-map-gl/maplibre";
 import DeckGL from "@deck.gl/react";
 import { Tile3DLayer } from "@deck.gl/geo-layers";
-import { CesiumIonLoader } from "@loaders.gl/3d-tiles";
-import MapboxDraw from "@mapbox/mapbox-gl-draw";
-import * as turf from "@turf/turf";
-import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
-
+import { ScatterplotLayer, ArcLayer } from "@deck.gl/layers";
+import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapViewState } from "@deck.gl/core";
 import type { Tileset3D } from "@loaders.gl/tiles";
 
 const TILESET_URL = `http://localhost:8000/cache/tileset.json`;
-
 const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 40,
-  longitude: -75,
-  pitch: 25,
-  maxPitch: 90,
+  latitude: 49.4521,
+  longitude: 11.0767,
+  pitch: 45,
+  maxPitch: 60,
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
-  zoom: 14,
+  zoom: 17,
 };
 
 export default function App({
@@ -31,81 +27,69 @@ export default function App({
   mapStyle?: string;
   updateAttributions?: (attributions: any) => void;
 }) {
-  const [initialViewState, setInitialViewState] = useState(INITIAL_VIEW_STATE);
+  const mapRef = useRef(null);
   const [map, setMap] = useState(null);
-  const drawRef = useRef(null);
 
-  const onTilesetLoad = (tileset: Tileset3D) => {
-    const { cartographicCenter, zoom } = tileset;
-    setInitialViewState({
-      ...INITIAL_VIEW_STATE,
-      longitude: cartographicCenter[0],
-      latitude: cartographicCenter[1],
-      zoom,
-    });
+  const [initialViewState, setInitialViewState] = useState(INITIAL_VIEW_STATE);
 
-    if (updateAttributions) {
-      updateAttributions(tileset.credits && tileset.credits.attributions);
-    }
-  };
-
-  const tile3DLayer = new Tile3DLayer({
-    id: "tile-3d-layer",
-    pointSize: 2,
-    data: TILESET_URL,
-    onTilesetLoad,
-  });
   useEffect(() => {
     if (map) {
-      // Initialize draw control
-      drawRef.current = new MapboxDraw({
-        displayControlsDefault: false,
-        controls: {
-          polygon: true,
-          trash: true
-        },
-        defaultMode: 'draw_polygon',
-        styles: [
-          {
-            id: 'gl-draw-polygon-fill',
-            type: 'fill',
-            filter: ['all', ['==', '$type', 'Polygon']],
-            paint: {
-              'fill-color': '#0000ff',
-              'fill-opacity': 0.5
-            }
-          },
-          {
-            id: 'gl-draw-polygon-stroke',
-            type: 'line',
-            filter: ['all', ['==', '$type', 'Polygon']],
-            paint: {
-              'line-color': '#0000ff',
-              'line-width': 2
-            }
-          }
-        ]
-      });
+      const mapInstance = map.getMap();
 
-      map.addControl(drawRef.current);
+      // Wait for the style to load before accessing layers
+      mapInstance.once("style.load", () => {
+        const firstLabelLayer = mapInstance
+          .getStyle()
+          .layers.find((layer) => layer.type === "symbol");
+
+        if (!firstLabelLayer) {
+          console.error("No symbol layers found in the map style.");
+          return;
+        }
+
+        const firstLabelLayerId = firstLabelLayer.id;
+
+        const onTilesetLoad = (tileset: Tileset3D) => {
+          // Recenter view to cover the new tileset
+          const { cartographicCenter, zoom } = tileset;
+          setInitialViewState({
+            ...INITIAL_VIEW_STATE,
+            longitude: cartographicCenter[0],
+            latitude: cartographicCenter[1],
+            zoom,
+          });
+
+          if (updateAttributions) {
+            updateAttributions(tileset.credits && tileset.credits.attributions);
+          }
+        };
+
+        const tile3DLayer = new Tile3DLayer({
+          id: "tile-3d-layer",
+          pointSize: 2,
+          data: TILESET_URL,
+          onTilesetLoad,
+        });
+
+
+        // Add DeckGL overlay
+        const overlay = new MapboxOverlay({
+          interleaved: true,
+          layers: [tile3DLayer],
+        });
+
+        mapInstance.addControl(overlay);
+      });
     }
   }, [map]);
 
   return (
-    <DeckGL
-      layers={[tile3DLayer]}
-      initialViewState={initialViewState}
-      controller={true}
-    >
-      <Map
-        reuseMaps
-        mapStyle={mapStyle}
-        ref={(ref) => ref && setMap(ref.getMap())}
-      />
+    <DeckGL initialViewState={INITIAL_VIEW_STATE} controller={true}>
+      <Map reuseMaps mapStyle={mapStyle} ref={(ref) => ref && setMap(ref)} />
     </DeckGL>
   );
 }
 
-export function renderToDOM(container: HTMLDivElement) {
+export function renderToDOM(container: HTMLElement) {
   createRoot(container).render(<App />);
 }
