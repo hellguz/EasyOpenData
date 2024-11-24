@@ -2,8 +2,8 @@
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import async_session, init_db
-from models import Building
+from app.database import async_session, init_db
+from app.models import Building
 from sqlalchemy.future import select
 from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +29,7 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 # Configure CORS
 origins = [
-    "http://localhost:8080",  # Frontend origin
+    "http://localhost:5173",  # Frontend origin
     # Add other origins if needed
 ]
 

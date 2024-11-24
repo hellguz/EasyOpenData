@@ -8,7 +8,7 @@ exclude_folders = ['node_modules', 'venv','.venv', '.github', 'tests', 'bin', 'o
 
 # Allowed file extensions
 #allowed_extensions = ('.py', '.js', '.jsx', '.ts', '.tsx', '.env', '.ini', '.txt', '.yml')
-not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson', 'dump.txt')
+not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson', '.json')
 
 def generate_tree(directory, prefix=''):
     """
@@ -45,15 +45,17 @@ with open('./.gpt/dump.txt', 'w', encoding='utf-8') as f:
 
         # Add files with allowed extensions to the list
         for name in filenames:         
-            if  not name.endswith(not_allowed_extensions):
-                objects_list.append(os.path.join(dirpath, name))
+            objects_list.append(os.path.join(dirpath, name))
 
     # Write filtered objects and their content to the dump file
     for obj in objects_list:
         if os.path.isfile(obj):
             try:
                 with open(obj, 'r', encoding='utf-8') as o:
-                    content = o.read()
+                    if  not obj.endswith(not_allowed_extensions):
+                        content = o.read()
+                    else:
+                        content = o.read()[:1000] + "\n................................"
                     f.write("&&& FILE: " + obj + '\n&&& CONTENT:\n' + content + '\n\n')
             except (IOError, UnicodeDecodeError) as e:
                 f.write(f"&&& FILE: {obj}\n&&& ERROR: Could not read file: {e}\n\n")
