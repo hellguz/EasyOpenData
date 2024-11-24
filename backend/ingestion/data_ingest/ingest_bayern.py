@@ -4,7 +4,7 @@ import subprocess
 import psycopg2
 from urllib.parse import urlparse
 
-DATA_DIR = 'backend/data_local/bayern'
+DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
 
 def ingest_gml_files():
@@ -13,15 +13,14 @@ def ingest_gml_files():
         cmd = [
             'ogr2ogr',
             '-f', 'PostgreSQL',
-            #'-overwrite',
+            '-overwrite',
             '-progress',
             '-lco', 'GEOMETRY_NAME=geom',
             '-skipfailures',
-            #'-nlt', 'CONVERT_TO_LINEAR',
             '-nlt', 'MULTIPOLYGON',
             '-dim', 'XYZ',
             '-s_srs', 'EPSG:25832',
-            '-t_srs', 'EPSG:3857',
+            '-t_srs', 'EPSG:4326',
             DATABASE_URL,
             gml_file
         ]

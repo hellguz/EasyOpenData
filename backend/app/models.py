@@ -9,4 +9,4 @@ class Building(Base):
 
     ogc_fid = Column(Integer, primary_key=True)
     name = Column(String)
-    geometry = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
+    geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
