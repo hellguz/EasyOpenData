@@ -1,95 +1,94 @@
-import React, { useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import { Map } from "react-map-gl/maplibre";
-import DeckGL from "@deck.gl/react";
-import { Tile3DLayer } from "@deck.gl/geo-layers";
-import { ScatterplotLayer, ArcLayer } from "@deck.gl/layers";
-import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { MapViewState } from "@deck.gl/core";
+import React, {useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {Map, NavigationControl, Popup, useControl} from 'react-map-gl/maplibre';
+import {GeoJsonLayer, ArcLayer, MapViewState, Tile3DLayer} from 'deck.gl';
+import {MapboxOverlay as DeckOverlay} from '@deck.gl/mapbox';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Tileset3D } from "@loaders.gl/tiles";
 
-const TILESET_URL = `http://localhost:8000/cache/tileset.json`;
-const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 49.4521,
-  longitude: 11.0767,
-  pitch: 45,
-  maxPitch: 60,
-  bearing: 0,
-  minZoom: 2,
-  maxZoom: 30,
-  zoom: 17,
-};
 
-export default function App({
-  mapStyle = "https://api.maptiler.com/maps/basic/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL",
-  updateAttributions,
-}: {
-  mapStyle?: string;
-  updateAttributions?: (attributions: any) => void;
-}) {
-  const mapRef = useRef(null);
-  const [map, setMap] = useState(null);
+// source: Natural Earth http://www.naturalearthdata.com/ via geojson.xyz
+const AIR_PORTS =
+  'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_10m_airports.geojson';
 
+  const TILESET_URL = `http://localhost:8000/cache/tileset.json`;
+  const INITIAL_VIEW_STATE: MapViewState = {
+    latitude: 49.4521,
+    longitude: 11.0767,
+    pitch: 45,
+    maxPitch: 60,
+    bearing: 0,
+    minZoom: 2,
+    maxZoom: 30,
+    zoom: 17,
+  };
+
+const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+function DeckGLOverlay(props) {
+  const overlay = useControl(() => new DeckOverlay(props));
+  overlay.setProps(props);
+  return null;
+}
+
+function Root() {
+  const [selected, setSelected] = useState(null);
   const [initialViewState, setInitialViewState] = useState(INITIAL_VIEW_STATE);
 
-  useEffect(() => {
-    if (map) {
-      const mapInstance = map.getMap();
+  const onTilesetLoad = (tileset: Tileset3D) => {
+    // Recenter view to cover the new tileset
+    const { cartographicCenter, zoom } = tileset;
+    setInitialViewState({
+      ...INITIAL_VIEW_STATE,
+      longitude: cartographicCenter[0],
+      latitude: cartographicCenter[1],
+      zoom,
+    });
 
-      // Wait for the style to load before accessing layers
-      mapInstance.once("style.load", () => {
-        const firstLabelLayer = mapInstance
-          .getStyle()
-          .layers.find((layer) => layer.type === "symbol");
+  };
 
-        if (!firstLabelLayer) {
-          console.error("No symbol layers found in the map style.");
-          return;
-        }
-
-        const firstLabelLayerId = firstLabelLayer.id;
-
-        const onTilesetLoad = (tileset: Tileset3D) => {
-          // Recenter view to cover the new tileset
-          const { cartographicCenter, zoom } = tileset;
-          setInitialViewState({
-            ...INITIAL_VIEW_STATE,
-            longitude: cartographicCenter[0],
-            latitude: cartographicCenter[1],
-            zoom,
-          });
-
-          if (updateAttributions) {
-            updateAttributions(tileset.credits && tileset.credits.attributions);
-          }
-        };
-
-        const tile3DLayer = new Tile3DLayer({
-          id: "tile-3d-layer",
-          pointSize: 2,
-          data: TILESET_URL,
-          onTilesetLoad,
-        });
-
-
-        // Add DeckGL overlay
-        const overlay = new MapboxOverlay({
-          interleaved: true,
-          layers: [tile3DLayer],
-        });
-
-        mapInstance.addControl(overlay);
-      });
-    }
-  }, [map]);
+  const layers = [
+    new Tile3DLayer({
+      id: "tile-3d-layer",
+      pointSize: 2,
+      data: TILESET_URL,
+      onTilesetLoad,
+    }),
+    new GeoJsonLayer({
+      id: 'airports',
+      data: AIR_PORTS,
+      // Styles
+      filled: true,
+      pointRadiusMinPixels: 2,
+      pointRadiusScale: 2000,
+      getPointRadius: f => 11 - f.properties.scalerank,
+      getFillColor: [200, 0, 80, 180],
+      // Interactive props
+      pickable: true,
+      autoHighlight: true,
+      onClick: info => setSelected(info.object)
+      // beforeId: 'watername_ocean' // In interleaved mode, render the layer under map labels
+    })
+  ];
 
   return (
-    <DeckGL initialViewState={INITIAL_VIEW_STATE} controller={true}>
-      <Map reuseMaps mapStyle={mapStyle} ref={(ref) => ref && setMap(ref)} />
-    </DeckGL>
+    <Map initialViewState={INITIAL_VIEW_STATE} mapStyle={MAP_STYLE}>
+      {selected && (
+        <Popup
+          key={selected.properties.name}
+          anchor="bottom"
+          style={{zIndex: 10}} /* position above deck.gl canvas */
+          longitude={selected.geometry.coordinates[0]}
+          latitude={selected.geometry.coordinates[1]}
+        >
+          {selected.properties.name} ({selected.properties.abbrev})
+        </Popup>
+      )}
+      <DeckGLOverlay layers={layers} /* interleaved*/ />
+      <NavigationControl position="top-left" />
+    </Map>
   );
 }
 
-export function renderToDOM(container: HTMLElement) {
-  createRoot(container).render(<App />);
-}
+/* global document */
+const container = document.body.appendChild(document.createElement('div'));
+createRoot(container).render(<Root />);
