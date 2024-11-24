@@ -10,7 +10,7 @@ from app.models import Building
 import os
 from pyproj import Transformer  # For coordinate transformation
 
-async def retrieve_obj(region_geojson, output_path):
+async def retrieve_obj_file(region_geojson, output_path):
     """
     Generates an OBJ file with buildings within the given polygon region.
 
@@ -127,6 +127,7 @@ async def retrieve_obj(region_geojson, output_path):
             obj_file.write("\n".join(obj_faces))
 
         print(f"OBJ file successfully written to {output_path}")
+        return
 
 # Example usage
 if __name__ == '__main__':
