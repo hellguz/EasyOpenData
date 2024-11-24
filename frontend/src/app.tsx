@@ -1,10 +1,13 @@
-import React, {useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Map, NavigationControl, Popup, useControl} from 'react-map-gl/maplibre';
 import {GeoJsonLayer, ArcLayer, MapViewState, Tile3DLayer} from 'deck.gl';
 import {MapboxOverlay as DeckOverlay} from '@deck.gl/mapbox';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Tileset3D } from "@loaders.gl/tiles";
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import { Editor, DrawPolygonMode } from 'react-map-gl-draw';
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 
 // source: Natural Earth http://www.naturalearthdata.com/ via geojson.xyz
@@ -45,7 +48,27 @@ function Root() {
     });
 
   };
+  const [features, setFeatures] = useState({});
 
+  const onUpdate = useCallback((e) => {
+    setFeatures(currFeatures => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        newFeatures[f.id] = f;
+      }
+      return newFeatures;
+    });
+  }, []);
+
+  const onDelete = useCallback((e) => {
+    setFeatures(currFeatures => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        delete newFeatures[f.id];
+      }
+      return newFeatures;
+    });
+  }, []);
   const layers = [
     new Tile3DLayer({
       id: "tile-3d-layer",
@@ -83,12 +106,37 @@ function Root() {
           {selected.properties.name} ({selected.properties.abbrev})
         </Popup>
       )}
+ 
       <DeckGLOverlay layers={layers} /* interleaved*/ />
+      <DrawControl
+        position="top-left"
+        displayControlsDefault={false}
+        controls={{
+          polygon: true,
+          trash: true
+        }}
+        defaultMode="draw_polygon"
+        onCreate={onUpdate}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+      />
       <NavigationControl position="top-left" />
     </Map>
   );
 }
 
+function DrawControl(props) {
+  useControl(
+    ({ map }) => {
+      const draw = new MapboxDraw(props);
+      map.addControl(draw);
+      return draw;
+    },
+    { position: props.position }
+  );
+
+  return null;
+}
 /* global document */
 const container = document.body.appendChild(document.createElement('div'));
 createRoot(container).render(<Root />);
