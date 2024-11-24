@@ -26,11 +26,11 @@ const INITIAL_VIEW_STATE: MapViewState = {
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
-  zoom: 17,
+  zoom: 15,
 };
 
 const MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+  "https://api.maptiler.com/maps/basic/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL";
 
 function DeckGLOverlay(props: any) {
   const overlay = useControl(() => new DeckOverlay(props));
@@ -141,6 +141,7 @@ function Root() {
       pointSize: 2,
       data: TILESET_URL,
       onTilesetLoad,
+      opacity: 0.6
     }),
     // new GeoJsonLayer({
     //   id: 'airports',
@@ -226,6 +227,130 @@ const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
             trash: false,
           },
           defaultMode: "simple_select",
+          styles: [
+            // === Active Polygon Styles ===
+            // Active polygon fill
+            {
+              id: "gl-draw-polygon-fill",
+              type: "fill",
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["!=", "mode", "static"],
+              ],
+              paint: {
+                "fill-color": "#ff0000", // Red color
+                "fill-opacity": 0.7,     // 70% opacity
+              },
+            },
+            // Active polygon outline
+            {
+              id: "gl-draw-polygon-stroke-active",
+              type: "line",
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["!=", "mode", "static"],
+              ],
+              layout: {},
+              paint: {
+                "line-color": "#ff0000", // Red color
+                "line-width": 2,
+              },
+            },
+            // === Inactive Polygon Styles ===
+            // Inactive polygon fill
+            {
+              id: "gl-draw-polygon-fill-inactive",
+              type: "fill",
+              filter: ["all", ["==", "$type", "Polygon"], ["==", "mode", "static"]],
+              paint: {
+                "fill-color": "#ff0000", // Red color
+                "fill-opacity": 0.7,     // 70% opacity
+              },
+            },
+            // Inactive polygon outline
+            {
+              id: "gl-draw-polygon-stroke-inactive",
+              type: "line",
+              filter: ["all", ["==", "$type", "Polygon"], ["==", "mode", "static"]],
+              layout: {},
+              paint: {
+                "line-color": "#ff0000", // Red color
+                "line-width": 2,
+              },
+            },
+            // === Line During Drawing ===
+            {
+              id: "gl-draw-polygon-and-line",
+              type: "line",
+              filter: [
+                "all",
+                ["==", "$type", "LineString"],
+                ["!=", "mode", "static"],
+              ],
+              layout: {
+                "line-cap": "round",
+                "line-join": "round",
+              },
+              paint: {
+                "line-color": "#ff0000", // Red color
+                "line-dasharray": [0.2, 2],
+                "line-width": 2,
+              },
+            },
+            // === Vertex Points During Drawing ===
+            {
+              id: "gl-draw-polygon-and-line-vertex",
+              type: "circle",
+              filter: [
+                "all",
+                ["==", "$type", "Point"],
+                ["!=", "meta", "midpoint"],
+                ["!=", "mode", "static"],
+              ],
+              paint: {
+                "circle-radius": 5,
+                "circle-color": "#ff0000", // Red color
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 2,
+              },
+            },
+            // === Midpoint Points ===
+            {
+              id: "gl-draw-polygon-and-line-midpoint",
+              type: "circle",
+              filter: [
+                "all",
+                ["==", "$type", "Point"],
+                ["==", "meta", "midpoint"],
+                ["!=", "mode", "static"],
+              ],
+              paint: {
+                "circle-radius": 5,
+                "circle-color": "#ffffff",
+                "circle-stroke-color": "#ff0000", // Red stroke
+                "circle-stroke-width": 2,
+              },
+            },
+            // === Vertex Points Inactive ===
+            {
+              id: "gl-draw-polygon-and-line-vertex-inactive",
+              type: "circle",
+              filter: [
+                "all",
+                ["==", "$type", "Point"],
+                ["!=", "meta", "midpoint"],
+                ["==", "mode", "static"],
+              ],
+              paint: {
+                "circle-radius": 5,
+                "circle-color": "#ff0000", // Red color
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 2,
+              },
+            },
+          ],
         });
         map.addControl(draw);
         if (ref && typeof ref !== "function") {
