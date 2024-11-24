@@ -1,9 +1,12 @@
 # ./backend/main.py
 
+import asyncio
+import tempfile
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session, init_db
-from app.models import Building
+from app.models import Building, RegionRequest
+from app.retrieve_geom import retrieve_obj_file
 from sqlalchemy.future import select
 from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,10 +38,10 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allowed origins
+    allow_origins=["http://localhost:5173"],  # Add your frontend URL
     allow_credentials=True,
-    allow_methods=["*"],    # Allow all HTTP methods
-    allow_headers=["*"],    # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")
@@ -53,4 +56,26 @@ async def get_db():
 async def read_root():
     return {"message": "Easy Open Data v1.0"}
 
+@app.post("/retrieve_obj")
+async def retrieve_obj(request: RegionRequest):
+    print(f"Received region: {request.region}")
+
+    try:
+        temp_path = os.path.join("/temp", "34.obj")
+        await retrieve_obj_file(request.region, temp_path)
+        return FileResponse(
+            temp_path,
+            media_type="application/octet-stream",
+            filename=f"object.txt")
+    except Exception as e:
+        logger.error(f"Error in retrieve_obj: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def remove_temp_file(file_path: str):
+    await asyncio.sleep(0)  # Ensure this runs after the response is sent
+    if os.path.exists(file_path):
+        os.unlink(file_path)
+
+        
 app.mount("/cache", StaticFiles(directory="cache"), name="cache")

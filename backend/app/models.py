@@ -10,3 +10,8 @@ class Building(Base):
     ogc_fid = Column(Integer, primary_key=True)
     name = Column(String)
     geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
+
+from pydantic import BaseModel
+
+class RegionRequest(BaseModel):
+    region: dict  # Adjust the type if you have a more specific structure
