@@ -17,7 +17,7 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 const AIR_PORTS =
   "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_10m_airports.geojson";
 
-const TILESET_URL = `http://localhost:8000/cache/tileset.json`;
+const TILESET_URL = `http://localhost:3303/cache/tileset.json`;
 const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.4521,
   longitude: 11.0767,
@@ -40,16 +40,15 @@ function DeckGLOverlay(props: any) {
 
 function Root() {
   const [selected, setSelected] = useState<any>(null);
-  const [initialViewState, setInitialViewState] =
-    useState<MapViewState>(INITIAL_VIEW_STATE);
+
+  const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
   const [features, setFeatures] = useState<Record<string, any>>({});
   const drawRef = useRef<MapboxDraw | null>(null);
 
   const onTilesetLoad = (tileset: Tileset3D) => {
-    // Recenter view to cover the new tileset
     const { cartographicCenter, zoom } = tileset;
-    setInitialViewState({
-      ...INITIAL_VIEW_STATE,
+    setViewState({
+      ...viewState,
       longitude: cartographicCenter[0],
       latitude: cartographicCenter[1],
       zoom,
@@ -101,7 +100,7 @@ function Root() {
       if (data.features.length > 0) {
         const regionJson = JSON.stringify(data);
         try {
-          const response = await fetch("http://localhost:8000/retrieve_obj", {
+          const response = await fetch("http://localhost:3303/retrieve_obj", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -162,7 +161,9 @@ function Root() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
       <Map
-        initialViewState={initialViewState}
+          // {...viewState}
+          // onMove={(e) => setViewState(e.viewState)}
+         initialViewState={viewState}
         mapStyle={MAP_STYLE}
         style={{ width: "100%", height: "100%" }}
       >
@@ -177,7 +178,7 @@ function Root() {
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers} />
+        <DeckGLOverlay layers={layers}  />
         <DrawControl
           ref={drawRef}
           onCreate={onUpdate}
