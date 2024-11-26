@@ -13,7 +13,7 @@ def ingest_gml_files():
         cmd = [
             'ogr2ogr',
             '-f', 'PostgreSQL',
-            '-overwrite',
+            #'-overwrite',
             '-progress',
             '-lco', 'GEOMETRY_NAME=geom',
             '-skipfailures',
