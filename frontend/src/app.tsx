@@ -1,4 +1,5 @@
-import React, { useCallback, useState, useRef } from "react";
+// Root.tsx
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Map,
@@ -6,21 +7,19 @@ import {
   Popup,
   useControl,
 } from "react-map-gl/maplibre";
-import { GeoJsonLayer, ArcLayer, MapViewState, Tile3DLayer } from "deck.gl";
+import { Tile3DLayer, MapViewState } from "deck.gl";
 import { MapboxOverlay as DeckOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Tileset3D } from "@loaders.gl/tiles";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
-
-// source: Natural Earth http://www.naturalearthdata.com/ via geojson.xyz
-const AIR_PORTS =
-  "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_10m_airports.geojson";
+import FloatingPanel from "./FloatingPanel";
+import * as turf from "@turf/turf";
 
 const TILESET_URL = `http://localhost:3303/cache/tileset.json`;
 const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 49.4521,
-  longitude: 11.0767,
+  latitude: 48.1374,
+  longitude: 11.5755,
   pitch: 45,
   maxPitch: 60,
   bearing: 0,
@@ -29,8 +28,7 @@ const INITIAL_VIEW_STATE: MapViewState = {
   zoom: 15,
 };
 
-const MAP_STYLE =
-  "https://api.maptiler.com/maps/basic/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL";
+const MAP_STYLE = "./src/basemap.json";
 
 function DeckGLOverlay(props: any) {
   const overlay = useControl(() => new DeckOverlay(props));
@@ -40,20 +38,23 @@ function DeckGLOverlay(props: any) {
 
 function Root() {
   const [selected, setSelected] = useState<any>(null);
-
   const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
   const [features, setFeatures] = useState<Record<string, any>>({});
+  const [isLod2Visible, setIsLod2Visible] = useState(true);
+  const [polygonArea, setPolygonArea] = useState<number | null>(null);
+
   const drawRef = useRef<MapboxDraw | null>(null);
 
   const onTilesetLoad = (tileset: Tileset3D) => {
     const { cartographicCenter, zoom } = tileset;
-    setViewState({
-      ...viewState,
+    setViewState((prev) => ({
+      ...prev,
       longitude: cartographicCenter[0],
       latitude: cartographicCenter[1],
       zoom,
-    });
+    }));
   };
+
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
       const newFeatures = { ...currFeatures };
@@ -62,6 +63,13 @@ function Root() {
       }
       return newFeatures;
     });
+
+    // Calculate polygon area
+    if (e.features && e.features.length > 0) {
+      const polygon = e.features[0];
+      const area = turf.area(polygon) / 1e6; // Convert from m² to km²
+      setPolygonArea(area);
+    }
   }, []);
 
   const onDelete = useCallback((e) => {
@@ -72,6 +80,7 @@ function Root() {
       }
       return newFeatures;
     });
+    setPolygonArea(null);
   }, []);
 
   const handleDrawPolygon = () => {
@@ -87,18 +96,10 @@ function Root() {
     }
   };
 
-  const handlePrintJSON = () => {
-    if (drawRef.current) {
-      const data = drawRef.current.getAll();
-      console.log(JSON.stringify(data, null, 2));
-    }
-  };
-
   const handleFetchObjFile = async () => {
     if (drawRef.current) {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
-        const regionJson = JSON.stringify(data);
         try {
           const response = await fetch("http://localhost:3303/retrieve_obj", {
             method: "POST",
@@ -107,7 +108,7 @@ function Root() {
             },
             body: JSON.stringify({ region: data }),
           });
-          
+
           if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -116,8 +117,11 @@ function Root() {
             a.href = url;
             // Use the filename from the Content-Disposition header if available
             const contentDisposition = response.headers.get("Content-Disposition");
-            const filenameMatch = contentDisposition && contentDisposition.match(/filename="?(.+)"?/i);
-            a.download = filenameMatch ? filenameMatch[1] : `yesyes_its_some_object_open_it_comeon.obj`;
+            const filenameMatch =
+              contentDisposition && contentDisposition.match(/filename="?(.+)"?/i);
+            a.download = filenameMatch
+              ? filenameMatch[1]
+              : `object_file.obj`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -133,38 +137,39 @@ function Root() {
     }
   };
 
+  const handleZoomChange = (event: any) => {
+    const newZoom = event.viewState.zoom;
+    setViewState(event.viewState);
+
+    // Toggle visibility based on zoom level
+    if (newZoom < 15) {
+      setIsLod2Visible(false);
+    } else {
+      setIsLod2Visible(true);
+    }
+  };
 
   const layers = [
     new Tile3DLayer({
       id: "tile-3d-layer",
-      pointSize: 2,
       data: TILESET_URL,
+      pickable: true,
+      autoHighlight: true,
+      onClick: (info, event) => console.log("Clicked:", info, event),
+      getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
+      getColor: [255, 255, 0, 120],
+      _useMeshColors: true,
       onTilesetLoad,
-      opacity: 0.6
+      visible: true,
     }),
-    // new GeoJsonLayer({
-    //   id: 'airports',
-    //   data: AIR_PORTS,
-    //   // Styles
-    //   filled: true,
-    //   pointRadiusMinPixels: 2,
-    //   pointRadiusScale: 2000,
-    //   getPointRadius: f => 11 - f.properties.scalerank,
-    //   getFillColor: [200, 0, 80, 180],
-    //   // Interactive props
-    //   pickable: true,
-    //   autoHighlight: true,
-    //   onClick: info => setSelected(info.object)
-    //   // beforeId: 'watername_ocean' // In interleaved mode, render the layer under map labels
-    // })
   ];
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
       <Map
-          // {...viewState}
-          // onMove={(e) => setViewState(e.viewState)}
-         initialViewState={viewState}
+        initialViewState={viewState}
         mapStyle={MAP_STYLE}
+        onMove={handleZoomChange}
         style={{ width: "100%", height: "100%" }}
       >
         {selected && (
@@ -178,7 +183,7 @@ function Root() {
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers}  />
+        <DeckGLOverlay layers={layers} />
         <DrawControl
           ref={drawRef}
           onCreate={onUpdate}
@@ -187,26 +192,12 @@ function Root() {
         />
         <NavigationControl position="top-left" />
       </Map>
-      <div
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          right: "20px",
-          backgroundColor: "white",
-          padding: "20px",
-          borderRadius: "10px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-          zIndex: 100,
-        }}
-      >
-        <button onClick={handleDrawPolygon}>Draw Polygon</button>
-        <button onClick={handleRemovePolygon}>Remove Polygon</button>
-        <button onClick={handlePrintJSON}>Print Polygon JSON</button>
-        <button onClick={handleFetchObjFile}>Fetch obj file</button>
-      </div>
+      <FloatingPanel
+        onDrawPolygon={handleDrawPolygon}
+        onRemovePolygon={handleRemovePolygon}
+        onFetchObjFile={handleFetchObjFile}
+        polygonArea={polygonArea}
+      />
     </div>
   );
 }
@@ -241,7 +232,7 @@ const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
               ],
               paint: {
                 "fill-color": "#ff0000", // Red color
-                "fill-opacity": 0.7,     // 70% opacity
+                "fill-opacity": 0.7, // 70% opacity
               },
             },
             // Active polygon outline
@@ -264,17 +255,25 @@ const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
             {
               id: "gl-draw-polygon-fill-inactive",
               type: "fill",
-              filter: ["all", ["==", "$type", "Polygon"], ["==", "mode", "static"]],
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["==", "mode", "static"],
+              ],
               paint: {
                 "fill-color": "#ff0000", // Red color
-                "fill-opacity": 0.7,     // 70% opacity
+                "fill-opacity": 0.7, // 70% opacity
               },
             },
             // Inactive polygon outline
             {
               id: "gl-draw-polygon-stroke-inactive",
               type: "line",
-              filter: ["all", ["==", "$type", "Polygon"], ["==", "mode", "static"]],
+              filter: [
+                "all",
+                ["==", "$type", "Polygon"],
+                ["==", "mode", "static"],
+              ],
               layout: {},
               paint: {
                 "line-color": "#ff0000", // Red color
@@ -354,6 +353,14 @@ const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
           ],
         });
         map.addControl(draw);
+
+        // Prevent adding the source multiple times
+        const existingSource = map.getSource("mapbox-gl-draw-cold");
+        if (existingSource) {
+          map.removeControl(draw);
+          return;
+        }
+
         if (ref && typeof ref !== "function") {
           ref.current = draw;
         }
