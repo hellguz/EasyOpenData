@@ -45,9 +45,26 @@ function Root() {
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [isLod2Visible, setIsLod2Visible] = useState(true);
   const [polygonArea, setPolygonArea] = useState<number | null>(null);
+  const mapRef = useRef<any>(null); // Reference to the map instance
 
-  const drawRef = useRef<MapboxDraw | null>(null);
+  const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
 
+  // Initialize MapboxDraw and add it to the map
+  const handleMapLoad = useCallback(() => {
+    const map = mapRef.current.getMap();
+
+    // Initialize MapboxDraw if not already initialized
+    if (!drawRef.current) {
+      drawRef.current = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+          polygon: true,
+          trash: true,
+        },
+      });
+      map.addControl(drawRef.current);
+    }
+  }, []);
   const onTilesetLoad = (tileset: Tileset3D) => {
     const { cartographicCenter, zoom } = tileset;
     setViewState((prev) => ({
@@ -100,6 +117,7 @@ function Root() {
   };
 
   const handleFetchObjFile = async () => {
+    console.info("getFetchObjFile")
     if (drawRef.current) {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
@@ -173,7 +191,9 @@ function Root() {
       <Map
         initialViewState={viewState}
         mapStyle={MAP_STYLE}
+        onLoad={handleMapLoad} // Ensure map is passed here
         onMove={handleZoomChange}
+        ref={mapRef}
         style={{ width: "100%", height: "100%" }}
       >
         {selected && (
