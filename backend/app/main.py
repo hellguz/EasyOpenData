@@ -91,42 +91,18 @@ def calculate_order_amount(amount: float):
     # people from directly manipulating the amount on the client
     return int(amount*100)
 
-class MapRequest(BaseModel):
-    id: str
-    amount: float 
-
-class PaymentRequest(BaseModel):
-    items : List[MapRequest]
-    
-
-
-# Request model for Checkout Session creation
-class CheckoutSessionRequest(BaseModel):
+class PaymentIntentRequest(BaseModel):
     amount: float
 
-@app.post("/create-checkout-session")
-async def create_checkout_session(data: CheckoutSessionRequest):
+@app.post("/create-payment-intent")
+async def create_payment_intent(data: PaymentIntentRequest):
     try:
-        YOUR_DOMAIN = "http://localhost:5173"  # Frontend domain
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "eur",
-                        "product_data": {
-                            "name": "Your Product",
-                        },
-                        "unit_amount": calculate_order_amount(data.amount),
-                    },
-                    "quantity": 1,
-                }
-            ],
-            mode="payment",
-            success_url=f"{YOUR_DOMAIN}/success",
-            cancel_url=f"{YOUR_DOMAIN}/cancel",
+        intent = stripe.PaymentIntent.create(
+            amount=calculate_order_amount(data.amount),  # Amount in cents
+            currency="eur",
+            automatic_payment_methods={"enabled": True},
         )
-        return {"id": checkout_session.id}
+        return {"clientSecret": intent.client_secret}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     

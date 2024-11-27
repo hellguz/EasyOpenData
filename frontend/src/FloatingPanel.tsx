@@ -1,6 +1,7 @@
-// FloatingPanel.tsx
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import CheckoutForm from "./CheckoutForm";
 
 // Initialize Stripe with your publishable key
 const stripePromise = loadStripe("hidden_api");
@@ -30,55 +31,6 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
-  const handlePayment = async (price, onFetchObjFile) => {
-    const stripe = await stripePromise;
-    if (!stripe) {
-      console.error("Stripe failed to load.");
-      return;
-    }
-  
-    try {
-      // Create a Checkout Session on the server
-      const response = await fetch("http://localhost:3303/create-checkout-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ amount: price }),
-      });
-  
-      if (!response.ok) {
-        throw new Error("Failed to create checkout session.");
-      }
-  
-      const session = await response.json();
-  
-      if (!session.id) {
-        throw new Error("Session ID is missing in the server response.");
-      }
-  
-      // Redirect to Stripe Checkout
-      const result = await stripe.redirectToCheckout({
-        sessionId: session.id,
-      });
-  
-      if (result.error) {
-        console.error(result.error.message);
-      } else {
-        // Show success message and trigger download after successful payment
-        document.getElementById("payment-message").textContent =
-          "Success! Thank you! Your download should start soon.";
-        onFetchObjFile();
-      }
-    } catch (error) {
-      console.error("An error occurred during payment:", error);
-    }
-  };
-
-  const handleDownloadWithoutPayment = () => {
-    onFetchObjFile();
-  };
-
   return (
     <div
       style={{
@@ -93,24 +45,22 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
         flexDirection: "column",
         gap: "10px",
         zIndex: 100,
-        width: "300px", // Twice as broad assuming original was ~150px
+        width: "300px",
       }}
     >
       <button onClick={onDrawPolygon}>Draw Polygon</button>
       <button onClick={onRemovePolygon}>Remove Polygon</button>
-      <button onClick={() => handlePayment(price, onFetchObjFile)} >
-        Download obj for {price.toFixed(2)} &euro;
-      </button>
-      <button onClick={handleDownloadWithoutPayment}>
-        Download obj without Payment
-      </button>
+      <Elements stripe={stripePromise}>
+        <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+      </Elements>
+      <button onClick={onFetchObjFile}>Download obj without Payment</button>
       {polygonArea !== null && (
         <div>
           <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
         </div>
       )}
-      <div id = "payment-message">
-        <strong>Payment info</strong>
+      <div id="payment-message" style={{ marginTop: "10px", color: "green" }}>
+        <strong>Payment Info:</strong>
       </div>
     </div>
   );
