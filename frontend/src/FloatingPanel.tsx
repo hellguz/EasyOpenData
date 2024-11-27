@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe("your-publishable-key-here");
+const stripePromise = loadStripe("hidden_api");
 
 interface FloatingPanelProps {
   onDrawPolygon: () => void;
@@ -22,7 +22,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
   useEffect(() => {
     if (polygonArea !== null) {
-      if (polygonArea < 2) {
+      if (polygonArea < 0.2) {
         setPrice(0);
       } else {
         setPrice(5 * polygonArea);
@@ -30,31 +30,48 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
-  const handlePayment = async () => {
+  const handlePayment = async (price, onFetchObjFile) => {
     const stripe = await stripePromise;
     if (!stripe) {
       console.error("Stripe failed to load.");
       return;
     }
-
-    // Create a Checkout Session on the server
-    const response = await fetch("http://localhost:3303/create-checkout-session", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ amount: price }),
-    });
-
-    const session = await response.json();
-
-    // Redirect to Stripe Checkout
-    const result = await stripe.redirectToCheckout({
-      sessionId: session.id,
-    });
-
-    if (result.error) {
-      console.error(result.error.message);
+  
+    try {
+      // Create a Checkout Session on the server
+      const response = await fetch("http://localhost:3303/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount: price }),
+      });
+  
+      if (!response.ok) {
+        throw new Error("Failed to create checkout session.");
+      }
+  
+      const session = await response.json();
+  
+      if (!session.id) {
+        throw new Error("Session ID is missing in the server response.");
+      }
+  
+      // Redirect to Stripe Checkout
+      const result = await stripe.redirectToCheckout({
+        sessionId: session.id,
+      });
+  
+      if (result.error) {
+        console.error(result.error.message);
+      } else {
+        // Show success message and trigger download after successful payment
+        document.getElementById("payment-message").textContent =
+          "Success! Thank you! Your download should start soon.";
+        onFetchObjFile();
+      }
+    } catch (error) {
+      console.error("An error occurred during payment:", error);
     }
   };
 
@@ -81,7 +98,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     >
       <button onClick={onDrawPolygon}>Draw Polygon</button>
       <button onClick={onRemovePolygon}>Remove Polygon</button>
-      <button onClick={handlePayment} >
+      <button onClick={() => handlePayment(price, onFetchObjFile)} >
         Download obj for {price.toFixed(2)} &euro;
       </button>
       <button onClick={handleDownloadWithoutPayment}>
@@ -92,6 +109,9 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
           <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
         </div>
       )}
+      <div id = "payment-message">
+        <strong>Payment info</strong>
+      </div>
     </div>
   );
 };
