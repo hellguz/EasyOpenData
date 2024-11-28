@@ -7,7 +7,7 @@ import {
   Popup,
   useControl,
 } from "react-map-gl/maplibre";
-import { Tile3DLayer, MapViewState } from "deck.gl";
+import { Tile3DLayer, MapViewState, AmbientLight, DirectionalLight, LightingEffect } from "deck.gl";
 import { MapboxOverlay as DeckOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Tileset3D } from "@loaders.gl/tiles";
@@ -74,6 +74,15 @@ function Root() {
       zoom,
     }));
   };
+
+  onTileLoad: (tile) => {
+    tile.content.traverse((object) => {
+      if (object.isMesh) {
+        // Adjust colors if needed
+        object.material.color.setHex(0xffffff);
+      }
+    });
+  }
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -170,18 +179,43 @@ function Root() {
     }
   };
 
+// Create ambient light
+const ambientLight = new AmbientLight({
+  color: [0, 255, 255],
+  intensity: 1.0
+});
+
+// Create directional light
+const directionalLight = new DirectionalLight({
+  color: [255, 255, 0],
+  intensity: 1.0,
+  direction: [-1, -3, -1]
+});
+
+// Create lighting effect
+const lightingEffect = new LightingEffect({ambientLight, directionalLight});
+
+
   const layers = [
     new Tile3DLayer({
       id: "tile-3d-layer",
       data: TILESET_URL,
       pickable: true,
-      autoHighlight: true,
+      autoHighlight: false,
       onClick: (info, event) => console.log("Clicked:", info, event),
       getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
-      getColor: [255, 255, 0, 120],
-      _useMeshColors: true,
       onTilesetLoad,
       visible: true,
+      // For ScenegraphLayer (b3dm or i3dm format)
+      _lighting: 'pbr',
+      effects: [lightingEffect],
+      // Additional sublayer props for fine-grained control
+      _subLayerProps: {
+        scenegraph: {
+          getColor: (d) => [250, 250, 250, 255], // Blue color for scenegraph models (alternative method)
+      effects: [lightingEffect]
+        }
+      }
     }),
   ];
 
@@ -207,7 +241,8 @@ function Root() {
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers} />
+        <DeckGLOverlay layers={layers}   effects={[lightingEffect]} // Apply the custom lighting effect globally
+ />
         {/* <DrawControl
           ref={drawRef}
           onCreate={onUpdate}
