@@ -181,19 +181,26 @@ function Root() {
 
 // Create ambient light
 const ambientLight = new AmbientLight({
-  color: [0, 255, 255],
+  color: [240, 255, 255],
   intensity: 1.0
 });
 
 // Create directional light
-const directionalLight = new DirectionalLight({
-  color: [255, 255, 0],
-  intensity: 1.0,
+const directionalLight1 = new DirectionalLight({
+  color: [220, 255, 255],
+  intensity: 0.6,
   direction: [-1, -3, -1]
 });
 
+// Create directional light
+const directionalLight2 = new DirectionalLight({
+  color:  [255, 220, 255],
+  intensity: 1,
+  direction: [1, -3, 1]
+});
+
 // Create lighting effect
-const lightingEffect = new LightingEffect({ambientLight, directionalLight});
+const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,directionalLight2});
 
 
   const layers = [
@@ -212,7 +219,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight});
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [250, 250, 250, 255], // Blue color for scenegraph models (alternative method)
+          getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
       effects: [lightingEffect]
         }
       }
