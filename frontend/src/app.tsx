@@ -19,10 +19,11 @@ import * as turf from "@turf/turf";
 import DrawControl from './draw-control';
 
 
-const TILESET_URL = `http://localhost:3303/cache/tileset.json`;
+const TILESET_URL = import.meta.env.VITE_BACKEND_URL + '/tileset/tileset.json';
+
 const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 48.1374,
-  longitude: 11.5755,
+  latitude: 49.8988,
+  longitude: 10.9028,   
   pitch: 45,
   maxPitch: 60,
   bearing: 0,
