@@ -91,7 +91,7 @@ def calculate_order_amount(amount: float):
     # people from directly manipulating the amount on the client
     return int(amount*100)
 
-class PaymentIntentRequest(BaseModel):
+class PaymentIntentRequest(BaseModel): 
     amount: float
 
 @app.post("/create-payment-intent")
@@ -106,4 +106,4 @@ async def create_payment_intent(data: PaymentIntentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-app.mount("/cache", StaticFiles(directory="cache"), name="cache")
+app.mount("/tileset", StaticFiles(directory="tileset"), name="tileset")

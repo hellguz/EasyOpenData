@@ -11,6 +11,10 @@ __pycache__/
 # Other ignores
 *.so
 
+# tileset
+backend/tileset/*
+!backend/tileset/
+
 *.gml
 *.gfs
 *.obj
@@ -18,5 +22,6 @@ __pycache__/
 #venv
 venv/
 .venv/
+.conda
 
 node_modules/

@@ -11,3 +11,6 @@ anyio
 pydantic
 packaging
 redis
+stripe
+pyproj
+lxml

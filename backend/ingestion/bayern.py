@@ -30,10 +30,10 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
-CACHE_DIR = 'backend/cache'
+CACHE_DIR = 'backend/tileset'
 
 # Configure logging
 logging.basicConfig(
@@ -177,9 +177,9 @@ def transform_gml(input_file, output_file):
 
     # Extract all namespaces
     namespaces = get_all_namespaces(tree)
-    print("Namespaces detected:")
-    for prefix, uri in namespaces.items():
-        print(f"  Prefix: '{prefix}' => URI: '{uri}'")
+    # print("Namespaces detected:")
+    # for prefix, uri in namespaces.items():
+    #     print(f"  Prefix: '{prefix}' => URI: '{uri}'")
 
     # Build a dictionary of gml:id to Polygon elements for quick lookup
     print("Indexing all <gml:Polygon> elements by gml:id...")
