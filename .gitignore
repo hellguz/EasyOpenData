@@ -13,7 +13,7 @@ __pycache__/
 
 # tileset
 backend/tileset/*
-!backend/tileset/
+!backend/tileset/README.md
 
 *.gml
 *.gfs
