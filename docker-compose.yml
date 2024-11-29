@@ -7,7 +7,13 @@ services:
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
-      - postgis_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -22,19 +28,21 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:barcelona@postgis:5432/easyopendata_database
     depends_on:
-      - postgis
+      postgis:
+        condition: service_healthy
 
-frontend:
-  build:
-    context: ./frontend
-    dockerfile: Dockerfile
-  volumes:
-    - ./frontend:/app
-  ports:
-    - 5173:5173
-  environment:
-    VITE_BACKEND_URL: http://localhost:8000
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - 5173:5173
+    environment:
+      VITE_BACKEND_URL: http://localhost:8000
 
 
 volumes:
-  postgis_data:
+  postgres_data:
