@@ -13,12 +13,18 @@ __pycache__/
 # Other ignores
 *.so
 
+# tileset
+backend/tileset/*
+!backend/tileset/
+
 *.gml
 *.gfs
+*.obj
 
 #venv
 venv/
 .venv/
+.conda
 
 node_modules/
 
@@ -221,199 +227,34 @@ For questions, feedback, or support, contact us at:
 
 - **Email**: support@opendataextractor.com
 
-&&& FILE: ./backend\.env
+&&& FILE: ./backend\output.obj
 &&& CONTENT:
-DATABASE_URL=postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database
-
-
-&&& FILE: ./backend\.gitignore
-&&& CONTENT:
-# Ignore local data files
-data_local/
-
-# Python cache
-__pycache__/
-*.pyc
-
-temp/
-cache/
-
-# Environment variables
-.env
-
-# Other ignores
-*.so
-
-*.gml
-*.gfs
-
-#venv
-venv/
-.venv/
-
-
-&&& FILE: ./backend\database.py
-&&& CONTENT:
-import os
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from models import Base
-
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database')
-
-engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = sessionmaker(
-    bind=engine, class_=AsyncSession, expire_on_commit=False
-)
-
-# Function to create tables
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
-
-&&& FILE: ./backend\main.py
-&&& CONTENT:
-# ./backend/main.py
-
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from database import async_session, init_db
-from models import Building
-from sqlalchemy.future import select
-from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-import json
-import math
-import redis
-import subprocess
-import os
-import logging
-from fastapi.staticfiles import StaticFiles
-
-import shutil
-
-# Configure Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = FastAPI()
-
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0) 
-
-# Configure CORS
-origins = [
-    "http://localhost:8080",  # Frontend origin
-    # Add other origins if needed
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allowed origins
-    allow_credentials=True,
-    allow_methods=["*"],    # Allow all HTTP methods
-    allow_headers=["*"],    # Allow all headers
-)
-
-@app.on_event("startup")
-async def on_startup():
-    await init_db()
-
-async def get_db():
-    async with async_session() as session:
-        yield session
-
-@app.get("/")
-async def read_root():
-    return {"message": "Hello World"}
-
-# Utility function to calculate tile bounding box
-def tile_bbox(x: int, y: int, z: int):
-    """
-    Calculate the bounding box for a given tile in EPSG:4326.
-
-    Args:
-        x (int): Tile X coordinate.
-        y (int): Tile Y coordinate.
-        z (int): Zoom level.
-
-    Returns:
-        tuple: (min_lon, min_lat, max_lon, max_lat)
-    """
-    n = 2.0 ** z
-    lon_deg_min = x / n * 360.0 - 180.0
-    lat_rad_min = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
-    lat_deg_min = math.degrees(lat_rad_min)
-
-    lon_deg_max = (x + 1) / n * 360.0 - 180.0
-    lat_rad_max = math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n)))
-    lat_deg_max = math.degrees(lat_rad_max)
-
-    logger.debug(f"tile_bbox({z}, {x}, {y}) = ({lon_deg_min}, {lat_deg_min}, {lon_deg_max}, {lat_deg_max})")
-    
-    return (lon_deg_min, lat_deg_min, lon_deg_max, lat_deg_max)
-
-app.mount("/cache", StaticFiles(directory="cache"), name="cache")
-
-@app.get("/buildings/tiles/{z}/{x}/{y}.b3dm")
-async def get_buildings_tile(z: int, x: int, y: int, db: AsyncSession = Depends(get_db)):
-    tile_key = f"{z}/{x}/{y}"
-    output_dir = f"./cache/tiles/{tile_key}"
-    os.makedirs(output_dir, exist_ok=True)
-
-    cmd = [
-        "C:\\PostgreSQL\\pg2b3dm\\pg2b3dm.exe",
-        "-h", "localhost",
-        "-U", "postgres",
-        "-d", "easyopendata_database",
-        "-t", "building",
-        "-c", "geometry",
-        "-a", "gml_id",
-        "-o", output_dir,
-        # "-q", query_str,  # Uncomment and modify if using spatial filtering
-    ]
-
-    env = os.environ.copy()
-    env['PGPASSWORD'] = 'barcelona'  # Replace with your actual password
-
-    logger.info(f"Running pg2b3dm command for tile {tile_key}: {' '.join(cmd)}")
-    try:
-        subprocess.run(cmd, check=True, env=env)
-    except FileNotFoundError:
-        logger.error("pg2b3dm executable not found.")
-        raise HTTPException(status_code=500, detail="pg2b3dm executable not found.")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error generating tile {tile_key}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating tile: {str(e)}")
-
-    # Adjust the tile path as per pg2b3dm output
-    tile_path = f"{output_dir}/tiles/0/0/0.b3dm"
-    if os.path.exists(tile_path):
-        logger.info(f"Tile {tile_key} generated and cached at {tile_path}")
-        return FileResponse(tile_path, media_type="application/octet-stream")
-    else:
-        logger.error(f"Tile not found after generation: {tile_path}")
-        raise HTTPException(status_code=404, detail="Tile not found after generation")
-    
-
-&&& FILE: ./backend\models.py
-&&& CONTENT:
-from sqlalchemy import Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from geoalchemy2 import Geometry
-
-Base = declarative_base()
-
-class Building(Base):
-    __tablename__ = 'building'
-
-    ogc_fid = Column(Integer, primary_key=True)
-    name = Column(String)
-    geometry = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
-
+# OBJ file generated from buildings
+v 650807.4799637606 0 5479426.030019235
+v 650811.3199686304 0 5479427.829986528
+v 650812.9799671678 0 5479421.270053929
+v 650812.8999825225 0 5479421.230021792
+v 650808.1799836652 0 5479418.730044991
+v 650807.0800038989 0 5479420.810042971
+v 650808.6600046919 0 5479421.569980272
+v 650807.4799637606 0 5479426.030019235
+v 650808.1799836652 0 5479418.730044991
+v 650808.1799836652 4.33 5479418.730044991
+v 650807.0800038989 4.33 5479420.810042971
+v 650807.0800038989 0 5479420.810042971
+v 650808.1799836652 0 5479418.730044991
+v 650808.1799836652 4.33 5479418.730044991
+v 650812.8999825225 4.33 5479421.230021792
+v 650812.9799671678 4.33 5479421.270053929
+v 650812.3590285704 4.33 5479423.724050431
+v 650808.6150303525 4.33 5479421.74094969
+v 650808.6600046919 4.33 5479421.569980272
+v 650807.0800038989 4.33 5479420.810042971
+v 650808.1799836652 4.33 5479418.730044991
+v 650812.8999825225 0 5479421.230021792
+v 650812.8999825225 4.33 5479421.230021792
+v 650808.179
+................................
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -430,6 +271,9 @@ anyio
 pydantic
 packaging
 redis
+stripe
+pyproj
+lxml
 
 &&& FILE: ./backend\setup_database.md
 &&& CONTENT:
@@ -668,375 +512,485 @@ print(response.json())
 
 
 
-&&& FILE: ./backend\cache\tileset.json
-&&& CONTENT:
-{
-  "asset": {
-    "generator": "pg2b3dm 2.18.1.0",
-    "version": "1.1"
-  },
-  "geometricError": 2000.0,
-  "root": {
-    "children": [
-      {
-        "geometricError": 250.0,
-        "boundingVolume": {
-          "region": [
-            0.19335084626674875,
-            0.8879755736299798,
-            0.19343239663189357,
-            0.8880238359358005,
-            0.0,
-            9.347000000000037
-          ]
-        },
-        "content": {
-          "uri": "content/1_0_1.glb"
-        }
-      },
-      {
-        "geometricError": 250.0,
-        "boundingVolume": {
-          "region": [
-            0.1934285068159936,
-            0.8879999251690178,
-            0.19350155212587686,
-            0.8880488462888476,
-            0.0,
-            11.625
-          ]
-        },
-        "content": {
-          "uri": "content/1_1_1.glb"
-        }
-      },
-      {
-        "geometricError": 62.5,
-        "boundingVolume": {
-          "region": [
-            0.19316303457999523,
-            0.862
-................................
-
-&&& FILE: ./backend\cache\tileset_3_1_0.json
-&&& CONTENT:
-{
-  "asset": {
-    "generator": "pg2b3dm 2.18.1.0",
-    "version": "1.1"
-  },
-  "geometricError": 250.0,
-  "root": {
-    "children": [
-      {
-        "geometricError": 31.25,
-        "boundingVolume": {
-          "region": [
-            0.19321727834592198,
-            0.8628205103745168,
-            0.19327583246781574,
-            0.8631369096418604,
-            0.0,
-            31.202999999999975
-          ]
-        },
-        "content": {
-          "uri": "content/4_2_0.glb"
-        }
-      },
-      {
-        "geometricError": 31.25,
-        "boundingVolume": {
-          "region": [
-            0.1932425398220154,
-            0.8628227918877767,
-            0.1933280939844969,
-            0.8631366747549941,
-            0.0,
-            36.910000000000025
-          ]
-        },
-        "content": {
-          "uri": "content/4_3_0.glb"
-        }
-      }
-    ],
-    "transform": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-     
-................................
-
-&&& FILE: ./backend\cache\tileset_3_3_0.json
-&&& CONTENT:
-{
-  "asset": {
-    "generator": "pg2b3dm 2.18.1.0",
-    "version": "1.1"
-  },
-  "geometricError": 250.0,
-  "root": {
-    "children": [
-      {
-        "geometricError": 31.25,
-        "boundingVolume": {
-          "region": [
-            0.19335067706996617,
-            0.8628197361372054,
-            0.19339999419207324,
-            0.8631331520889401,
-            0.0,
-            42.360000000000014
-          ]
-        },
-        "content": {
-          "uri": "content/4_6_0.glb"
-        }
-      },
-      {
-        "geometricError": 31.25,
-        "boundingVolume": {
-          "region": [
-            0.1933905682822639,
-            0.8628197362076032,
-            0.19344847960349917,
-            0.8631343633226729,
-            0.0,
-            40.56
-          ]
-        },
-        "content": {
-          "uri": "content/4_7_0.glb"
-        }
-      }
-    ],
-    "transform": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      
-................................
-
-&&& FILE: ./backend\cache\content\1_0_1.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa4 in position 9: invalid start byte
-
-&&& FILE: ./backend\cache\content\1_1_1.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xb0 in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\3_0_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 12: invalid start byte
-
-&&& FILE: ./backend\cache\content\3_2_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xf4 in position 8: invalid continuation byte
-
-&&& FILE: ./backend\cache\content\3_4_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xd0 in position 8: invalid continuation byte
-
-&&& FILE: ./backend\cache\content\3_5_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa7 in position 9: invalid start byte
-
-&&& FILE: ./backend\cache\content\3_6_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x98 in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\3_7_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xf8 in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\4_2_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xfc in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\4_3_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x80 in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\4_6_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0xa0 in position 8: invalid start byte
-
-&&& FILE: ./backend\cache\content\4_7_0.glb
-&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x8c in position 8: invalid start byte
-
-&&& FILE: ./backend\data_ingest\ingest_baden_wuerttemberg.py
+&&& FILE: ./backend\app\database.py
 &&& CONTENT:
 import os
-import glob
-import subprocess
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from app.models import Base
 
-DATA_DIR = 'data_local/baden_wuerttemberg'
-DATABASE_URL = os.getenv('DATABASE_URL', 'PG:dbname=your_db user=your_user password=your_pass')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database')
 
-def ingest_gml_files():
-    gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
-    for gml_file in gml_files:
-        cmd = [
-            'ogr2ogr',
-            '-f', 'PostgreSQL',
-            '-overwrite',
-            '-progress',
-            DATABASE_URL,
-            gml_file
-        ]
-        subprocess.run(cmd)
+engine = create_async_engine(DATABASE_URL, echo=True)
+async_session = sessionmaker(
+    bind=engine, class_=AsyncSession, expire_on_commit=False
+)
 
-if __name__ == '__main__':
-    ingest_gml_files()
+# Function to create tables
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 
-&&& FILE: ./backend\data_ingest\ingest_bayern.py
+&&& FILE: ./backend\app\main.py
 &&& CONTENT:
-import os
-import glob
+# ./backend/main.py
+
+import asyncio
+import tempfile
+from typing import List
+from urllib import request
+from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+import stripe
+from app.database import async_session, init_db
+from app.models import Building, RegionRequest
+from app.retrieve_geom import retrieve_obj_file
+from sqlalchemy.future import select
+from geoalchemy2.functions import ST_AsGeoJSON, ST_Intersects, ST_GeomFromText, ST_SimplifyPreserveTopology
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+import json
+import math
+import redis
 import subprocess
-import psycopg2
-from urllib.parse import urlparse
+import os
+import logging
+from fastapi.staticfiles import StaticFiles
 
-DATA_DIR = 'backend/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+import shutil
 
-def ingest_gml_files():
-    gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
-    for gml_file in gml_files:
-        cmd = [
-            'ogr2ogr',
-            '-f', 'PostgreSQL',
-            #'-overwrite',
-            '-progress',
-            '-lco', 'GEOMETRY_NAME=geom',
-            '-skipfailures',
-            #'-nlt', 'CONVERT_TO_LINEAR',
-            '-nlt', 'MULTIPOLYGON',
-            '-dim', 'XYZ',
-            '-s_srs', 'EPSG:25832',
-            '-t_srs', 'EPSG:3857',
-            DATABASE_URL,
-            gml_file
-        ]
-        subprocess.run(cmd)
+# Configure Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    
+app = FastAPI()
 
-def put_buildings_on_ground():
-    # Parse the DATABASE_URL to get connection parameters
-    url = urlparse(DATABASE_URL)
-    conn = psycopg2.connect(
-        dbname=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port
-    )
-    
-    with conn.cursor() as cur:
-        # Update the geometries to put them on ground level
-        cur.execute("""
-            UPDATE building
-            SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
-            WHERE ST_ZMin(geom) != 0;
-        """)
+# Initialize Redis client
+redis_client = redis.Redis(host='localhost', port=6379, db=0) 
+
+# Configure CORS
+origins = [
+    "http://localhost:5173",  # Frontend origin
+    # Add other origins if needed
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Add your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
+async def get_db():
+    async with async_session() as session:
+        yield session
+
+@app.get("/")
+async def read_root():
+    return {"message": "Easy Open Data v1.0"}
+
+@app.post("/retrieve_obj")
+async def retrieve_obj(request: RegionRequest):
+    print(f"Received region: {request.region}")
+
+    try:
+        temp_path = os.path.join("/temp", "34.obj")
+        await retrieve_obj_file(request.region, temp_path)
+        return FileResponse(
+            temp_path,
+            media_type="application/octet-stream",
+            filename=f"object.txt")
+    except Exception as e:
+        logger.error(f"Error in retrieve_obj: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def remove_temp_file(file_path: str):
+    await asyncio.sleep(0)  # Ensure this runs after the response is sent
+    if os.path.exists(file_path):
+        os.unlink(file_path)
+
         
-        conn.commit()
+stripe.api_key = 'REMOVED_STRIPE_KEY'
+
+
+def calculate_order_amount(amount: float):
+    # Replace this constant with a calculation of the order's amount
+    # Calculate the order total on the server to prevent
+    # people from directly manipulating the amount on the client
+    return int(amount*100)
+
+class PaymentIntentRequest(BaseModel): 
+    amount: float
+
+@app.post("/create-payment-intent")
+async def create_payment_intent(data: PaymentIntentRequest):
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=calculate_order_amount(data.amount),  # Amount in cents
+            currency="eur",
+            automatic_payment_methods={"enabled": True},
+        )
+        return {"clientSecret": intent.client_secret}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
-    conn.close()
-
-if __name__ == '__main__':
-    ingest_gml_files()
-    put_buildings_on_ground()
+app.mount("/tileset", StaticFiles(directory="tileset"), name="tileset")
 
 
-
-&&& FILE: ./backend\data_ingest\ingest_thuringia.py
+&&& FILE: ./backend\app\models.py
 &&& CONTENT:
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from geoalchemy2 import Geometry
+
+Base = declarative_base()
+
+class Building(Base):
+    __tablename__ = 'building'
+
+    ogc_fid = Column(Integer, primary_key=True)
+    name = Column(String)
+    geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
+
+from pydantic import BaseModel
+
+class RegionRequest(BaseModel):
+    region: dict  # Adjust the type if you have a more specific structure
+
+
+&&& FILE: ./backend\app\retrieve_geom.py
+&&& CONTENT:
+# ./backend/retrieve_obj.py
+
+import asyncio
+import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from geoalchemy2 import functions as func
+from app.database import async_session
+from app.models import Building
 import os
-import glob
-import subprocess
-import psycopg2
-from urllib.parse import urlparse
+from pyproj import Transformer  # For coordinate transformation
 
-DATA_DIR = 'backend/data_local/thuringia'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+async def retrieve_obj_file(region_geojson, output_path):
+    """
+    Generates an OBJ file with buildings within the given polygon region.
 
-def ingest_gml_files():
-    gml_files = glob.glob(os.path.join(DATA_DIR, '*.gml'))
-    for gml_file in gml_files:
-        cmd = [
-            'ogr2ogr',
-            '-f', 'PostgreSQL',
-            #'-overwrite',
-            '-progress',
-            '-lco', 'GEOMETRY_NAME=geom',
-            '-skipfailures',
-            #'-nlt', 'CONVERT_TO_LINEAR',
-            '-nlt', 'MULTIPOLYGON',
-            '-dim', 'XYZ',
-            '-s_srs', 'EPSG:25832',
-            '-t_srs', 'EPSG:3857',
-            DATABASE_URL,
-            gml_file
-        ]
-        subprocess.run(cmd)
-
+    Args:
+        region_geojson (dict): The GeoJSON representing the input region.
+        output_path (str): The file path where the OBJ file will be saved.
+    """
+    # Parse the input GeoJSON to get the polygon geometry
+    features = region_geojson.get('features', [])
+    if not features:
+        raise ValueError("No features found in the input GeoJSON.")
     
+    polygon_feature = features[0]
+    polygon_geometry = polygon_feature.get('geometry', {})
+    if polygon_geometry.get('type') != 'Polygon':
+        raise ValueError("The geometry must be of type 'Polygon'.")
 
-def put_buildings_on_ground():
-    # Parse the DATABASE_URL to get connection parameters
-    url = urlparse(DATABASE_URL)
-    conn = psycopg2.connect(
-        dbname=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port
-    )
-    
-    with conn.cursor() as cur:
-        # Update the geometries to put them on ground level
-        cur.execute("""
-            UPDATE building
-            SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
-            WHERE ST_ZMin(geom) != 0;
-        """)
+    # Convert GeoJSON geometry to GeoJSON string
+    polygon_geojson_str = json.dumps(polygon_geometry)
+
+    # Choose the appropriate projection (e.g., UTM zone 32N for Germany)
+    # You may need to adjust the EPSG code based on your location
+    source_crs = 'EPSG:4326'  # WGS84 Latitude/Longitude
+    target_crs = 'EPSG:25832'  # ETRS89 / UTM zone 32N (adjust as needed)
+
+    # Create a Transformer object for coordinate transformation
+    transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
+
+    # Start an asynchronous database session
+    async with async_session() as session:
+        # Query the database for buildings within the polygon
+        stmt = select(
+            Building.ogc_fid,
+            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+        ).where(
+            func.ST_Intersects(
+                func.ST_MakeValid(Building.geom),
+                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
+            )
+        )
+        result = await session.execute(stmt)
+        buildings = result.fetchall()
         
-        conn.commit()
-    
-    conn.close()
+        if not buildings:
+            print("No buildings found within the given region.")
+            return
 
+        # Initialize lists to store OBJ data
+        obj_vertices = []
+        obj_faces = []
+        vertex_offset = 0  # Offset for indexing vertices in faces
+
+        # Process each building geometry
+        for building in buildings:
+            ogc_fid = building.ogc_fid
+            geom_geojson_str = building.geom_geojson
+            if not geom_geojson_str:
+                continue  # Skip if geometry is null
+
+            # Load geometry from GeoJSON
+            geom_geojson = json.loads(geom_geojson_str)
+
+            # Handle Polygon and MultiPolygon geometries
+            geom_type = geom_geojson.get('type')
+            coordinates = geom_geojson.get('coordinates')
+
+            if geom_type == 'Polygon':
+                polygons = [coordinates]
+            elif geom_type == 'MultiPolygon':
+                polygons = coordinates
+            else:
+                print(f"Skipping unsupported geometry type (ID: {ogc_fid}, Type: {geom_type})")
+                continue
+
+            for polygon in polygons:
+                ring_vertex_indices = []
+
+                # Process exterior ring
+                exterior_coords = polygon[0]
+                exterior_indices = []
+                for coord in exterior_coords:
+                    lon, lat = coord[:2]
+                    z = coord[2] if len(coord) > 2 else 0
+                    # Transform coordinates
+                    x, y = transformer.transform(lon, lat)
+                    obj_vertices.append(f"v {x} {z} {y}")
+                    vertex_offset += 1
+                    exterior_indices.append(vertex_offset)
+                # Add face for exterior ring
+                obj_faces.append(f"f {' '.join(map(str, exterior_indices))}")
+
+                # Process interior rings (holes)
+                for interior_coords in polygon[1:]:
+                    interior_indices = []
+                    for coord in interior_coords:
+                        lon, lat = coord[:2]
+                        z = coord[2] if len(coord) > 2 else 0
+                        # Transform coordinates
+                        x, y = transformer.transform(lon, lat)
+                        obj_vertices.append(f"v {x} {z} {y}")
+                        vertex_offset += 1
+                        interior_indices.append(vertex_offset)
+                    # Add face for interior ring (negative indices to denote holes are not standard in OBJ)
+                    # Some software may not support holes directly
+                    # So, we can skip adding faces for holes or handle them as separate objects
+                    # For now, we'll skip adding faces for holes
+                    print(f"Skipping interior ring (hole) in building ID: {ogc_fid}")
+
+        # Write to OBJ file
+        with open(output_path, 'w') as obj_file:
+            obj_file.write("# OBJ file generated from buildings\n")
+            obj_file.write("\n".join(obj_vertices))
+            obj_file.write("\n")
+            obj_file.write("\n".join(obj_faces))
+
+        print(f"OBJ file successfully written to {output_path}")
+        return
+
+# Example usage
 if __name__ == '__main__':
-    ingest_gml_files()
-    put_buildings_on_ground()
+    # Load the input region GeoJSON
+    region_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "id": "bef0b7ecb5e2a869ea655de233909ed2",
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [11.078828018081367, 49.452387361598454],
+                            [11.075765898190326, 49.452622450748436],
+                            [11.07450436712378, 49.45031424385303],
+                            [11.076197865379754, 49.449993191955855],
+                            [11.08040312808447, 49.44850087839157],
+                            [11.085839287965683, 49.452705969665345],
+                            [11.078828018081367, 49.452387361598454]
+                        ]
+                    ]
+                }
+            }
+        ]
+    }
+    output_path = 'output.obj'
+    asyncio.run(retrieve_obj(region_geojson, output_path))
 
 
+&&& FILE: ./backend\docker\docker-compose.yml
+&&& CONTENT:
 
-&&& FILE: ./backend\data_ingest\transform_gml.py
+services:
+
+  postgis:
+    image: postgis/postgis:17-3.5
+    restart: always
+    # set shared memory limit when using docker-compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    ports:
+    - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: barcelona
+
+
+&&& FILE: ./backend\ingestion\bayern.py
 &&& CONTENT:
 #!/usr/bin/env python3
 """
-transform_gml.py
+process_meta4.py
 
-A script to transform a CityGML file by embedding polygon geometries directly within
-lod2Solid's surfaceMember elements, removing external xlink references.
+A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
+ingest them into a PostgreSQL database, convert them to 3D tiles, and remove the original files.
 
 Usage:
-    python transform_gml.py input.gml output.gml
+    python process_meta4.py file.meta4
+
+Requirements:
+    - Python 3.x
+    - lxml
+    - psycopg2
+    - ogr2ogr (from GDAL)
+    - pg2b3dm_new command available in PATH
 """
-
-### python .\transform_gml.py .\..\data_local\bayern\raw\650_5478.gml .\..\data_local\bayern\650_5478_trs.gml
-
 
 import sys
 import os
+import glob
+import subprocess
+import hashlib
+import logging
+import shutil
+from urllib.parse import urlparse
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
 from lxml import etree
+import psycopg2
+
+# Constants
+META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+DATA_DIR = 'backend/ingestion/data_local/bayern'
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+CACHE_DIR = 'backend/tileset'
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+def parse_meta4(meta4_file):
+    """
+    Parses the Meta4 XML file and extracts file information.
+
+    Args:
+        meta4_file (str): Path to the Meta4 XML file.
+
+    Returns:
+        list of dict: List containing information about each file.
+    """
+    logging.info(f"Parsing Meta4 file: {meta4_file}")
+    tree = etree.parse(meta4_file)
+    root = tree.getroot()
+    ns = {'metalink': 'urn:ietf:params:xml:ns:metalink'}
+
+    files = []
+    for file_elem in root.findall('metalink:file', namespaces=ns):
+        name = file_elem.get('name')
+        size = int(file_elem.find('metalink:size', namespaces=ns).text)
+        hash_elem = file_elem.find('metalink:hash', namespaces=ns)
+        hash_type = hash_elem.get('type')
+        hash_value = hash_elem.text
+        urls = [url_elem.text for url_elem in file_elem.findall('metalink:url', namespaces=ns)]
+        files.append({
+            'name': name,
+            'size': size,
+            'hash_type': hash_type,
+            'hash_value': hash_value,
+            'urls': urls
+        })
+    logging.info(f"Found {len(files)} files in Meta4.")
+    return files
+
+def download_file(url, dest_path):
+    """
+    Downloads a file from a URL to a destination path.
+
+    Args:
+        url (str): URL to download from.
+        dest_path (str): Destination file path.
+
+    Returns:
+        bool: True if download was successful, False otherwise.
+    """
+    try:
+        logging.info(f"Downloading from URL: {url}")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        req = Request(url, headers=headers)
+        with urlopen(req) as response, open(dest_path, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+        logging.info(f"Downloaded file to: {dest_path}")
+        return True
+    except HTTPError as e:
+        logging.warning(f"HTTP Error: {e.code} when downloading {url}")
+    except URLError as e:
+        logging.warning(f"URL Error: {e.reason} when downloading {url}")
+    except Exception as e:
+        logging.warning(f"Unexpected error when downloading {url}: {e}")
+    return False
+
+def verify_file(file_path, expected_size, expected_hash, hash_type='sha-256'):
+    """
+    Verifies the size and hash of a downloaded file.
+
+    Args:
+        file_path (str): Path to the file.
+        expected_size (int): Expected file size in bytes.
+        expected_hash (str): Expected hash value.
+        hash_type (str): Hash algorithm, default 'sha-256'.
+
+    Returns:
+        bool: True if verification succeeds, False otherwise.
+    """
+    logging.info(f"Verifying file: {file_path}")
+    # Check size
+    actual_size = os.path.getsize(file_path)
+    if actual_size != expected_size:
+        logging.error(f"Size mismatch for {file_path}: expected {expected_size}, got {actual_size}")
+        return False
+    # Check hash
+    hash_func = hashlib.new(hash_type)
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            hash_func.update(chunk)
+    actual_hash = hash_func.hexdigest()
+    if actual_hash.lower() != expected_hash.lower():
+        logging.error(f"Hash mismatch for {file_path}: expected {expected_hash}, got {actual_hash}")
+        return False
+    logging.info(f"Verification passed for {file_path}")
+    return True
 
 def get_all_namespaces(gml_tree):
     """
@@ -1080,9 +1034,9 @@ def transform_gml(input_file, output_file):
 
     # Extract all namespaces
     namespaces = get_all_namespaces(tree)
-    print("Namespaces detected:")
-    for prefix, uri in namespaces.items():
-        print(f"  Prefix: '{prefix}' => URI: '{uri}'")
+    # print("Namespaces detected:")
+    # for prefix, uri in namespaces.items():
+    #     print(f"  Prefix: '{prefix}' => URI: '{uri}'")
 
     # Build a dictionary of gml:id to Polygon elements for quick lookup
     print("Indexing all <gml:Polygon> elements by gml:id...")
@@ -1104,7 +1058,7 @@ def transform_gml(input_file, output_file):
             continue
         # Extract the referenced polygon ID (remove the '#' prefix)
         polygon_id = href.lstrip('#')
-        print(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
+        # print(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
         polygon = polygon_dict.get(polygon_id)
         if not polygon:
             print(f"Warning: Polygon with gml:id='{polygon_id}' not found. Skipping.")
@@ -1116,11 +1070,11 @@ def transform_gml(input_file, output_file):
         # Replace the surfaceMember's xlink:href attribute with the actual Polygon
         sm.clear()  # Remove existing children and attributes
         sm.append(polygon_copy)
-        print(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
+        # print(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
 
     # Optionally, remove standalone <gml:Polygon> elements that were referenced
-    print("Removing standalone <gml:Polygon> elements that were referenced...")
-    removed_count = 0
+    # print("Removing standalone <gml:Polygon> elements that were referenced...")
+    # removed_count = 0
     # for polygon_id in polygon_dict.keys():
     #     # Find and remove the standalone polygon
     #     polygons_to_remove = root.xpath(f'.//gml:Polygon[@gml:id="{polygon_id}"]', namespaces=namespaces)
@@ -1136,232 +1090,330 @@ def transform_gml(input_file, output_file):
     print(f"Writing transformed GML to: {output_file}")
     tree.write(output_file, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     print("Transformation complete.")
+def ingest_gml_file(gml_file, database_url):
+    """
+    Ingests a GML file into a PostgreSQL database using ogr2ogr.
 
-def main():
-    if len(sys.argv) != 3:
-        print("Usage: python transform_gml.py input.gml output.gml")
-        sys.exit(1)
-    
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
+    Args:
+        gml_file (str): Path to the GML file.
+        database_url (str): PostgreSQL connection URL.
+    """
+    logging.info(f"Ingesting GML file into database: {gml_file}")
+    cmd = [
+        'ogr2ogr',
+        '-f', 'PostgreSQL',
+        # '-overwrite',
+        '-progress',
+        '-lco', 'GEOMETRY_NAME=geom',
+        '-skipfailures',
+        '-nlt', 'MULTIPOLYGON',
+        '-dim', 'XYZ',
+        '-s_srs', 'EPSG:25832',
+        '-t_srs', 'EPSG:4326',
+        database_url,
+        gml_file
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
+        raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
+    logging.info(f"Ingested {gml_file} into database successfully.")
 
-    if not os.path.isfile(input_file):
-        print(f"Error: Input file '{input_file}' does not exist.")
-        sys.exit(1)
+def put_buildings_on_ground(database_url):
+    """
+    Updates the geometries in the 'building' table to put them on ground level.
 
+    Args:
+        database_url (str): PostgreSQL connection URL.
+    """
+    logging.info("Updating building geometries to ground level.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
     try:
-        transform_gml(input_file, output_file)
-    except etree.XMLSyntaxError as e:
-        print(f"XML Syntax Error: {e}")
-        sys.exit(1)
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE building
+                SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
+                WHERE ST_ZMin(geom) != 0;
+            """)
+            conn.commit()
+            logging.info("Building geometries updated successfully.")
     except Exception as e:
-        print(f"An error occurred during transformation: {e}")
+        logging.error(f"Failed to update building geometries: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def convert_to_3d_tiles(cache_dir, database_url):
+    """
+    Converts buildings from the database to 3D tiles using pg2b3dm_new.
+
+    Args:
+        cache_dir (str): Output directory for 3D tiles.
+        database_url (str): PostgreSQL connection URL.
+    """
+    logging.info("Converting buildings to 3D tiles with pg2b3dm_new.")
+    # Parse the database URL for parameters
+    url = urlparse(database_url)
+    dbname = url.path[1:]
+    user = url.username
+    host = url.hostname or 'localhost'
+    # Assume password is handled via environment or .pgpass
+    cmd = [
+        'pg2b3dm_new',
+        '-h', host,
+        '-U', user,
+        '-c', 'geom',
+        '-t', 'building',
+        '-d', dbname,
+        '-o', cache_dir, 
+        '--use_implicit_tiling', 'false'
+    ]
+    # To handle password, set PGPASSWORD environment variable if available
+    env = os.environ.copy()
+    if url.password:
+        env['PGPASSWORD'] = url.password
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    if result.returncode != 0:
+        logging.error(f"pg2b3dm_new failed: {result.stderr}")
+        raise RuntimeError(f"pg2b3dm_new failed: {result.stderr}")
+    logging.info("3D tiles generated successfully.")
+
+def remove_file(file_path):
+    """
+    Removes a file from the filesystem.
+
+    Args:
+        file_path (str): Path to the file.
+    """
+    try:
+        os.remove(file_path)
+        logging.info(f"Removed file: {file_path}")
+    except OSError as e:
+        logging.warning(f"Failed to remove file {file_path}: {e}")
+
+def main(meta4_file):
+    # Ensure DATA_DIR exists
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+    # Parse the Meta4 file
+    files = parse_meta4(meta4_file)
+
+    for file_info in files:
+        file_name = file_info['name']
+        size = file_info['size']
+        hash_type = file_info['hash_type']
+        hash_value = file_info['hash_value']
+        urls = file_info['urls']
+
+        logging.info(f"Processing file: {file_name}")
+
+        # Determine download paths
+        download_path = os.path.join(DATA_DIR, file_name)
+        transformed_file_name = os.path.splitext(file_name)[0] + '_trs.gml'
+        transformed_path = os.path.join(DATA_DIR, transformed_file_name)
+
+        # Download the file from available URLs
+        downloaded = False
+        for url in urls:
+            if download_file(url, download_path):
+                # Verify the file
+                if verify_file(download_path, size, hash_value, hash_type):
+                    downloaded = True
+                    break
+                else:
+                    logging.warning(f"Verification failed for {download_path}. Trying next URL.")
+                    remove_file(download_path)
+        if not downloaded:
+            logging.error(f"Failed to download and verify {file_name} from all URLs. Skipping.")
+            continue
+
+        try:
+            # Transform the GML file
+            transform_gml(download_path, transformed_path)
+
+            # Ingest the transformed GML into the database
+            ingest_gml_file(transformed_path, DATABASE_URL)
+
+            # Update building geometries
+            put_buildings_on_ground(DATABASE_URL)
+
+            # Convert to 3D tiles
+            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+
+            # Remove the transformed GML file
+            remove_file(transformed_path)
+            # Remove the transformed GFS file
+            remove_file(transformed_path.split(".")[0] + ".gfs")
+
+            # Optionally, remove the original downloaded GML file
+            remove_file(download_path)
+
+            logging.info(f"Completed processing for {file_name}")
+
+        except Exception as e:
+            logging.error(f"An error occurred while processing {file_name}: {e}")
+            # Optionally, clean up files or continue
+            continue
+
+    logging.info("All files processed.")
+
+if __name__ == '__main__':
+    meta4_file = META4_PATH
+    if not os.path.isfile(meta4_file):
+        logging.error(f"Meta4 file '{meta4_file}' does not exist.")
         sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+    main(meta4_file)
 
 
-&&& FILE: ./backend\data_local\README.md
-&&& CONTENT:
-# Data Local Directory
-
-Place your local GML data files here under their respective Bundesland directories.
-
-Example:
-
-- data_local/baden_wuerttemberg/file1.gml
-- data_local/bayern/file2.gml
-
-Ensure the directory structure matches the Bundesland names used in the data_ingest scripts.
-
-
-
-&&& FILE: ./backend\data_local\bayern\650_5478_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>6831</FeatureCount>
-      <ExtentXMin>649850.69500</ExtentXMin>
-      <ExtentXMax>652050.86000</ExtentXMax>
-      <ExtentYMin>5477946.35000</ExtentYMin>
-      <ExtentYMax>5480010.49000</ExtentYMax>
-    </DatasetSpecificInfo>
-    <PropertyDefn>
-      <Name>name</Name>
-      <ElementPath>name</ElementPath>
-      <Type>String</Type>
-      <Width>71</Width>
-    </PropertyDefn>
-    <PropertyDefn>
-      <Name>creationDate</Name>
-      <ElementPath>creationDate</ElementPath>
-      <Type>String</Type>
-      <Width>10</Width>
-    </PropertyDefn>
-    <PropertyDefn>
-      <Name>informationSystem</Name>
-      <ElementPa
-................................
-
-&&& FILE: ./backend\data_local\bayern\650_5478_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/1.0" xmlns:base="http://www.citygml.org/citygml/profiles/base/1.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:wtr="http://www.opengis.net/citygml/waterbody/1.0" xmlns:dem="http://www.opengis.net/citygml/relief/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:app="http://www.opengis.net/citygml/appearance/1.0" xmlns:frn="http://www.opengis.net/citygml/cityfurniture/1.0" xmlns:smil20="http://www.w3.org/2001/SMIL20/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:smil20lang="http://www.w3.org/2001/SMIL20/Language" xmlns:xAL="
-................................
-
-&&& FILE: ./backend\data_local\bayern\raw\650_5478.gml
+&&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/1.0" xmlns:base="http://www.citygml.org/citygml/profiles/base/1.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:wtr="http://www.opengis.net/citygml/waterbody/1.0" xmlns:dem="http://www.opengis.net/citygml/relief/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:app="http://www.opengis.net/citygml/appearance/1.0" xmlns:frn="http://www.opengis.net/citygml/cityfurniture/1.0" xmlns:smil20="http://www.w3.org/2001/SMIL20/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:smil20lang="http://www.w3.org/2001/SMIL20/Language" xmlns:xAL="
+<metalink xmlns="urn:ietf:params:xml:ns:metalink">
+  <generator>BVV-MetaLinker</generator>
+  <published>2024-11-26T22:13:07Z</published>
+  <file name="636_5524.gml">
+    <size>17451544</size>
+    <hash type="sha-256">a2a226df7ce76c817c5c112531104349fe6ed09735e1083a5b5644c2387f2f38</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
+  </file>
+  <file name="636_5522.gml">
+    <size>5602040</size>
+    <hash type="sha-256">b82c745b51646c5f28cd1f0c78bb9a3bce62b20495b0e0748d7dbc6cb9b7e5cc</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
+  </file>
+  <file name="630_5530.gml">
+    <size>30137377</size>
+    <hash type="sha-256">c2f0682332c699db30227f15b04de40a72d6a1158ef7ed4552ffb5fbe923920a</hash>
+    <url>https://download1.bayernwolke.de/a/l
 ................................
 
-&&& FILE: ./backend\data_local\thuringia\LoD1_32_646_5638_2_TH.gfs
+&&& FILE: ./backend\ingestion\data_sources\bayern.meta4
 &&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>239</FeatureCount>
-      <ExtentXMin>646203.33900</ExtentXMin>
-      <ExtentXMax>646800.64500</ExtentXMax>
-      <ExtentYMin>5638232.56300</ExtentYMin>
-      <ExtentYMax>5638712.02800</ExtentYMax>
-    </DatasetSpecificInfo>
-    <PropertyDefn>
-      <Name>creationDate</Name>
-      <ElementPath>creationDate</ElementPath>
-      <Type>String</Type>
-      <Width>10</Width>
-    </PropertyDefn>
-    <PropertyDefn>
-      <Name>informationSystem</Name>
-      <ElementPath>externalReference|informationSystem</ElementPath>
-      <Type>String</Type>
-      <Width>66</Width>
-    </PropertyDefn>
-    <PropertyDefn>
-      <Name>name</Name>
-      <ElementPath>externalReference|externalObject|name</ElementPath>
-      <Type>Str
+<?xml version="1.0" encoding="UTF-8"?>
+<metalink xmlns="urn:ietf:params:xml:ns:metalink">
+  <generator>BVV-MetaLinker</generator>
+  <published>2024-11-19T22:09:01Z</published>
+  <file name="792_5432.gml">
+    <size>10477602</size>
+    <hash type="sha-256">9796ed6c748821e06ff874296c6a8727d4ba25c596bd35cc8d8633f5133c235e</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/792_5432.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/792_5432.gml</url>
+  </file>
+  <file name="794_5346.gml">
+    <size>1085</size>
+    <hash type="sha-256">e5cb2ed98b116ab90f7a68a4523853f7fb8812d77ffc7d3ae5bfa59584f276e2</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/794_5346.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/794_5346.gml</url>
+  </file>
+  <file name="814_5382.gml">
+    <size>3212530</size>
+    <hash type="sha-256">e09623b720d46d8de5c2a971c5eea8944e9dd40f8aef80de716f6c0f7c710473</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/
 ................................
 
-&&& FILE: ./backend\data_local\thuringia\LoD1_32_646_5638_2_TH.gml
+&&& FILE: ./backend\ingestion\data_sources\munchen.meta4
 &&& CONTENT:
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<core:CityModel xmlns:xal="urn:oasis:names:tc:ciq:xsdschema:xAL:2.0" xmlns:bldg="http://www.opengis.net/citygml/building/1.0" xmlns:gml="http://www.opengis.net/gml" xmlns:core="http://www.opengis.net/citygml/1.0" xmlns:gen="http://www.opengis.net/citygml/generics/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/citygml/building/1.0 http://repository.gdi-de.org/schemas/adv/citygml/building/1.0/buildingLoD1.xsd http://www.opengis.net/citygml/1.0 http://repository.gdi-de.org/schemas/adv/citygml/1.0/cityGMLBaseLoD1.xsd http://www.opengis.net/citygml/generics/1.0 http://repository.gdi-de.org/schemas/adv/citygml/generics/1.0/genericsLoD1.xsd">
-  <gml:name>LoD1_32_646_5638_2_TH</gml:name>
-  <gml:boundedBy>
-    <gml:Envelope srsName="urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH">
-      <gml:lowerCorner srsDimension="3">646000.0 5638000.0 326.779</gm
+<?xml version="1.0" encoding="UTF-8"?>
+<metalink xmlns="urn:ietf:params:xml:ns:metalink">
+  <generator>BVV-MetaLinker</generator>
+  <published>2024-11-19T22:08:58Z</published>
+  <file name="680_5342.gml">
+    <size>4250333</size>
+    <hash type="sha-256">1353eebc758692b08ad7e3b10bfa39d032cb2e64831b89871fe748e5f40d80a5</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/680_5342.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/680_5342.gml</url>
+  </file>
+  <file name="678_5334.gml">
+    <size>30247980</size>
+    <hash type="sha-256">b177209b35906faf9bb9383e4a81321f1c732d33e77f0d33de79784aedc856fb</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/678_5334.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/678_5334.gml</url>
+  </file>
+  <file name="676_5338.gml">
+    <size>74799238</size>
+    <hash type="sha-256">09472ef2af047c3aa0922c9248187889e133c3904538f837232dd62322af7254</hash>
+    <url>https://download1.bayernwolke.de/a/l
 ................................
 
-&&& FILE: ./backend\data_sources\here i will put files with links to gml files
+&&& FILE: ./frontend\.gitignore
 &&& CONTENT:
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 
-&&& FILE: ./backend\postgis_docker\docker-compose.yml
+&&& FILE: ./frontend\eslint.config.js
 &&& CONTENT:
+import js from '@eslint/js'
+import globals from 'globals'
+import react from 'eslint-plugin-react'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
 
-services:
-
-  db:
-    image: postgis/postgis:17-3.5
-    restart: always
-    # set shared memory limit when using docker-compose
-    shm_size: 128mb
-    # or set shared memory limit when deploy via swarm stack
-    #volumes:
-    #  - type: tmpfs
-    #    target: /dev/shm
-    #    tmpfs:
-    #      size: 134217728 # 128*2^20 bytes = 128Mb
-    ports:
-    - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: barcelona
-
-
-&&& FILE: ./frontend\app.js
-&&& CONTENT:
-// app.js
-
-// Ensure that the script runs after all libraries have loaded
-document.addEventListener('DOMContentLoaded', () => {
-  initializeMap();
-});
-
-function initializeMap() {
-  // Initialize MapLibre Map
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://api.maptiler.com/maps/basic/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL', // Basemap style
-    center: [11.0767, 49.4521], // Nürnberg coordinates [lng, lat]
-    zoom: 15,
-    pitch: 45,
-    bearing: 0,
-    minZoom: 10,
-    maxZoom: 18, // Reduced maxZoom for performance
-    antialias: false, // Disables antialiasing for better performance
-    renderWorldCopies: false, // Prevents rendering multiple copies of the world
-  });
-
-  map.addControl(new maplibregl.NavigationControl(), 'top-right'); // Optional: Add navigation controls
-
-  map.on('load', () => {
-    // Create a Deck instance as a MapboxOverlay
-    const deckOverlay = new deck.MapboxOverlay({
-      layers: [
-        new deck.Tile3DLayer({
-          id: 'tile-3d-layer',
-          data: 'http://localhost:8000/cache/tileset.json', // Replace with your tileset URL
-          // loader: deck.loaders3DTiles, // Specify the loader explicitly
-          onTileLoad: handleTileLoad, // Optional: Handle tile load events
-          onTileError: handleTileError, // Optional: Handle tile load errors
-          maxZoom: 18, // Align with map's maxZoom
-          minZoom: 10, // Align with map's minZoom
-          cull: true, // Enable frustum culling
-          dynamic: true, // Enable dynamic rendering
-          loadOptions: {
-            workers: 4, // Number of worker threads
-            useDraco: true, // Enable Draco compression if supported by tileset
-          },
-          pickable: false, // Disable picking for performance if not needed
-        })
-      ],
-      parameters: {
-        depthTest: true,
-        blend: true,
+export default [
+  { ignores: ['dist'] },
+  {
+    files: ['**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
       },
-      //viewState: map.getFreeCameraOptions(), // Sync Deck.gl view with MapLibre
-    });
-
-    // Add the Deck overlay to the map
-    map.addControl(deckOverlay);
-  });
-}
-
-// Optional: Handle tile load success
-function handleTileLoad(tile) {
-  console.log(`Tile loaded: ${tile.url}`);
-}
-
-// Optional: Handle tile load errors
-function handleTileError(error, tile) {
-  console.error(`Error loading tile ${tile.url}:`, error);
-}
+    },
+    settings: { react: { version: '18.3' } },
+    plugins: {
+      react,
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      ...react.configs.recommended.rules,
+      ...react.configs['jsx-runtime'].rules,
+      ...reactHooks.configs.recommended.rules,
+      'react/jsx-no-target-blank': 'off',
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
+    },
+  },
+]
 
 
 &&& FILE: ./frontend\index.html
@@ -1369,42 +1421,99 @@ function handleTileError(error, tile) {
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>3D Tiles Example with MapLibre Basemap</title>
+  <meta charset="utf-8">
+  <title>deck.gl Example</title>
   
-  <!-- MapLibre GL JS CSS -->
-  <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
-  
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css" type="text/css">
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-    /* Map Container */
-    #map {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 100%;
-    }
+    body, body > div {margin: 0; width: 100vw; height: 100vh; overflow: hidden;}
   </style>
 </head>
 <body>
-  <!-- Map Container -->
-  <div id="map"></div>
-  
-  <!-- Include Libraries via CDN with defer -->
-  <script  src="https://unpkg.com/@loaders.gl/core@3.4.10/dist/dist.min.js"></script>
-  <script  src="https://unpkg.com/@loaders.gl/3d-tiles@3.4.10/dist/dist.min.js"></script>
-  <script  src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
-  <script  src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
-  
-  <!-- Initialize the Application -->
-  <script  src="./app.js"></script>
 </body>
+<script type="module" src="./src/app.tsx"></script>
 </html>
 
+&&& FILE: ./frontend\package-lock.json
+&&& CONTENT:
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "frontend",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deck.gl/core": "^9.0.0",
+        "@deck.gl/layers": "^9.0.0",
+        "@deck.gl/mapbox": "^9.0.0",
+        "@loaders.gl/3d-tiles": "^4.2.0",
+        "@mapbox/mapbox-gl-draw": "^1.4.3",
+        "@stripe/react-stripe-js": "^3.0.0",
+        "@stripe/stripe-js": "^5.2.0",
+        "@turf/turf": "^7.1.0",
+        "@types/react": "^18.0.0",
+        "@types/react-dom": "^18.0.0",
+        "deck.gl": "^9.0.0",
+        "mapbox-gl": "^3.8.0",
+        "maplibre-gl": "^3.0.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-map-gl": "^7.1.0"
+      },
+      "devDependencies": {
+        "@eslint/js": "^9.13.0",
+        "@types/react": "^18.3.12",
+        "@types/react-dom": "^18.3.1",
+        "@vitejs/plugin-react": "^4.3.3",
+        "eslint": "^9.13.0",
+        "eslint-plugin
+................................
+
+&&& FILE: ./frontend\package.json
+&&& CONTENT:
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.0.0",
+    "@deck.gl/layers": "^9.0.0",
+    "@deck.gl/mapbox": "^9.0.0",
+    "@loaders.gl/3d-tiles": "^4.2.0",
+    "@mapbox/mapbox-gl-draw": "^1.4.3",
+    "@stripe/react-stripe-js": "^3.0.0",
+    "@stripe/stripe-js": "^5.2.0",
+    "@turf/turf": "^7.1.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "deck.gl": "^9.0.0",
+    "mapbox-gl": "^3.8.0",
+    "maplibre-gl": "^3.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-map-gl": "^7.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+
+................................
 
 &&& FILE: ./frontend\README.md
 &&& CONTENT:
@@ -1423,5 +1532,720 @@ This is a simple frontend HTML page that displays 2D buildings of Nürnberg usin
    ```bash
    cd frontend
    python -m http.server 8080
+
+
+&&& FILE: ./frontend\tsconfig.json
+&&& CONTENT:
+{
+    "compilerOptions": {
+      "target": "es2020",
+      "jsx": "react",
+      "moduleResolution": "node",
+      "allowSyntheticDefaultImports": true
+    }
+  }
+................................
+
+&&& FILE: ./frontend\vite.config.js
+&&& CONTENT:
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+
+
+&&& FILE: ./frontend\public\vite.svg
+&&& CONTENT:
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
+
+&&& FILE: ./frontend\src\app.tsx
+&&& CONTENT:
+// Root.tsx
+import React, { useCallback, useState, useRef, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Map,
+  NavigationControl,
+  Popup,
+  useControl,
+} from "react-map-gl/maplibre";
+import { Tile3DLayer, MapViewState, AmbientLight, DirectionalLight, LightingEffect } from "deck.gl";
+import { MapboxOverlay as DeckOverlay } from "@deck.gl/mapbox";
+import "maplibre-gl/dist/maplibre-gl.css";
+import type { Tileset3D } from "@loaders.gl/tiles";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+import FloatingPanel from "./FloatingPanel";
+import * as turf from "@turf/turf";
+
+import DrawControl from './draw-control';
+
+
+const TILESET_URL = `http://localhost:3303/cache/tileset.json`;
+const INITIAL_VIEW_STATE: MapViewState = {
+  latitude: 48.1374,
+  longitude: 11.5755,
+  pitch: 45,
+  maxPitch: 60,
+  bearing: 0,
+  minZoom: 2,
+  maxZoom: 30,
+  zoom: 15,
+};
+
+const MAP_STYLE = "./src/basemap.json";
+
+function DeckGLOverlay(props: any) {
+  const overlay = useControl(() => new DeckOverlay(props));
+  overlay.setProps(props);
+  return null;
+}
+
+function Root() {
+  const [selected, setSelected] = useState<any>(null);
+  const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
+  const [features, setFeatures] = useState<Record<string, any>>({});
+  const [isLod2Visible, setIsLod2Visible] = useState(true);
+  const [polygonArea, setPolygonArea] = useState<number | null>(null);
+  const mapRef = useRef<any>(null); // Reference to the map instance
+
+  const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
+
+  // Initialize MapboxDraw and add it to the map
+  const handleMapLoad = useCallback(() => {
+    const map = mapRef.current.getMap();
+
+    // Initialize MapboxDraw if not already initialized
+    if (!drawRef.current) {
+      drawRef.current = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+          polygon: true,
+          trash: true,
+        },
+      });
+      map.addControl(drawRef.current);
+    }
+  }, []);
+  const onTilesetLoad = (tileset: Tileset3D) => {
+    const { cartographicCenter, zoom } = tileset;
+    setViewState((prev) => ({
+      ...prev,
+      longitude: cartographicCenter[0],
+      latitude: cartographicCenter[1],
+      zoom,
+    }));
+  };
+
+  onTileLoad: (tile) => {
+    tile.content.traverse((object) => {
+      if (object.isMesh) {
+        // Adjust colors if needed
+        object.material.color.setHex(0xffffff);
+      }
+    });
+  }
+
+  const onUpdate = useCallback((e) => {
+    setFeatures((currFeatures) => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        newFeatures[f.id] = f;
+      }
+      return newFeatures;
+    });
+
+    // Calculate polygon area
+    if (e.features && e.features.length > 0) {
+      const polygon = e.features[0];
+      const area = turf.area(polygon) / 1e6; // Convert from m² to km²
+      setPolygonArea(area);
+    }
+  }, []);
+
+  const onDelete = useCallback((e) => {
+    setFeatures((currFeatures) => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        delete newFeatures[f.id];
+      }
+      return newFeatures;
+    });
+    setPolygonArea(null);
+  }, []);
+
+  const handleDrawPolygon = () => {
+    if (drawRef.current) {
+      drawRef.current.deleteAll();
+      drawRef.current.changeMode("draw_polygon");
+    }
+  };
+
+  const handleRemovePolygon = () => {
+    if (drawRef.current) {
+      drawRef.current.deleteAll();
+    }
+  };
+
+  const handleFetchObjFile = async () => {
+    console.info("getFetchObjFile")
+    if (drawRef.current) {
+      const data = drawRef.current.getAll();
+      if (data.features.length > 0) {
+        try {
+          const response = await fetch("http://localhost:3303/retrieve_obj", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ region: data }),
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            // Use the filename from the Content-Disposition header if available
+            const contentDisposition = response.headers.get("Content-Disposition");
+            const filenameMatch =
+              contentDisposition && contentDisposition.match(/filename="?(.+)"?/i);
+            a.download = filenameMatch
+              ? filenameMatch[1]
+              : `object_file.obj`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+          } else {
+            console.error("Failed to fetch obj file");
+          }
+        } catch (error) {
+          console.error("Error fetching obj file:", error);
+        }
+      } else {
+        console.error("No polygon drawn");
+      }
+    }
+  };
+
+  const handleZoomChange = (event: any) => {
+    const newZoom = event.viewState.zoom;
+    setViewState(event.viewState);
+
+    // Toggle visibility based on zoom level
+    if (newZoom < 15) {
+      setIsLod2Visible(false);
+    } else {
+      setIsLod2Visible(true);
+    }
+  };
+
+// Create ambient light
+const ambientLight = new AmbientLight({
+  color: [240, 255, 255],
+  intensity: 1.0
+});
+
+// Create directional light
+const directionalLight1 = new DirectionalLight({
+  color: [220, 255, 255],
+  intensity: 0.6,
+  direction: [-1, -3, -1]
+});
+
+// Create directional light
+const directionalLight2 = new DirectionalLight({
+  color:  [255, 220, 255],
+  intensity: 1,
+  direction: [1, -3, 1]
+});
+
+// Create lighting effect
+const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,directionalLight2});
+
+
+  const layers = [
+    new Tile3DLayer({
+      id: "tile-3d-layer",
+      data: TILESET_URL,
+      pickable: true,
+      autoHighlight: false,
+      onClick: (info, event) => console.log("Clicked:", info, event),
+      getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
+      onTilesetLoad,
+      visible: true,
+      // For ScenegraphLayer (b3dm or i3dm format)
+      _lighting: 'pbr',
+      effects: [lightingEffect],
+      // Additional sublayer props for fine-grained control
+      _subLayerProps: {
+        scenegraph: {
+          getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
+      effects: [lightingEffect]
+        }
+      }
+    }),
+  ];
+
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100vh" }}>
+      <Map
+        initialViewState={viewState}
+        mapStyle={MAP_STYLE}
+        onLoad={handleMapLoad} // Ensure map is passed here
+        onMove={handleZoomChange}
+        ref={mapRef}
+        style={{ width: "100%", height: "100%" }}
+      >
+        {selected && (
+          <Popup
+            key={selected.properties.name}
+            anchor="bottom"
+            style={{ zIndex: 10 }}
+            longitude={selected.geometry.coordinates[0]}
+            latitude={selected.geometry.coordinates[1]}
+          >
+            {selected.properties.name} ({selected.properties.abbrev})
+          </Popup>
+        )}
+        <DeckGLOverlay layers={layers}   effects={[lightingEffect]} // Apply the custom lighting effect globally
+ />
+        {/* <DrawControl
+          ref={drawRef}
+          onCreate={onUpdate}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+        /> */}
+        <NavigationControl position="top-left" />
+
+        <DrawControl
+          position="top-right"
+          displayControlsDefault={false}
+          controls={{
+            polygon: true,
+            trash: true
+          }}
+          defaultMode="draw_polygon"
+          onCreate={onUpdate}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+        />
+      </Map>
+      <FloatingPanel
+        onDrawPolygon={handleDrawPolygon}
+        onRemovePolygon={handleRemovePolygon}
+        onFetchObjFile={handleFetchObjFile}
+        polygonArea={polygonArea}
+      />
+    </div>
+  );
+}
+
+interface DrawControlProps {
+  onCreate: (e: any) => void;
+  onUpdate: (e: any) => void;
+  onDelete: (e: any) => void;
+}
+
+// const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
+//   (props, ref) => {
+//     useControl(
+//       ({ map }) => {
+//         const draw = new MapboxDraw({
+//           displayControlsDefault: false,
+//           controls: {
+//             polygon: false,
+//             trash: false,
+//           },
+//           defaultMode: "simple_select",
+//           styles: [
+//             // === Active Polygon Styles ===
+//             // Active polygon fill
+//             {
+//               id: "gl-draw-polygon-fill",
+//               type: "fill",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Polygon"],
+//                 ["!=", "mode", "static"],
+//               ],
+//               paint: {
+//                 "fill-color": "#ff0000", // Red color
+//                 "fill-opacity": 0.7, // 70% opacity
+//               },
+//             },
+//             // Active polygon outline
+//             {
+//               id: "gl-draw-polygon-stroke-active",
+//               type: "line",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Polygon"],
+//                 ["!=", "mode", "static"],
+//               ],
+//               layout: {},
+//               paint: {
+//                 "line-color": "#ff0000", // Red color
+//                 "line-width": 2,
+//               },
+//             },
+//             // === Inactive Polygon Styles ===
+//             // Inactive polygon fill
+//             {
+//               id: "gl-draw-polygon-fill-inactive",
+//               type: "fill",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Polygon"],
+//                 ["==", "mode", "static"],
+//               ],
+//               paint: {
+//                 "fill-color": "#ff0000", // Red color
+//                 "fill-opacity": 0.7, // 70% opacity
+//               },
+//             },
+//             // Inactive polygon outline
+//             {
+//               id: "gl-draw-polygon-stroke-inactive",
+//               type: "line",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Polygon"],
+//                 ["==", "mode", "static"],
+//               ],
+//               layout: {},
+//               paint: {
+//                 "line-color": "#ff0000", // Red color
+//                 "line-width": 2,
+//               },
+//             },
+//             // === Line During Drawing ===
+//             {
+//               id: "gl-draw-polygon-and-line",
+//               type: "line",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "LineString"],
+//                 ["!=", "mode", "static"],
+//               ],
+//               layout: {
+//                 "line-cap": "round",
+//                 "line-join": "round",
+//               },
+//               paint: {
+//                 "line-color": "#ff0000", // Red color
+//                 "line-dasharray": [0.2, 2],
+//                 "line-width": 2,
+//               },
+//             },
+//             // === Vertex Points During Drawing ===
+//             {
+//               id: "gl-draw-polygon-and-line-vertex",
+//               type: "circle",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Point"],
+//                 ["!=", "meta", "midpoint"],
+//                 ["!=", "mode", "static"],
+//               ],
+//               paint: {
+//                 "circle-radius": 5,
+//                 "circle-color": "#ff0000", // Red color
+//                 "circle-stroke-color": "#ffffff",
+//                 "circle-stroke-width": 2,
+//               },
+//             },
+//             // === Midpoint Points ===
+//             {
+//               id: "gl-draw-polygon-and-line-midpoint",
+//               type: "circle",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Point"],
+//                 ["==", "meta", "midpoint"],
+//                 ["!=", "mode", "static"],
+//               ],
+//               paint: {
+//                 "circle-radius": 5,
+//                 "circle-color": "#ffffff",
+//                 "circle-stroke-color": "#ff0000", // Red stroke
+//                 "circle-stroke-width": 2,
+//               },
+//             },
+//             // === Vertex Points Inactive ===
+//             {
+//               id: "gl-draw-polygon-and-line-vertex-inactive",
+//               type: "circle",
+//               filter: [
+//                 "all",
+//                 ["==", "$type", "Point"],
+//                 ["!=", "meta", "midpoint"],
+//                 ["==", "mode", "static"],
+//               ],
+//               paint: {
+//                 "circle-radius": 5,
+//                 "circle-color": "#ff0000", // Red color
+//                 "circle-stroke-color": "#ffffff",
+//                 "circle-stroke-width": 2,
+//               },
+//             },
+//           ],
+//         });
+//         map.addControl(draw);
+
+//         // Prevent adding the source multiple times
+//         const existingSource = map.getSource("mapbox-gl-draw-cold");
+//         if (existingSource) {
+//           map.removeControl(draw);
+//           return;
+//         }
+
+//         if (ref && typeof ref !== "function") {
+//           ref.current = draw;
+//         }
+//         return draw;
+//       },
+//       { position: "top-left" }
+//     );
+
+//     return null;
+//   }
+// );
+
+const container = document.body.appendChild(document.createElement("div"));
+createRoot(container).render(<Root />);
+
+
+&&& FILE: ./frontend\src\basemap.json
+&&& CONTENT:
+{
+  "version": 8,
+  "name": "Positron",
+  "metadata": {
+    "mapbox:autocomposite": false,
+    "mapbox:groups": {
+      "101da9f13b64a08fa4b6ac1168e89e5f": {
+        "collapsed": false,
+        "name": "Places"
+      },
+      "a14c9607bc7954ba1df7205bf660433f": {"name": "Boundaries"},
+      "b6371a3f2f5a9932464fa3867530a2e5": {
+        "collapsed": false,
+        "name": "Transportation"
+      }
+    },
+    "mapbox:type": "template",
+    "openmaptiles:mapbox:owner": "openmaptiles",
+    "openmaptiles:mapbox:source:url": "mapbox://openmaptiles.4qljc88t",
+    "openmaptiles:version": "3.x",
+    "maputnik:renderer": "mlgljs"
+  },
+  "sources": {
+    "openmaptiles": {
+      "type": "vector",
+      "url": "https://api.maptiler.com/tiles/v3-openmaptiles/tiles.json?key=rkAUNMAmIqET28RXGV5e"
+    }
+  },
+  "sprite": "https://openmaptiles.github.io/positron-gl-style/sprite",
+  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=rkAUNMAmIqET28RXGV5e",
+  "layers": [
+    {
+      "id": 
+................................
+
+&&& FILE: ./frontend\src\CheckoutForm.tsx
+&&& CONTENT:
+import React, { useState } from "react";
+import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
+
+interface CheckoutFormProps {
+  price: number;
+  onFetchObjFile: () => void;
+}
+
+const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!stripe || !elements) {
+      console.error("Stripe has not loaded yet.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Create PaymentIntent on the server
+      const response = await fetch("http://localhost:3303/create-payment-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount: Math.round(price * 100) }), // Amount in cents
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create PaymentIntent.");
+      }
+
+      const { clientSecret } = await response.json();
+
+      // Confirm Card Payment
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement)!,
+        },
+      });
+
+      if (result.error) {
+        console.error(result.error.message);
+        document.getElementById("payment-message")!.textContent = result.error.message;
+      } else if (result.paymentIntent?.status === "succeeded") {
+        document.getElementById("payment-message")!.textContent =
+          "Success! Thank you! Your download should start soon.";
+        onFetchObjFile(); // Trigger download
+      }
+    } catch (error) {
+      console.error("An error occurred during payment:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ marginTop: "10px" }}>
+      <CardElement />
+      <button type="submit" disabled={!stripe || loading} style={{ marginTop: "10px" }}>
+        {loading ? "Processing..." : `Pay €${price.toFixed(2)}`}
+      </button>
+    </form>
+  );
+};
+
+export default CheckoutForm;
+
+
+&&& FILE: ./frontend\src\draw-control.ts
+&&& CONTENT:
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import {useControl} from 'react-map-gl';
+
+import type {MapRef, ControlPosition} from 'react-map-gl';
+
+type DrawControlProps = ConstructorParameters<typeof MapboxDraw>[0] & {
+  position?: ControlPosition;
+
+  onCreate?: (evt: {features: object[]}) => void;
+  onUpdate?: (evt: {features: object[]; action: string}) => void;
+  onDelete?: (evt: {features: object[]}) => void;
+};
+
+export default function DrawControl(props: DrawControlProps) {
+  useControl<MapboxDraw>(
+    () => new MapboxDraw(props),
+    ({map}: {map: MapRef}) => {
+      map.on('draw.create', props.onCreate);
+      map.on('draw.update', props.onUpdate);
+      map.on('draw.delete', props.onDelete);
+    },
+    ({map}: {map: MapRef}) => {
+      map.off('draw.create', props.onCreate);
+      map.off('draw.update', props.onUpdate);
+      map.off('draw.delete', props.onDelete);
+    },
+    {
+      position: props.position
+    }
+  );
+
+  return null;
+}
+
+DrawControl.defaultProps = {
+  onCreate: () => {},
+  onUpdate: () => {},
+  onDelete: () => {}
+};
+
+&&& FILE: ./frontend\src\FloatingPanel.tsx
+&&& CONTENT:
+import React, { useState, useEffect } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import CheckoutForm from "./CheckoutForm";
+
+// Initialize Stripe with your publishable key
+const stripePromise = loadStripe("hidden_api");
+
+interface FloatingPanelProps {
+  onDrawPolygon: () => void;
+  onRemovePolygon: () => void;
+  onFetchObjFile: () => void;
+  polygonArea: number | null; // in square kilometers
+}
+
+const FloatingPanel: React.FC<FloatingPanelProps> = ({
+  onDrawPolygon,
+  onRemovePolygon,
+  onFetchObjFile,
+  polygonArea,
+}) => {
+  const [price, setPrice] = useState<number>(0);
+
+  useEffect(() => {
+    if (polygonArea !== null) {
+      if (polygonArea < 0.2) {
+        setPrice(0);
+      } else {
+        setPrice(5 * polygonArea);
+      }
+    }
+  }, [polygonArea]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: "20px",
+        right: "20px",
+        backgroundColor: "white",
+        padding: "20px",
+        borderRadius: "10px",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        zIndex: 100,
+        width: "300px",
+      }}
+    >
+      <button onClick={onDrawPolygon}>Draw Polygon</button>
+      <button onClick={onRemovePolygon}>Remove Polygon</button>
+      <Elements stripe={stripePromise}>
+        <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+      </Elements>
+      <button onClick={onFetchObjFile}>Download obj without Payment</button>
+      {polygonArea !== null && (
+        <div>
+          <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
+        </div>
+      )}
+      <div id="payment-message" style={{ marginTop: "10px", color: "green" }}>
+        <strong>Payment Info:</strong>
+      </div>
+    </div>
+  );
+};
+
+export default FloatingPanel;
 
 
