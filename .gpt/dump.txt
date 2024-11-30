@@ -56,10 +56,11 @@ file
 &&& CONTENT:
 services:
   postgis:
+    container_name: easyopen_db
     image: postgis/postgis:17-3.5
     restart: always
     ports:
-      - 5432:5432
+      - 8735:5432
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
@@ -71,7 +72,8 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  easyopen_backend:
+    container_name: easyopen_backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -88,7 +90,8 @@ services:
       postgis:
         condition: service_healthy
 
-  frontend:
+  easyopen_frontend:
+    container_name: easyopen_frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -98,8 +101,7 @@ services:
     ports:
       - 5173:5173
     environment:
-      VITE_BACKEND_URL: http://localhost:5400
-
+      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
 
 volumes:
   postgres_data:
@@ -330,7 +332,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models import Base
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:8735/easyopendata_database')
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 async_session = sessionmaker(
@@ -380,18 +382,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0) 
-
-# Configure CORS
-origins = [
-    "http://localhost:5173",  # Frontend origin
-    # Add other origins if needed
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Add your frontend URL
+    allow_origins=["http://localhost:5173", "http://easyopen.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -681,8 +675,9 @@ import psycopg2
 # Constants
 META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
+PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 
 # Configure logging
 logging.basicConfig(
@@ -945,22 +940,23 @@ def put_buildings_on_ground(database_url):
 
 def convert_to_3d_tiles(cache_dir, database_url):
     """
-    Converts buildings from the database to 3D tiles using pg2b3dm_new.
+    Converts buildings from the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
     """
-    logging.info("Converting buildings to 3D tiles with pg2b3dm_new.")
+    logging.info("Converting buildings to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
+    port=url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
-        'pg2b3dm_new',
-        '-h', host,
+        PG2B3DM_PATH,
+        '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
         '-t', 'building',
@@ -974,8 +970,8 @@ def convert_to_3d_tiles(cache_dir, database_url):
         env['PGPASSWORD'] = url.password
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     if result.returncode != 0:
-        logging.error(f"pg2b3dm_new failed: {result.stderr}")
-        raise RuntimeError(f"pg2b3dm_new failed: {result.stderr}")
+        logging.error(f"pg2b3dm failed: {result.stderr}")
+        raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
 
 def remove_file(file_path):
@@ -1066,85 +1062,41 @@ if __name__ == '__main__':
     main(meta4_file)
 
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528.gml
+&&& FILE: ./backend\ingestion\README.md
+&&& CONTENT:
+These scripts can be executed to download 3D Bulidings data from gml files, ingest them in the database, and create a Tileset of 3D Tiles from the database.
+
+Before you run the scripts:
+
+1. Create a conda environment in the root project folder (EasyOpenData):
+...
+2. activate the new environment:
+...
+3. Install GDAL with libraries:
+conda install -c conda-forge gdal libgdal 
+3. Install all other dependencies:
+pip install -r .\backend\requirements.txt
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5526.gml
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gfs
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5526_trs.gfs
 &&& CONTENT:
 <GMLFeatureClassList>
   <GMLFeatureClass>
     <Name>Building</Name>
     <ElementPath>Building</ElementPath>
     <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>3183</FeatureCo
+    <GeometryElementPath>lod2Solid</GeometryEleme
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gml
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5526_trs.gml
 &&& CONTENT:
 <?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>1090</FeatureCo
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>6875</FeatureCo
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
@@ -1153,10 +1105,7 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-26T22:13:07Z</published>
-  <file name="636_5524.gml">
-    <size>17451544</size>
-    <hash type="sha-256">a2a226df7ce76c817c5c112531104349fe6ed09735e1083a5b5644c2387f2f38</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</u
+  <file name="636_5524.g
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bayern.meta4
@@ -1165,10 +1114,7 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-19T22:09:01Z</published>
-  <file name="792_5432.gml">
-    <size>10477602</size>
-    <hash type="sha-256">9796ed6c748821e06ff874296c6a8727d4ba25c596bd35cc8d8633f5133c235e</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/792_5432.gml</u
+  <file name="792_5432.g
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\munchen.meta4
@@ -1177,11 +1123,11 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-19T22:08:58Z</published>
-  <file name="680_5342.gml">
-    <size>4250333</size>
-    <hash type="sha-256">1353eebc758692b08ad7e3b10bfa39d032cb2e64831b89871fe748e5f40d80a5</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/680_5342.gml</ur
+  <file name="680_5342.g
 ................................
+
+&&& FILE: ./backend\ingestion\libs\pg2b3dm.exe
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 2: invalid start byte
 
 &&& FILE: ./frontend\.gitignore
 &&& CONTENT:
@@ -1219,7 +1165,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package.json and yarn.lock first for dependency installation
-COPY package.json yarn.lock ./
+COPY package.json ./
 
 # Install dependencies
 RUN yarn install 
@@ -1304,13 +1250,6 @@ export default [
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
-  },
-  "dependencies": {
-    "@deck.gl/core": "^9.0.0",
-    "@deck.gl/layers": "^9.0.0",
-    "@deck.gl/mapbox": "^9.0.0",
-    "@loaders.gl/3d-tiles": "^4.2.0",
-    "@mapbox/mapbox-gl-draw": "^1.4.3",
 
 ................................
 
@@ -1361,29 +1300,188 @@ export default defineConfig({
 })
 
 
-&&& FILE: ./frontend\yarn.lock
+&&& FILE: ./frontend\docs\agb.md
 &&& CONTENT:
-# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
-# yarn lockfile v1
+# Allgemeine Geschäftsbedingungen
+
+## 1. Geltungsbereich
+
+Diese Allgemeinen Geschäftsbedingungen gelten für alle Bestellungen, die Kunden über unsere Website [Ihre Website-URL] tätigen.
+
+## 2. Vertragsschluss
+
+Der Vertrag kommt zustande, wenn wir Ihre Bestellung durch eine Auftragsbestätigung per E-Mail unmittelbar nach dem Erhalt Ihrer Bestellung annehmen.
+
+## 3. Preise und Zahlungsbedingungen
+
+Alle Preise sind Endpreise und enthalten die gesetzliche Mehrwertsteuer. Die Zahlung erfolgt per [Ihre Zahlungsmethoden, z.B. Kreditkarte, PayPal].
+
+## 4. Lieferung und Downloadbereitstellung
+
+Die bestellten Daten werden nach Zahlungseingang zum Download bereitgestellt oder per E-Mail zugesandt.
+
+## 5. Widerrufsrecht
+
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+## 6. Haftungsausschluss
+
+Wir übernehmen keine Haftung für die Richtigkeit, Vollständigkeit und Aktualität der bereitgestellten Daten.
+
+## 7. Urheberrecht
+
+Die heruntergeladenen Daten dürfen nur für den persönlichen Gebrauch verwendet werden. Eine Weitergabe an Dritte ist nicht gestattet.
+
+## 8. Datenschutz
+
+Wir verarbeiten Ihre personenbezogenen Daten gemäß unserer Datenschutzerklärung.
+
+## 9. Schlussbestimmungen
+
+Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist [Ihr Gerichtsstand].
+
+&&& FILE: ./frontend\docs\datenschutz.md
+&&& CONTENT:
+# Datenschutzerklärung
+
+Stand: [Aktuelles Datum]
+
+## 1. Datenschutz auf einen Blick
+
+### Allgemeine Hinweise
+Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
+
+### Datenerfassung auf dieser Website
+
+#### Wer ist verantwortlich für die Datenerfassung auf dieser Website?
+Die Datenverarbeitung auf dieser Website erfolgt durch den Websitebetreiber. Dessen Kontaktdaten können Sie dem Impressum dieser Website entnehmen.
+
+#### Wie erfassen wir Ihre Daten?
+Ihre Daten werden zum einen dadurch erhoben, dass Sie uns diese mitteilen. Hierbei kann es sich z.B. um Daten handeln, die Sie in ein Kontaktformular eingeben.
+
+Andere Daten werden automatisch beim Besuch der Website durch unsere IT-Systeme erfasst. Das sind vor allem technische Daten (z.B. Internetbrowser, Betriebssystem oder Uhrzeit des Seitenaufrufs).
+
+#### Wofür nutzen wir Ihre Daten?
+Ein Teil der Daten wird erhoben, um eine fehlerfreie Bereitstellung der Website zu gewährleisten. Andere Daten können zur Analyse Ihres Nutzerverhaltens verwendet werden.
+
+#### Welche Rechte haben Sie bezüglich Ihrer Daten?
+Sie haben jederzeit das Recht unentgeltlich Auskunft über Herkunft, Empfänger und Zweck Ihrer gespeicherten personenbezogenen Daten zu erhalten. Sie haben außerdem ein Recht, die Berichtigung, Sperrung oder Löschung dieser Daten zu verlangen. Hierzu sowie zu weiteren Fragen zum Thema Datenschutz können Sie sich jederzeit unter der im Impressum angegebenen Adresse an uns wenden.
+
+## 2. Allgemeine Hinweise und Pflichtinformationen
+
+### Datenschutz
+Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerklärung.
+
+### Hinweis zur verantwortlichen Stelle
+Die verantwortliche Stelle für die Datenverarbeitung auf dieser Website ist:
+
+[Ihr Name]
+[Ihre Straße und Hausnummer]
+[Ihre Postleitzahl und Stadt]
+
+Telefon: [Ihre Telefonnummer]
+E-Mail: [Ihre E-Mail-Adresse]
+
+Verantwortliche Stelle ist die natürliche oder juristische Person, die allein oder gemeinsam mit anderen über die Zwecke und Mittel der Verarbeitung von personenbezogenen Daten (z.B. Namen, E-Mail-Adressen o. Ä.) entscheidet.
+
+## 3. Datenerfassung auf unserer Website
+
+### Cookies
+Die Internetseiten verwenden teilweise so genannte Cookies. Cookies richten auf Ihrem Rechner keinen Schaden an und enthalten keine Viren. Cookies dienen dazu, unser Angebot nutzerfreundlicher, effektiver und sicherer zu machen.
+
+### Server-Log-Dateien
+Der Provider der Seiten erhebt und speichert automatisch Informationen in so genannten Server-Log-Dateien, die Ihr Browser automatisch an uns übermittelt. Dies sind:
+
+- Browsertyp und Browserversion
+- verwendetes Betriebssystem
+- Referrer URL
+- Hostname des zugreifenden Rechners
+- Uhrzeit der Serveranfrage
+- IP-Adresse
+
+Eine Zusammenführung dieser Daten mit anderen Datenquellen wird nicht vorgenommen.
+
+### Kontaktformular
+Wenn Sie uns per Kontaktformular Anfragen zukommen lassen, werden Ihre Angaben aus dem Anfrageformular inklusive der von Ihnen dort angegebenen Kontaktdaten zwecks Bearbeitung der Anfrage und für den Fall von Anschlussfragen bei uns gespeichert. Diese Daten geben wir nicht ohne Ihre Einwilligung weiter.
+
+### Zahlungsdaten
+Bei der Bezahlung über unsere Website werden Ihre Zahlungsdaten zur Abwicklung der Transaktion an unseren Zahlungsdienstleister übermittelt. Diese Daten werden verschlüsselt übertragen und nur für den Zweck der Zahlungsabwicklung verwendet.
+
+## 4. Analyse Tools und Werbung
+
+[Falls Sie Analyse-Tools wie Google Analytics verwenden, fügen Sie hier die entsprechenden Informationen ein]
+
+## 5. Plugins und Tools
+
+[Falls Sie Plugins oder Tools von Drittanbietern verwenden, fügen Sie hier die entsprechenden Informationen ein]
+
+## 6. Ihre Rechte als betroffene Person
+
+Sie haben das Recht:
+
+- gemäß Art. 15 DSGVO Auskunft über Ihre von uns verarbeiteten personenbezogenen Daten zu verlangen;
+- gemäß Art. 16 DSGVO unverzüglich die Berichtigung unrichtiger oder Vervollständigung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
+- gemäß Art. 17 DSGVO die Löschung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
+- gemäß Art. 18 DSGVO die Einschränkung der Verarbeitung Ihrer personenbezogenen Daten zu verlangen;
+- gemäß Art. 20 DSGVO Ihre personenbezogenen Daten, die Sie uns bereitgestellt haben, in einem strukturierten, gängigen und maschinenlesbaren Format zu erhalten oder die Übermittlung an einen anderen Verantwortlichen zu verlangen;
+- gemäß Art. 21 DSGVO Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten einzulegen;
+- gemäß Art. 77 DSGVO sich bei einer Aufsichtsbehörde zu beschweren.
 
 
-"@ampproject/remapping@^2.2.0":
-  version "2.3.0"
-  resolved "https://registry.yarnpkg.com/@ampproject/remapping/-/remapping-2.3.0.tgz#ed441b6fa600072520ce18b43d2c8cc8caecc7f4"
-  integrity sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==
-  dependencies:
-    "@jridgew
-................................
+&&& FILE: ./frontend\docs\impressum.md
+&&& CONTENT:
+# Impressum
+
+Angaben gemäß § 5 TMG:
+
+[Ihr Name]
+[Ihre Straße und Hausnummer]
+[Ihre Postleitzahl und Stadt]
+
+## Kontakt
+Telefon: [Ihre Telefonnummer]
+E-Mail: [Ihre E-Mail-Adresse]
+
+## Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV:
+[Ihr Name]
+[Ihre Adresse]
+
+## Haftungsausschluss
+
+### Haftung für Inhalte
+Die Inhalte unserer Seiten wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.
+
+### Haftung für Links
+Unser Angebot enthält Links zu externen Webseiten Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen.
+
+### Urheberrecht
+Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.
 
 &&& FILE: ./frontend\docs\widerruf.md
 &&& CONTENT:
-Hey Mama! I'm on the Internet
+# Widerrufsbelehrung
+
+## Widerrufsrecht
+
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
+
+Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
+
+Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
+
+## Folgen des Widerrufs
+
+Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
+
+Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
 
 &&& FILE: ./frontend\public\vite.svg
 &&& CONTENT:
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
 
-&&& FILE: ./frontend\src\App.tsx
+&&& FILE: ./frontend\src\app.tsx
 &&& CONTENT:
 // Root.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
@@ -1616,6 +1714,23 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     }),
   ];
 
+  const handleSearch = async (query: string) => {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=de`
+    );
+    const data = await response.json();
+    return data;
+  };
+  
+  const handleSelectResult = (result: any) => {
+    // Fly to the selected location
+    const map = mapRef.current.getMap();
+
+    map.flyTo({
+      center: [parseFloat(result.lon), parseFloat(result.lat)],
+      zoom: 14
+    });
+  };
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
@@ -1666,6 +1781,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onRemovePolygon={handleRemovePolygon}
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
+  onSearch={handleSearch}
+  onSelectResult={handleSelectResult}
       />
       
       <LegalDocuments />
@@ -1858,14 +1975,7 @@ createRoot(container).render(<Root />);
     "mapbox:groups": {
       "101da9f13b64a08fa4b6ac1168e89e5f": {
         "collapsed": false,
-        "name": "Places"
-      },
-      "a14c9607bc7954ba1df7205bf660433f": {"name": "Boundaries"},
-      "b6371a3f2f5a9932464fa3867530a2e5": {
-        "collapsed": false,
-        "name": "Transportation"
-      }
- 
+        "name"
 ................................
 
 &&& FILE: ./frontend\src\CheckoutForm.tsx
@@ -1878,71 +1988,184 @@ interface CheckoutFormProps {
   onFetchObjFile: () => void;
 }
 
+interface CustomerData {
+  email: string;
+  name: string;
+  address: {
+    line1: string;
+    postal_code: string;
+    city: string;
+    country: string;
+  };
+}
 const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [customerData, setCustomerData] = useState<CustomerData>({
+    email: "",
+    name: "",
+    address: {
+      line1: "",
+      postal_code: "",
+      city: "",
+      country: "DE",
+    },
+  });
+
+  // If price is 0, render only the download button
+  if (price === 0) {
+    return (
+      <button 
+        onClick={onFetchObjFile}
+        className="btn btn-primary btn-sm mt-2"
+      >
+        Download File
+      </button>
+    );
+  }
+
+  const handleFocus = () => {
+    setIsExpanded(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!stripe || !elements) return;
 
-    if (!stripe || !elements) {
-      console.error("Stripe has not loaded yet.");
+    if (!customerData.email || !customerData.name || !customerData.address.line1 || 
+        !customerData.address.postal_code || !customerData.address.city) {
+      document.getElementById("payment-message")!.textContent = "Please fill in all required fields.";
       return;
     }
 
     setLoading(true);
 
     try {
-      // Create PaymentIntent on the server
       const response = await fetch(import.meta.env.VITE_BACKEND_URL + "/create-payment-intent", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ amount: Math.round(price * 100) }), // Amount in cents
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          amount: Math.round(price * 100),
+          customer: customerData
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to create PaymentIntent.");
-      }
+      if (!response.ok) throw new Error("Failed to create PaymentIntent.");
 
       const { clientSecret } = await response.json();
 
-      // Confirm Card Payment
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
+          billing_details: {
+            name: customerData.name,
+            email: customerData.email,
+            address: {
+              line1: customerData.address.line1,
+              postal_code: customerData.address.postal_code,
+              city: customerData.address.city,
+              country: customerData.address.country,
+            },
+          },
           card: elements.getElement(CardElement)!,
         },
       });
 
       if (result.error) {
-        console.error(result.error.message);
         document.getElementById("payment-message")!.textContent = result.error.message;
       } else if (result.paymentIntent?.status === "succeeded") {
-        document.getElementById("payment-message")!.textContent =
-          "Success! Thank you! Your download should start soon.";
-        onFetchObjFile(); // Trigger download
+        document.getElementById("payment-message")!.textContent = "Success! Your download will start soon.";
+        onFetchObjFile();
       }
     } catch (error) {
-      console.error("An error occurred during payment:", error);
+      console.error("Payment error:", error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: "10px" }}>
-      <CardElement />
-      <button type="submit" disabled={!stripe || loading} style={{ marginTop: "10px" }}>
+    <form onSubmit={handleSubmit} className="d-flex flex-column gap-2">
+
+      
+      {isExpanded && (
+        <div className="mt-2 animate__animated animate__fadeIn">
+          <input
+            type="email"
+            placeholder="Email *"
+            required
+            value={customerData.email}
+            onChange={(e) => setCustomerData({...customerData, email: e.target.value})}
+            className="form-control form-control-sm mb-2"
+          />
+          <input
+            type="text"
+            placeholder="Full Name *"
+            required
+            value={customerData.name}
+            onChange={(e) => setCustomerData({...customerData, name: e.target.value})}
+            className="form-control form-control-sm mb-2"
+          />
+          <input
+            type="text"
+            placeholder="Street Address *"
+            required
+            value={customerData.address.line1}
+            onChange={(e) => setCustomerData({
+              ...customerData,
+              address: {...customerData.address, line1: e.target.value}
+            })}
+            className="form-control form-control-sm mb-2"
+          />
+          <div className="d-flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Postal Code *"
+              required
+              value={customerData.address.postal_code}
+              onChange={(e) => setCustomerData({
+                ...customerData,
+                address: {...customerData.address, postal_code: e.target.value}
+              })}
+              className="form-control form-control-sm"
+            />
+            <input
+              type="text"
+              placeholder="City *"
+              required
+              value={customerData.address.city}
+              onChange={(e) => setCustomerData({
+                ...customerData,
+                address: {...customerData.address, city: e.target.value}
+              })}
+              className="form-control form-control-sm"
+            />
+          </div>
+        </div>
+      )}
+            <CardElement 
+        onFocus={handleFocus}
+        options={{
+          style: {
+            base: {
+              fontSize: '14px',
+            }
+          }
+        }}
+      />
+      <div id="payment-message" className="text-danger small"></div>
+      <button 
+        type="submit" 
+        disabled={!stripe || loading}
+        className="btn btn-primary btn-sm mt-2"
+      >
         {loading ? "Processing..." : `Pay €${price.toFixed(2)}`}
       </button>
     </form>
   );
 };
-
 export default CheckoutForm;
-
 
 &&& FILE: ./frontend\src\draw-control.ts
 &&& CONTENT:
@@ -1995,25 +2218,34 @@ import CheckoutForm from "./CheckoutForm";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe("hidden_api");
+const stripePromise = loadStripe(
+  "hidden_api"
+);
 
 interface FloatingPanelProps {
   onDrawPolygon: () => void;
   onRemovePolygon: () => void;
   onFetchObjFile: () => void;
   polygonArea: number | null; // in square kilometers
+  onSearch: (query: string) => Promise<any>;
+  onSelectResult: (result: any) => void;
 }
-
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
   onDrawPolygon,
   onRemovePolygon,
   onFetchObjFile,
   polygonArea,
+  onSearch,
+  onSelectResult
 }) => {
   const [price, setPrice] = useState<number>(0);
   const [gelandeActive, setGelandeActive] = useState<boolean>(false);
   const [gebaudeActive, setGebaudeActive] = useState<boolean>(false);
   const [flurstuckeActive, setFlurstuckeActive] = useState<boolean>(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (polygonArea !== null) {
@@ -2025,122 +2257,197 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
+  
+// Add this function to handle search
+const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const query = e.target.value;
+  setSearchQuery(query);
+  
+  if (query.length > 2) {
+    setIsSearching(true);
+    try {
+      const results = await onSearch(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    }
+    setIsSearching(false);
+  } else {
+    setSearchResults([]);
+  }
+};
+
+
   return (
-    <>
-      
-
-      {/* Existing Panels: Row Layout */}
+    <div
+      className="d-flex align-items-end"
+      style={{
+        position: "absolute",
+        bottom: "20px",
+        left: "20px",
+        right: "20px",
+        gap: "20px",
+        zIndex: 1050,
+        pointerEvents: "none", // Add this line
+      }}
+    >
       <div
-        className="d-flex align-items-end justify-content-center"
+        className="d-flex gap-3"
         style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "20px",
-          right: "20px",
-          gap: "20px", // Constant gap between panels
-          zIndex: 1050,
+          marginRight: "auto",
+          pointerEvents: "none", // Add this line
         }}
       >
-      {/* Fourth Panel: Toggle Options */}
-      <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-          width: "200px",
-          height: "auto",
-          zIndex: 1050,
-          marginLeft: "20px",
-        }}
-      >
-        <h5 className="mb-3 text-center">Options</h5>
-        <button
-          className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGelandeActive(!gelandeActive)}
-        >
-          Gelände {gelandeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGebaudeActive(!gebaudeActive)}
-        >
-          Gebäude {gebaudeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setFlurstuckeActive(!flurstuckeActive)}
-        >
-          Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
-        </button>
-      </div>
-        {/* Panel 1: Area Selection */}
-         {/* Merged Panel: Pricing & Polygon Actions */}
-         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
-          }}
-        >
-          <h5 className="mb-3 text-center">Region</h5>
-          {polygonArea !== null ? (
-            <div className="text-center mb-3">
-              <p>
-                <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-              </p>
-              <p>
-                <strong>Price:</strong> €{price.toFixed(2)}
-              </p>
-            </div>
-          ) : (
-            <p className="text-center mb-3">No area selected.</p>
-          )}
-          <div className="btn-group w-100" role="group">
-            <button
-              type="button"
-              className="btn btn-outline-primary"
-              onClick={onDrawPolygon}
-            >
-              Draw Polygon
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-danger"
-              onClick={onRemovePolygon}
-            >
-              Delete Polygon
-            </button>
-          </div>
-        </div>
-
-        {/* Panel 3: Payment */}
+        {/* Region Panel */}
         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+  className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+  style={{
+    width: "300px",
+    height: "auto",
+    minHeight: "200px",
+    pointerEvents: "auto",
+  }}
+>
+  <h5 className="mb-3 text-center">Region</h5>
+  
+  {/* Search Input */}
+  <div className="w-100 mb-3">
+    <input
+      type="text"
+      className="form-control form-control-sm"
+      placeholder="Search location..."
+      value={searchQuery}
+      onChange={handleSearch}
+    />
+    
+    {/* Search Results */}
+    {searchResults.length > 0 && (
+      <div 
+        className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
+        style={{ maxHeight: '150px', zIndex: 1060 }}
+      >
+        {searchResults.map((result, index) => (
+          <div
+            key={index}
+            className="p-2 hover-bg-light cursor-pointer"
+            onClick={() => {
+              onSelectResult(result);
+              setSearchResults([]);
+              setSearchQuery('');
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            {result.display_name || result.name}
+          </div>
+        ))}
+      </div>
+    )}
+    
+    {isSearching && (
+      <div className="text-center mt-2">
+        <small>Searching...</small>
+      </div>
+    )}
+  </div>
+
+  {/* Existing Area and Price Display */}
+  {polygonArea !== null ? (
+    <div className="text-center mb-3">
+        <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
+    </div>
+  ) : (
+    <p className="text-center mb-3">No area selected.</p>
+  )}
+
+  {/* Existing Buttons */}
+  <div className="btn-group w-100" role="group">
+    <button
+      type="button"
+      className="btn btn-outline-primary"
+      onClick={onDrawPolygon}
+    >
+      Draw Polygon
+    </button>
+    <button
+      type="button"
+      className="btn btn-outline-danger"
+      onClick={onRemovePolygon}
+    >
+      Delete Polygon
+    </button>
+  </div>
+</div>
+        {/* Options Panel */}
+        <div
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
+            width: "200px",
+            height: "200px",
+            pointerEvents: "auto", // Add this line
           }}
         >
-          <h5 className="mb-3 text-center">Payment</h5>
-          <Elements stripe={stripePromise}>
-            <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-          </Elements>
-          <button className="btn btn-secondary w-100 mt-3" onClick={onFetchObjFile}>
-            Download OBJ Without Payment
+          <h5 className="mb-3 text-center">Options</h5>
+          <button
+            className={`btn w-100 mb-2 ${
+              gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
+            onClick={() => setGelandeActive(!gelandeActive)}
+          >
+            Gelände {gelandeActive ? "Active" : "Inactive"}
+          </button>
+          <button
+            className={`btn w-100 mb-2 ${
+              gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
+            onClick={() => setGebaudeActive(!gebaudeActive)}
+          >
+            Gebäude {gebaudeActive ? "Active" : "Inactive"}
+          </button>
+          <button
+            className={`btn w-100 ${
+              flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
+            onClick={() => setFlurstuckeActive(!flurstuckeActive)}
+          >
+            Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
           </button>
         </div>
       </div>
-    </>
+
+      {/* Payment Panel */}
+      <div
+        className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+        style={{
+          width: "300px",
+          minHeight: "200px",
+          height: "auto",
+          marginLeft: "auto",
+          transition: "height 0.3s ease-in-out",      
+          pointerEvents: "auto", // Add this line
+
+        }}
+      >
+        <h5 className="mb-3 text-center">Payment</h5>
+        <Elements stripe={stripePromise}>
+          <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+        </Elements>
+        <button
+          className="btn btn-secondary w-100 mt-3"
+          onClick={onFetchObjFile}
+        >
+          Download OBJ Without Payment
+        </button>
+      </div>
+    </div>
   );
 };
-
 export default FloatingPanel;
 
 
 &&& FILE: ./frontend\src\Legals.tsx
 &&& CONTENT:
+
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -2180,8 +2487,8 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
           position: 'absolute',
           top: '50px',
           right: '10px',
-          width: '300px',
-          maxHeight: '80vh',
+          width: '600px',
+          maxHeight: '50vh',
           overflowY: 'auto',
           zIndex: 1070,
         }}>

@@ -55,7 +55,7 @@ with open('./.gpt/dump.txt', 'w', encoding='utf-8') as f:
                     if  not obj.endswith(not_allowed_extensions):
                         content = o.read()
                     else:
-                        content = o.read()[:400] + "\n................................"
+                        content = o.read()[:200] + "\n................................"
                     f.write("&&& FILE: " + obj + '\n&&& CONTENT:\n' + content + '\n\n')
             except (IOError, UnicodeDecodeError) as e:
                 f.write(f"&&& FILE: {obj}\n&&& ERROR: Could not read file: {e}\n\n")
