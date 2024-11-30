@@ -30,9 +30,9 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 
@@ -246,7 +246,7 @@ def ingest_gml_file(gml_file, database_url):
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
-        # '-overwrite',
+        #'-overwrite',
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
@@ -309,10 +309,11 @@ def convert_to_3d_tiles(cache_dir, database_url):
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
+    port=url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
         PG2B3DM_PATH,
-        '-h', host,
+        '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
         '-t', 'building',
