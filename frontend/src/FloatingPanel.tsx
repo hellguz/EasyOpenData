@@ -5,7 +5,9 @@ import CheckoutForm from "./CheckoutForm";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe("hidden_api");
+const stripePromise = loadStripe(
+  "hidden_api"
+);
 
 interface FloatingPanelProps {
   onDrawPolygon: () => void;
@@ -44,16 +46,23 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
         right: "20px",
         gap: "20px",
         zIndex: 1050,
+        pointerEvents: "none", // Add this line
       }}
     >
-      <div className="d-flex gap-3" style={{ marginRight: "auto" }}>
-        
+      <div
+        className="d-flex gap-3"
+        style={{
+          marginRight: "auto",
+          pointerEvents: "none", // Add this line
+        }}
+      >
         {/* Region Panel */}
         <div
           className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
             width: "300px",
             height: "200px",
+            pointerEvents: "auto", // Add this line
           }}
         >
           <h5 className="mb-3 text-center">Region</h5>
@@ -92,53 +101,61 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
           style={{
             width: "200px",
             height: "200px",
+            pointerEvents: "auto", // Add this line
           }}
         >
           <h5 className="mb-3 text-center">Options</h5>
           <button
-            className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            className={`btn w-100 mb-2 ${
+              gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
             onClick={() => setGelandeActive(!gelandeActive)}
           >
             Gelände {gelandeActive ? "Active" : "Inactive"}
           </button>
           <button
-            className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            className={`btn w-100 mb-2 ${
+              gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
             onClick={() => setGebaudeActive(!gebaudeActive)}
           >
             Gebäude {gebaudeActive ? "Active" : "Inactive"}
           </button>
           <button
-            className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            className={`btn w-100 ${
+              flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"
+            }`}
             onClick={() => setFlurstuckeActive(!flurstuckeActive)}
           >
             Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
           </button>
         </div>
-
       </div>
 
       {/* Payment Panel */}
-<div
-  className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
-  style={{
-    width: "300px",
-    minHeight: "200px",
-    height: "auto",
-    marginLeft: "auto",
-    transition: "height 0.3s ease-in-out",
-  }}
->
-  <h5 className="mb-3 text-center">Payment</h5>
-  <Elements stripe={stripePromise}>
-    <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-  </Elements>
-  <button 
-    className="btn btn-secondary w-100 mt-3" 
-    onClick={onFetchObjFile}
-  >
-    Download OBJ Without Payment
-  </button>
-</div>
+      <div
+        className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+        style={{
+          width: "300px",
+          minHeight: "200px",
+          height: "auto",
+          marginLeft: "auto",
+          transition: "height 0.3s ease-in-out",      
+          pointerEvents: "auto", // Add this line
+
+        }}
+      >
+        <h5 className="mb-3 text-center">Payment</h5>
+        <Elements stripe={stripePromise}>
+          <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+        </Elements>
+        <button
+          className="btn btn-secondary w-100 mt-3"
+          onClick={onFetchObjFile}
+        >
+          Download OBJ Without Payment
+        </button>
+      </div>
     </div>
   );
 };
