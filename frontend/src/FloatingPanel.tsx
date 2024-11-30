@@ -13,7 +13,6 @@ interface FloatingPanelProps {
   onFetchObjFile: () => void;
   polygonArea: number | null; // in square kilometers
 }
-
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
   onDrawPolygon,
   onRemovePolygon,
@@ -36,60 +35,25 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   }, [polygonArea]);
 
   return (
-    <>
-      
-
-      {/* Existing Panels: Row Layout */}
-      <div
-        className="d-flex align-items-end justify-content-center"
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "20px",
-          right: "20px",
-          gap: "20px", // Constant gap between panels
-          zIndex: 1050,
-        }}
-      >
-      {/* Fourth Panel: Toggle Options */}
-      <div
+    <div
+      className="d-flex align-items-end"
+      style={{
+        position: "absolute",
+        bottom: "20px",
+        left: "20px",
+        right: "20px",
+        gap: "20px",
+        zIndex: 1050,
+      }}
+    >
+      <div className="d-flex gap-3" style={{ marginRight: "auto" }}>
+        
+        {/* Region Panel */}
+        <div
           className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
-          width: "200px",
-          height: "auto",
-          zIndex: 1050,
-          marginLeft: "20px",
-        }}
-      >
-        <h5 className="mb-3 text-center">Options</h5>
-        <button
-          className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGelandeActive(!gelandeActive)}
-        >
-          Gelände {gelandeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGebaudeActive(!gebaudeActive)}
-        >
-          Gebäude {gebaudeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setFlurstuckeActive(!flurstuckeActive)}
-        >
-          Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
-        </button>
-      </div>
-        {/* Panel 1: Area Selection */}
-         {/* Merged Panel: Pricing & Polygon Actions */}
-         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
+            width: "300px",
+            height: "200px",
           }}
         >
           <h5 className="mb-3 text-center">Region</h5>
@@ -122,28 +86,60 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Panel 3: Payment */}
+        {/* Options Panel */}
         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
+            width: "200px",
+            height: "200px",
           }}
         >
-          <h5 className="mb-3 text-center">Payment</h5>
-          <Elements stripe={stripePromise}>
-            <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-          </Elements>
-          <button className="btn btn-secondary w-100 mt-3" onClick={onFetchObjFile}>
-            Download OBJ Without Payment
+          <h5 className="mb-3 text-center">Options</h5>
+          <button
+            className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            onClick={() => setGelandeActive(!gelandeActive)}
+          >
+            Gelände {gelandeActive ? "Active" : "Inactive"}
+          </button>
+          <button
+            className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            onClick={() => setGebaudeActive(!gebaudeActive)}
+          >
+            Gebäude {gebaudeActive ? "Active" : "Inactive"}
+          </button>
+          <button
+            className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+            onClick={() => setFlurstuckeActive(!flurstuckeActive)}
+          >
+            Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
           </button>
         </div>
+
       </div>
-    </>
+
+      {/* Payment Panel */}
+<div
+  className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+  style={{
+    width: "300px",
+    minHeight: "200px",
+    height: "auto",
+    marginLeft: "auto",
+    transition: "height 0.3s ease-in-out",
+  }}
+>
+  <h5 className="mb-3 text-center">Payment</h5>
+  <Elements stripe={stripePromise}>
+    <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+  </Elements>
+  <button 
+    className="btn btn-secondary w-100 mt-3" 
+    onClick={onFetchObjFile}
+  >
+    Download OBJ Without Payment
+  </button>
+</div>
+    </div>
   );
 };
-
 export default FloatingPanel;
