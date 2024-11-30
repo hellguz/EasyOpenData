@@ -1,9 +1,10 @@
 services:
   postgis:
+    container_name: easyopen_db
     image: postgis/postgis:17-3.5
     restart: always
     ports:
-      - 5432:5432
+      - 8735:5432
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
@@ -15,7 +16,8 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  easyopen_backend:
+    container_name: easyopen_backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -32,7 +34,8 @@ services:
       postgis:
         condition: service_healthy
 
-  frontend:
+  easyopen_frontend:
+    container_name: easyopen_frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -42,8 +45,7 @@ services:
     ports:
       - 5173:5173
     environment:
-      VITE_BACKEND_URL: http://localhost:5400
-
+      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
 
 volumes:
   postgres_data:

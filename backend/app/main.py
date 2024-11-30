@@ -32,18 +32,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0) 
-
-# Configure CORS
-origins = [
-    "http://localhost:5173",  # Frontend origin
-    # Add other origins if needed
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Add your frontend URL
+    allow_origins=["http://localhost:5173", "http://easyopen.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
