@@ -23,10 +23,10 @@ import LegalDocuments from "./Legals";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
-const INITIAL_VIEW_STATE: MapViewState = {
+const INITIAL_VIEW_STATE: MapViewState = { 
   latitude: 48.1351,
   longitude: 11.5820,
-  pitch: 45,
+  pitch: 45, 
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
