@@ -14,17 +14,25 @@ interface FloatingPanelProps {
   onRemovePolygon: () => void;
   onFetchObjFile: () => void;
   polygonArea: number | null; // in square kilometers
+  onSearch: (query: string) => Promise<any>;
+  onSelectResult: (result: any) => void;
 }
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
   onDrawPolygon,
   onRemovePolygon,
   onFetchObjFile,
   polygonArea,
+  onSearch,
+  onSelectResult
 }) => {
   const [price, setPrice] = useState<number>(0);
   const [gelandeActive, setGelandeActive] = useState<boolean>(false);
   const [gebaudeActive, setGebaudeActive] = useState<boolean>(false);
   const [flurstuckeActive, setFlurstuckeActive] = useState<boolean>(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (polygonArea !== null) {
@@ -35,6 +43,28 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       }
     }
   }, [polygonArea]);
+
+  
+// Add this function to handle search
+const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const query = e.target.value;
+  setSearchQuery(query);
+  
+  if (query.length > 2) {
+    setIsSearching(true);
+    try {
+      const results = await onSearch(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    }
+    setIsSearching(false);
+  } else {
+    setSearchResults([]);
+  }
+};
+
 
   return (
     <div
@@ -58,43 +88,83 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       >
         {/* Region Panel */}
         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-            width: "300px",
-            height: "200px",
-            pointerEvents: "auto", // Add this line
-          }}
-        >
-          <h5 className="mb-3 text-center">Region</h5>
-          {polygonArea !== null ? (
-            <div className="text-center mb-3">
-              <p>
-                <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-              </p>
-              <p>
-                <strong>Price:</strong> €{price.toFixed(2)}
-              </p>
-            </div>
-          ) : (
-            <p className="text-center mb-3">No area selected.</p>
-          )}
-          <div className="btn-group w-100" role="group">
-            <button
-              type="button"
-              className="btn btn-outline-primary"
-              onClick={onDrawPolygon}
-            >
-              Draw Polygon
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-danger"
-              onClick={onRemovePolygon}
-            >
-              Delete Polygon
-            </button>
+  className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+  style={{
+    width: "300px",
+    height: "auto",
+    minHeight: "200px",
+    pointerEvents: "auto",
+  }}
+>
+  <h5 className="mb-3 text-center">Region</h5>
+  
+  {/* Search Input */}
+  <div className="w-100 mb-3">
+    <input
+      type="text"
+      className="form-control form-control-sm"
+      placeholder="Search location..."
+      value={searchQuery}
+      onChange={handleSearch}
+    />
+    
+    {/* Search Results */}
+    {searchResults.length > 0 && (
+      <div 
+        className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
+        style={{ maxHeight: '150px', zIndex: 1060 }}
+      >
+        {searchResults.map((result, index) => (
+          <div
+            key={index}
+            className="p-2 hover-bg-light cursor-pointer"
+            onClick={() => {
+              onSelectResult(result);
+              setSearchResults([]);
+              setSearchQuery('');
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            {result.display_name || result.name}
           </div>
-        </div>
+        ))}
+      </div>
+    )}
+    
+    {isSearching && (
+      <div className="text-center mt-2">
+        <small>Searching...</small>
+      </div>
+    )}
+  </div>
+
+  {/* Existing Area and Price Display */}
+  {polygonArea !== null ? (
+    <div className="text-center mb-3">
+        <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
+    </div>
+  ) : (
+    <p className="text-center mb-3">No area selected.</p>
+  )}
+
+  {/* Existing Buttons */}
+  <div className="btn-group w-100" role="group">
+    <button
+      type="button"
+      className="btn btn-outline-primary"
+      onClick={onDrawPolygon}
+    >
+      Draw Polygon
+    </button>
+    <button
+      type="button"
+      className="btn btn-outline-danger"
+      onClick={onRemovePolygon}
+    >
+      Delete Polygon
+    </button>
+  </div>
+</div>
         {/* Options Panel */}
         <div
           className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
