@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -37,8 +38,8 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
           position: 'absolute',
           top: '50px',
           right: '10px',
-          width: '300px',
-          maxHeight: '80vh',
+          width: '600px',
+          maxHeight: '50vh',
           overflowY: 'auto',
           zIndex: 1070,
         }}>
