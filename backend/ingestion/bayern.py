@@ -310,7 +310,7 @@ def convert_to_3d_tiles(cache_dir, database_url):
     host = url.hostname or 'localhost'
     # Assume password is handled via environment or .pgpass
     cmd = [
-        'pg2b3dm_new',
+        'pg2b3dm',
         '-h', host,
         '-U', user,
         '-c', 'geom',
