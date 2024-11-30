@@ -23,7 +23,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
 
     try {
       // Create PaymentIntent on the server
-      const response = await fetch("http://localhost:3303/create-payment-intent", {
+      const response = await fetch(import.meta.env.VITE_BACKEND_URL + "/create-payment-intent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
