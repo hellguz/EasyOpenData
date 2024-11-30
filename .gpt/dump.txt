@@ -15,7 +15,7 @@ __pycache__/
 
 # tileset
 backend/tileset/*
-!backend/tileset/
+!backend/tileset/README.md
 
 *.gml
 *.gfs
@@ -51,6 +51,68 @@ content
 of
 another
 file
+
+&&& FILE: ./docker-compose.yml
+&&& CONTENT:
+services:
+  postgis:
+    image: postgis/postgis:17-3.5
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: barcelona
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 5400 --reload
+    volumes:
+      - ./backend:/app
+      - ./backend/tileset:/app/tileset
+      - ./backend/tempfiles:/app/tempfiles
+    ports:
+      - 5400:5400
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@postgis:5432/easyopendata_database
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - 5173:5173
+    environment:
+      VITE_BACKEND_URL: http://localhost:5400
+
+
+volumes:
+  postgres_data:
+
+
+&&& FILE: ./init.sql
+&&& CONTENT:
+CREATE DATABASE easyopendata_database;
+
+\c easyopendata_database;
+
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 
 &&& FILE: ./README.md
 &&& CONTENT:
@@ -227,34 +289,20 @@ For questions, feedback, or support, contact us at:
 
 - **Email**: support@opendataextractor.com
 
-&&& FILE: ./backend\output.obj
+&&& FILE: ./backend\Dockerfile
 &&& CONTENT:
-# OBJ file generated from buildings
-v 650807.4799637606 0 5479426.030019235
-v 650811.3199686304 0 5479427.829986528
-v 650812.9799671678 0 5479421.270053929
-v 650812.8999825225 0 5479421.230021792
-v 650808.1799836652 0 5479418.730044991
-v 650807.0800038989 0 5479420.810042971
-v 650808.6600046919 0 5479421.569980272
-v 650807.4799637606 0 5479426.030019235
-v 650808.1799836652 0 5479418.730044991
-v 650808.1799836652 4.33 5479418.730044991
-v 650807.0800038989 4.33 5479420.810042971
-v 650807.0800038989 0 5479420.810042971
-v 650808.1799836652 0 5479418.730044991
-v 650808.1799836652 4.33 5479418.730044991
-v 650812.8999825225 4.33 5479421.230021792
-v 650812.9799671678 4.33 5479421.270053929
-v 650812.3590285704 4.33 5479423.724050431
-v 650808.6150303525 4.33 5479421.74094969
-v 650808.6600046919 4.33 5479421.569980272
-v 650807.0800038989 4.33 5479420.810042971
-v 650808.1799836652 4.33 5479418.730044991
-v 650812.8999825225 0 5479421.230021792
-v 650812.8999825225 4.33 5479421.230021792
-v 650808.179
-................................
+# ./backend/Dockerfile
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY . /app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -274,243 +322,6 @@ redis
 stripe
 pyproj
 lxml
-
-&&& FILE: ./backend\setup_database.md
-&&& CONTENT:
-# Database Setup Instructions for Windows
-
-Follow these steps to create the PostgreSQL database with the PostGIS extension on Windows:
-
----
-
-## 1. Install PostgreSQL and PostGIS
-
-### **Download the Installer**
-
-1. Visit the PostgreSQL official website: [PostgreSQL Downloads](https://www.postgresql.org/download/windows/).
-2. Click on **"Download the installer"** to go to the EnterpriseDB download page.
-3. Download the latest version of the PostgreSQL installer for Windows.
-
-### **Run the Installer**
-
-1. Run the downloaded `.exe` installer.
-2. Follow the installation wizard steps:
-   - **Installation Directory**: Choose your preferred installation directory.
-   - **Select Components**: Ensure that **"PostGIS Bundle"** is checked to install PostGIS along with PostgreSQL.
-   - **Password Setup**: Set a password for the default `postgres` superuser. Remember this password.
-   - **Port Number**: Default is `5432`. You can change it if needed.
-   - **Locale**: Choose the default locale or your preferred setting.
-3. Complete the installation and wait for it to finish.
-
----
-
-## 2. Create a New PostgreSQL Database and User
-
-### **Open pgAdmin**
-
-1. After installation, open **pgAdmin 4** from the Start Menu.
-2. When prompted, enter the password you set for the `postgres` user during installation.
-
-### **Create a New Database**
-
-1. In pgAdmin, expand the server tree to see **"Databases"**.
-2. Right-click on **"Databases"** and select **"Create"** > **"Database..."**.
-3. In the **"Database"** dialog:
-   - **Database Name**: Enter `your_db`.
-   - **Owner**: Select `postgres` or your preferred user.
-4. Click **"Save"**.
-
-### **Create a New User (Role)**
-
-1. Expand the **"Login/Group Roles"** under your server.
-2. Right-click on **"Login/Group Roles"** and select **"Create"** > **"Login/Group Role..."**.
-3. In the **"Properties"** tab:
-   - **Role Name**: Enter `your_user`.
-4. In the **"Definition"** tab:
-   - **Password**: Enter `your_password`.
-   - **Confirm Password**: Re-enter the password.
-5. In the **"Privileges"** tab:
-   - Set **"Can login?"** to **"Yes"**.
-6. Click **"Save"**.
-
-### **Grant Privileges to the User**
-
-1. In pgAdmin, navigate to **"Databases"** > **"your_db"** > **"Schemas"** > **"public"**.
-2. Right-click on **"public"** schema and select **"Properties"**.
-3. Go to the **"Privileges"** tab.
-4. Click on the **"Add"** icon (a plus sign).
-5. In the new row:
-   - **Role**: Select `your_user`.
-   - **Privileges**: Check all the boxes (or at least **"Usage"** and **"Create"**).
-6. Click **"Save"**.
-
-### **Enable the PostGIS Extension**
-
-1. Right-click on **"your_db"** and select **"Query Tool"**.
-2. In the Query Editor, run the following SQL command:
-
-   ```sql
-   CREATE EXTENSION postgis;
-   ```
-
-3. Click the **"Execute/Refresh"** button (lightning bolt icon) to run the query.
-4. You should see a message indicating that the extension was created successfully.
-
----
-
-## 3. Update Your Database Configuration
-
-### **Modify the `.env` File**
-
-In your project directory, locate the `.env` file inside the `./backend` folder and update the `DATABASE_URL`:
-
-```
-DATABASE_URL=postgresql+asyncpg://your_user:your_password@localhost:5432/your_db
-```
-
----
-
-## 4. Run the Application to Create Tables
-
-The `init_db()` function in `database.py` will automatically create the necessary tables when the application starts.
-
-### **Open Command Prompt or PowerShell**
-
-Navigate to your project's backend directory:
-
-```cmd
-cd path\to\your\project\backend
-```
-
-### **Create a Virtual Environment (Optional but Recommended)**
-
-```cmd
-python -m venv venv
-venv\Scripts\activate
-```
-
-### **Install Dependencies**
-
-Ensure all the required Python packages are installed:
-
-```cmd
-pip install -r requirements.txt
-```
-
-### **Start the FastAPI Application**
-
-```cmd
-uvicorn main:app --reload
-```
-
----
-
-## 5. Verify the Tables Have Been Created
-
-### **Using pgAdmin**
-
-1. In pgAdmin, right-click on **"Tables"** under **"your_db"** > **"Schemas"** > **"public"**, and select **"Refresh"**.
-2. Expand the **"Tables"** section.
-3. You should see the `buildings` table listed.
-
----
-
-## 6. Ingest Data into the Database
-
-Use the provided data ingestion scripts to populate the database with building data.
-
-### **Install GDAL for Windows**
-
-1. Download the GDAL Windows binaries from [GIS Internals](https://www.gisinternals.com/query.html?content=filelist&file=release-1930-x64-gdal-3-4-1-mapserver-7-6-4.zip).
-2. Extract the contents to a directory (e.g., `C:\Program Files\GDAL`).
-3. Add the GDAL bin directory to your system PATH:
-   - Open **Control Panel** > **System** > **Advanced system settings**.
-   - Click on **"Environment Variables"**.
-   - Under **"System Variables"**, find and edit the **"Path"** variable.
-   - Add the path to the GDAL `bin` directory (e.g., `C:\Program Files\GDAL\bin`).
-4. Set the `GDAL_DATA` environment variable:
-   - In **"System Variables"**, click **"New"**.
-   - **Variable name**: `GDAL_DATA`
-   - **Variable value**: `C:\Program Files\GDAL\gdal-data`
-
-### **Place Your GML Files**
-
-Add your `.gml` files into the appropriate directories under `data_local\{bundesland_name}\`.
-
-### **Run the Ingestion Script**
-
-```cmd
-python data_ingest\ingest_baden_wuerttemberg.py
-```
-
-Replace `ingest_baden_wuerttemberg.py` with the script corresponding to your Bundesland.
-
-**Note**: You may need to install `osgeo` dependencies for GDAL to work with Python scripts.
-
----
-
-## 7. Test the Endpoint
-
-You can now test the `/buildings` endpoint to retrieve buildings within a given boundary.
-
-### **Example Request Using cURL**
-
-```cmd
-curl -X POST "http://localhost:8000/buildings" -H "Content-Type: application/json" -d "{\"type\":\"Polygon\",\"coordinates\":[[[9.0,48.0],[9.1,48.0],[9.1,48.1],[9.0,48.1],[9.0,48.0]]]}"
-```
-
-### **Example Request Using Python**
-
-```python
-import requests
-
-url = "http://localhost:8000/buildings"
-geometry = {
-    "type": "Polygon",
-    "coordinates": [
-        [
-            [9.0, 48.0],
-            [9.1, 48.0],
-            [9.1, 48.1],
-            [9.0, 48.1],
-            [9.0, 48.0]
-        ]
-    ]
-}
-
-response = requests.post(url, json=geometry)
-print(response.json())
-```
-
----
-
-## Notes
-
-- Ensure that the SRID (Spatial Reference System Identifier) matches between your data and the database. The default SRID in the model is `4326`.
-- If you encounter any issues, check the application logs for errors and verify your database connection settings.
-- Make sure that the `psycopg2` package is installed properly. On Windows, you might need to install `psycopg2-binary`.
-
----
-
-## Troubleshooting
-
-### **Common Issues**
-
-- **GDAL Not Found**: Ensure that GDAL is correctly installed and added to your system PATH.
-- **Database Connection Errors**: Double-check your `DATABASE_URL` in the `.env` file.
-- **Permission Denied**: Run Command Prompt or PowerShell as an administrator if you encounter permission issues.
-- **Port Conflicts**: Ensure that port `5432` (PostgreSQL) and `8000` (FastAPI default) are not being used by other applications.
-
----
-
-## Additional Resources
-
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [PostGIS Documentation](https://postgis.net/documentation/)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [GDAL Documentation](https://gdal.org/)
-
-
 
 &&& FILE: ./backend\app\database.py
 &&& CONTENT:
@@ -541,6 +352,7 @@ import asyncio
 import tempfile
 from typing import List
 from urllib import request
+import uuid
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -602,7 +414,9 @@ async def retrieve_obj(request: RegionRequest):
     print(f"Received region: {request.region}")
 
     try:
-        temp_path = os.path.join("/temp", "34.obj")
+        # Generate a unique filename using UUID
+        random_filename = f"{uuid.uuid4()}.obj"
+        temp_path = os.path.join("/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,
@@ -829,28 +643,6 @@ if __name__ == '__main__':
     }
     output_path = 'output.obj'
     asyncio.run(retrieve_obj(region_geojson, output_path))
-
-
-&&& FILE: ./backend\docker\docker-compose.yml
-&&& CONTENT:
-
-services:
-
-  postgis:
-    image: postgis/postgis:17-3.5
-    restart: always
-    # set shared memory limit when using docker-compose
-    shm_size: 128mb
-    # or set shared memory limit when deploy via swarm stack
-    #volumes:
-    #  - type: tmpfs
-    #    target: /dev/shm
-    #    tmpfs:
-    #      size: 134217728 # 128*2^20 bytes = 128Mb
-    ports:
-    - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: barcelona
 
 
 &&& FILE: ./backend\ingestion\bayern.py
@@ -1274,6 +1066,87 @@ if __name__ == '__main__':
     main(meta4_file)
 
 
+&&& FILE: ./backend\ingestion\data_local\bayern\632_5528.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryElementPath>
+    <!--POLYHEDRALSURFACEZ-->
+    <GeometryType>1015</GeometryType>
+    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
+    <DatasetSpecificInfo>
+      <FeatureCount>3183</FeatureCo
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5524.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryElementPath>
+    <!--POLYHEDRALSURFACEZ-->
+    <GeometryType>1015</GeometryType>
+    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
+    <DatasetSpecificInfo>
+      <FeatureCount>1090</FeatureCo
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5528.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryElementPath>
+    <!--POLYHEDRALSURFACEZ-->
+    <GeometryType>1015</GeometryType>
+    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
+    <DatasetSpecificInfo>
+      <FeatureCount>6875</FeatureCo
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+................................
+
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1283,19 +1156,7 @@ if __name__ == '__main__':
   <file name="636_5524.gml">
     <size>17451544</size>
     <hash type="sha-256">a2a226df7ce76c817c5c112531104349fe6ed09735e1083a5b5644c2387f2f38</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
-  </file>
-  <file name="636_5522.gml">
-    <size>5602040</size>
-    <hash type="sha-256">b82c745b51646c5f28cd1f0c78bb9a3bce62b20495b0e0748d7dbc6cb9b7e5cc</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
-  </file>
-  <file name="630_5530.gml">
-    <size>30137377</size>
-    <hash type="sha-256">c2f0682332c699db30227f15b04de40a72d6a1158ef7ed4552ffb5fbe923920a</hash>
-    <url>https://download1.bayernwolke.de/a/l
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</u
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bayern.meta4
@@ -1307,19 +1168,7 @@ if __name__ == '__main__':
   <file name="792_5432.gml">
     <size>10477602</size>
     <hash type="sha-256">9796ed6c748821e06ff874296c6a8727d4ba25c596bd35cc8d8633f5133c235e</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/792_5432.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/792_5432.gml</url>
-  </file>
-  <file name="794_5346.gml">
-    <size>1085</size>
-    <hash type="sha-256">e5cb2ed98b116ab90f7a68a4523853f7fb8812d77ffc7d3ae5bfa59584f276e2</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/794_5346.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/794_5346.gml</url>
-  </file>
-  <file name="814_5382.gml">
-    <size>3212530</size>
-    <hash type="sha-256">e09623b720d46d8de5c2a971c5eea8944e9dd40f8aef80de716f6c0f7c710473</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/792_5432.gml</u
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\munchen.meta4
@@ -1331,19 +1180,7 @@ if __name__ == '__main__':
   <file name="680_5342.gml">
     <size>4250333</size>
     <hash type="sha-256">1353eebc758692b08ad7e3b10bfa39d032cb2e64831b89871fe748e5f40d80a5</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/680_5342.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/680_5342.gml</url>
-  </file>
-  <file name="678_5334.gml">
-    <size>30247980</size>
-    <hash type="sha-256">b177209b35906faf9bb9383e4a81321f1c732d33e77f0d33de79784aedc856fb</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/678_5334.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/678_5334.gml</url>
-  </file>
-  <file name="676_5338.gml">
-    <size>74799238</size>
-    <hash type="sha-256">09472ef2af047c3aa0922c9248187889e133c3904538f837232dd62322af7254</hash>
-    <url>https://download1.bayernwolke.de/a/l
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/680_5342.gml</ur
 ................................
 
 &&& FILE: ./frontend\.gitignore
@@ -1373,6 +1210,26 @@ dist-ssr
 *.sln
 *.sw?
 
+yarn.lock
+
+&&& FILE: ./frontend\Dockerfile
+&&& CONTENT:
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package.json and yarn.lock first for dependency installation
+COPY package.json yarn.lock ./
+
+# Install dependencies
+RUN yarn install 
+
+# Copy the rest of the frontend code
+COPY . .
+
+EXPOSE 5173
+
+CMD ["yarn", "dev", "--host", "0.0.0.0"]
 
 &&& FILE: ./frontend\eslint.config.js
 &&& CONTENT:
@@ -1432,46 +1289,8 @@ export default [
 </head>
 <body>
 </body>
-<script type="module" src="./src/app.tsx"></script>
+<script type="module" src="./src/App.tsx"></script>
 </html>
-
-&&& FILE: ./frontend\package-lock.json
-&&& CONTENT:
-{
-  "name": "frontend",
-  "version": "0.0.0",
-  "lockfileVersion": 3,
-  "requires": true,
-  "packages": {
-    "": {
-      "name": "frontend",
-      "version": "0.0.0",
-      "dependencies": {
-        "@deck.gl/core": "^9.0.0",
-        "@deck.gl/layers": "^9.0.0",
-        "@deck.gl/mapbox": "^9.0.0",
-        "@loaders.gl/3d-tiles": "^4.2.0",
-        "@mapbox/mapbox-gl-draw": "^1.4.3",
-        "@stripe/react-stripe-js": "^3.0.0",
-        "@stripe/stripe-js": "^5.2.0",
-        "@turf/turf": "^7.1.0",
-        "@types/react": "^18.0.0",
-        "@types/react-dom": "^18.0.0",
-        "deck.gl": "^9.0.0",
-        "mapbox-gl": "^3.8.0",
-        "maplibre-gl": "^3.0.0",
-        "react": "^18.3.1",
-        "react-dom": "^18.3.1",
-        "react-map-gl": "^7.1.0"
-      },
-      "devDependencies": {
-        "@eslint/js": "^9.13.0",
-        "@types/react": "^18.3.12",
-        "@types/react-dom": "^18.3.1",
-        "@vitejs/plugin-react": "^4.3.3",
-        "eslint": "^9.13.0",
-        "eslint-plugin
-................................
 
 &&& FILE: ./frontend\package.json
 &&& CONTENT:
@@ -1492,26 +1311,6 @@ export default [
     "@deck.gl/mapbox": "^9.0.0",
     "@loaders.gl/3d-tiles": "^4.2.0",
     "@mapbox/mapbox-gl-draw": "^1.4.3",
-    "@stripe/react-stripe-js": "^3.0.0",
-    "@stripe/stripe-js": "^5.2.0",
-    "@turf/turf": "^7.1.0",
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0",
-    "deck.gl": "^9.0.0",
-    "mapbox-gl": "^3.8.0",
-    "maplibre-gl": "^3.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-map-gl": "^7.1.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.13.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
-    "eslint": "^9.13.0",
-    "eslint-plugin-react": "^7.37.2",
-    "eslint-plugin-react-hooks": "^5.0.0",
 
 ................................
 
@@ -1553,15 +1352,38 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    watch: {
+      usePolling: true, // For Docker environments
+    },
+  },
   plugins: [react()],
 })
 
+
+&&& FILE: ./frontend\yarn.lock
+&&& CONTENT:
+# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+"@ampproject/remapping@^2.2.0":
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/@ampproject/remapping/-/remapping-2.3.0.tgz#ed441b6fa600072520ce18b43d2c8cc8caecc7f4"
+  integrity sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==
+  dependencies:
+    "@jridgew
+................................
+
+&&& FILE: ./frontend\docs\widerruf.md
+&&& CONTENT:
+Hey Mama! I'm on the Internet
 
 &&& FILE: ./frontend\public\vite.svg
 &&& CONTENT:
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
 
-&&& FILE: ./frontend\src\app.tsx
+&&& FILE: ./frontend\src\App.tsx
 &&& CONTENT:
 // Root.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
@@ -1580,14 +1402,17 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import FloatingPanel from "./FloatingPanel";
 import * as turf from "@turf/turf";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 import DrawControl from './draw-control';
+import LegalDocuments from "./Legals";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
-const TILESET_URL = `http://localhost:3303/cache/tileset.json`;
 const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 48.1374,
-  longitude: 11.5755,
+  latitude: 49.8988,
+  longitude: 10.9028,   
   pitch: 45,
   maxPitch: 60,
   bearing: 0,
@@ -1623,8 +1448,8 @@ function Root() {
       drawRef.current = new MapboxDraw({
         displayControlsDefault: false,
         controls: {
-          polygon: true,
-          trash: true,
+          polygon: false,
+          trash: false,
         },
       });
       map.addControl(drawRef.current);
@@ -1696,7 +1521,7 @@ function Root() {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
         try {
-          const response = await fetch("http://localhost:3303/retrieve_obj", {
+          const response = await fetch(BACKEND_URL + "/retrieve_obj", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1827,8 +1652,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
           position="top-right"
           displayControlsDefault={false}
           controls={{
-            polygon: true,
-            trash: true
+            polygon: false,
+            trash: false
           }}
           defaultMode="draw_polygon"
           onCreate={onUpdate}
@@ -1842,6 +1667,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
       />
+      
+      <LegalDocuments />
     </div>
   );
 }
@@ -2038,24 +1865,7 @@ createRoot(container).render(<Root />);
         "collapsed": false,
         "name": "Transportation"
       }
-    },
-    "mapbox:type": "template",
-    "openmaptiles:mapbox:owner": "openmaptiles",
-    "openmaptiles:mapbox:source:url": "mapbox://openmaptiles.4qljc88t",
-    "openmaptiles:version": "3.x",
-    "maputnik:renderer": "mlgljs"
-  },
-  "sources": {
-    "openmaptiles": {
-      "type": "vector",
-      "url": "https://api.maptiler.com/tiles/v3-openmaptiles/tiles.json?key=rkAUNMAmIqET28RXGV5e"
-    }
-  },
-  "sprite": "https://openmaptiles.github.io/positron-gl-style/sprite",
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=rkAUNMAmIqET28RXGV5e",
-  "layers": [
-    {
-      "id": 
+ 
 ................................
 
 &&& FILE: ./frontend\src\CheckoutForm.tsx
@@ -2085,7 +1895,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
 
     try {
       // Create PaymentIntent on the server
-      const response = await fetch("http://localhost:3303/create-payment-intent", {
+      const response = await fetch(import.meta.env.VITE_BACKEND_URL + "/create-payment-intent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2180,8 +1990,9 @@ DrawControl.defaultProps = {
 &&& CONTENT:
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "./CheckoutForm";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 // Initialize Stripe with your publishable key
 const stripePromise = loadStripe("hidden_api");
@@ -2200,6 +2011,9 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   polygonArea,
 }) => {
   const [price, setPrice] = useState<number>(0);
+  const [gelandeActive, setGelandeActive] = useState<boolean>(false);
+  const [gebaudeActive, setGebaudeActive] = useState<boolean>(false);
+  const [flurstuckeActive, setFlurstuckeActive] = useState<boolean>(false);
 
   useEffect(() => {
     if (polygonArea !== null) {
@@ -2212,40 +2026,194 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   }, [polygonArea]);
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: "20px",
-        right: "20px",
-        backgroundColor: "white",
-        padding: "20px",
-        borderRadius: "10px",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        zIndex: 100,
-        width: "300px",
-      }}
-    >
-      <button onClick={onDrawPolygon}>Draw Polygon</button>
-      <button onClick={onRemovePolygon}>Remove Polygon</button>
-      <Elements stripe={stripePromise}>
-        <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-      </Elements>
-      <button onClick={onFetchObjFile}>Download obj without Payment</button>
-      {polygonArea !== null && (
-        <div>
-          <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-        </div>
-      )}
-      <div id="payment-message" style={{ marginTop: "10px", color: "green" }}>
-        <strong>Payment Info:</strong>
+    <>
+      
+
+      {/* Existing Panels: Row Layout */}
+      <div
+        className="d-flex align-items-end justify-content-center"
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "20px",
+          right: "20px",
+          gap: "20px", // Constant gap between panels
+          zIndex: 1050,
+        }}
+      >
+      {/* Fourth Panel: Toggle Options */}
+      <div
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+          style={{
+          width: "200px",
+          height: "auto",
+          zIndex: 1050,
+          marginLeft: "20px",
+        }}
+      >
+        <h5 className="mb-3 text-center">Options</h5>
+        <button
+          className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+          onClick={() => setGelandeActive(!gelandeActive)}
+        >
+          Gelände {gelandeActive ? "Active" : "Inactive"}
+        </button>
+        <button
+          className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+          onClick={() => setGebaudeActive(!gebaudeActive)}
+        >
+          Gebäude {gebaudeActive ? "Active" : "Inactive"}
+        </button>
+        <button
+          className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
+          onClick={() => setFlurstuckeActive(!flurstuckeActive)}
+        >
+          Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
+        </button>
       </div>
-    </div>
+        {/* Panel 1: Area Selection */}
+         {/* Merged Panel: Pricing & Polygon Actions */}
+         <div
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+          style={{
+            flex: 1, // Panels take equal width
+            maxWidth: "400px",
+            minWidth: "200px",
+            height: "200px", // Unified height
+          }}
+        >
+          <h5 className="mb-3 text-center">Region</h5>
+          {polygonArea !== null ? (
+            <div className="text-center mb-3">
+              <p>
+                <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
+              </p>
+              <p>
+                <strong>Price:</strong> €{price.toFixed(2)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-center mb-3">No area selected.</p>
+          )}
+          <div className="btn-group w-100" role="group">
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={onDrawPolygon}
+            >
+              Draw Polygon
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-danger"
+              onClick={onRemovePolygon}
+            >
+              Delete Polygon
+            </button>
+          </div>
+        </div>
+
+        {/* Panel 3: Payment */}
+        <div
+          className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+          style={{
+            flex: 1, // Panels take equal width
+            maxWidth: "400px",
+            minWidth: "200px",
+            height: "200px", // Unified height
+          }}
+        >
+          <h5 className="mb-3 text-center">Payment</h5>
+          <Elements stripe={stripePromise}>
+            <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+          </Elements>
+          <button className="btn btn-secondary w-100 mt-3" onClick={onFetchObjFile}>
+            Download OBJ Without Payment
+          </button>
+        </div>
+      </div>
+    </>
   );
 };
 
 export default FloatingPanel;
 
+
+&&& FILE: ./frontend\src\Legals.tsx
+&&& CONTENT:
+import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+
+const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [content, setContent] = useState('');
+
+  const handleClick = async () => {
+    if (!isOpen) {
+      try {
+        const response = await fetch(`/docs/${documentType}.md`);
+        const text = await response.text();
+        setContent(text);
+      } catch (error) {
+        console.error(`Error loading ${documentType}:`, error);
+        setContent('Failed to load content.');
+      }
+    }
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        className="btn btn-sm btn-light"
+        style={{
+          display: 'inline-block',
+          padding: '0.25rem 0.5rem',
+        }}
+      >
+        {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
+      </button>
+
+      {isOpen && (
+        <div className="bg-white rounded shadow p-3" style={{
+          position: 'absolute',
+          top: '50px',
+          right: '10px',
+          width: '300px',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          zIndex: 1070,
+        }}>
+          <button
+            className="btn btn-sm btn-close float-end"
+            onClick={() => setIsOpen(false)}
+          />
+          <h5 className="mb-3">{documentType.charAt(0).toUpperCase() + documentType.slice(1)}</h5>
+          <ReactMarkdown>{content}</ReactMarkdown>
+        </div>
+      )}
+    </>
+  );
+};
+
+const LegalDocuments: React.FC = () => {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '10px',
+      right: '10px',
+      display: 'flex',
+      gap: '20px',
+      zIndex: 1060,
+    }}>
+      <LegalDocumentPanel documentType="impressum" />
+      <LegalDocumentPanel documentType="datenschutz" />
+      <LegalDocumentPanel documentType="agb" />
+      <LegalDocumentPanel documentType="widerruf" />
+    </div>
+  );
+};
+
+export default LegalDocuments;
 
