@@ -18,6 +18,7 @@ import * as turf from "@turf/turf";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import DrawControl from './draw-control';
+import LegalDocuments from "./Legals";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
@@ -279,6 +280,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
       />
+      
+      <LegalDocuments />
     </div>
   );
 }
