@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 from typing import List
 from urllib import request
+import uuid
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,7 +66,9 @@ async def retrieve_obj(request: RegionRequest):
     print(f"Received region: {request.region}")
 
     try:
-        temp_path = os.path.join("/temp", "34.obj")
+        # Generate a unique filename using UUID
+        random_filename = f"{uuid.uuid4()}.obj"
+        temp_path = os.path.join("/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,

@@ -15,11 +15,12 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import FloatingPanel from "./FloatingPanel";
 import * as turf from "@turf/turf";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 import DrawControl from './draw-control';
 
-
-const TILESET_URL = import.meta.env.VITE_BACKEND_URL + '/tileset/tileset.json';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
 const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.8988,
@@ -59,8 +60,8 @@ function Root() {
       drawRef.current = new MapboxDraw({
         displayControlsDefault: false,
         controls: {
-          polygon: true,
-          trash: true,
+          polygon: false,
+          trash: false,
         },
       });
       map.addControl(drawRef.current);
@@ -132,7 +133,7 @@ function Root() {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
         try {
-          const response = await fetch("http://localhost:3303/retrieve_obj", {
+          const response = await fetch(BACKEND_URL + "/retrieve_obj", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -263,8 +264,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
           position="top-right"
           displayControlsDefault={false}
           controls={{
-            polygon: true,
-            trash: true
+            polygon: false,
+            trash: false
           }}
           defaultMode="draw_polygon"
           onCreate={onUpdate}

@@ -23,6 +23,7 @@ services:
     volumes:
       - ./backend:/app
       - ./backend/tileset:/app/tileset
+      - ./backend/tempfiles:/app/tempfiles
     ports:
       - 5400:5400
     environment:
