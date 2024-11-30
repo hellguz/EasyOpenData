@@ -229,6 +229,23 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     }),
   ];
 
+  const handleSearch = async (query: string) => {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=de`
+    );
+    const data = await response.json();
+    return data;
+  };
+  
+  const handleSelectResult = (result: any) => {
+    // Fly to the selected location
+    const map = mapRef.current.getMap();
+
+    map.flyTo({
+      center: [parseFloat(result.lon), parseFloat(result.lat)],
+      zoom: 14
+    });
+  };
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
@@ -279,6 +296,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onRemovePolygon={handleRemovePolygon}
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
+  onSearch={handleSearch}
+  onSelectResult={handleSelectResult}
       />
       
       <LegalDocuments />
