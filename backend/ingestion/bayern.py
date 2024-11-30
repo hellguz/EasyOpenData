@@ -34,6 +34,7 @@ META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
+PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 
 # Configure logging
 logging.basicConfig(
@@ -296,13 +297,13 @@ def put_buildings_on_ground(database_url):
 
 def convert_to_3d_tiles(cache_dir, database_url):
     """
-    Converts buildings from the database to 3D tiles using pg2b3dm_new.
+    Converts buildings from the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
     """
-    logging.info("Converting buildings to 3D tiles with pg2b3dm_new.")
+    logging.info("Converting buildings to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
@@ -310,7 +311,7 @@ def convert_to_3d_tiles(cache_dir, database_url):
     host = url.hostname or 'localhost'
     # Assume password is handled via environment or .pgpass
     cmd = [
-        'pg2b3dm',
+        PG2B3DM_PATH,
         '-h', host,
         '-U', user,
         '-c', 'geom',
@@ -325,8 +326,8 @@ def convert_to_3d_tiles(cache_dir, database_url):
         env['PGPASSWORD'] = url.password
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     if result.returncode != 0:
-        logging.error(f"pg2b3dm_new failed: {result.stderr}")
-        raise RuntimeError(f"pg2b3dm_new failed: {result.stderr}")
+        logging.error(f"pg2b3dm failed: {result.stderr}")
+        raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
 
 def remove_file(file_path):
