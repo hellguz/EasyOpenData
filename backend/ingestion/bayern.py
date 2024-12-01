@@ -331,6 +331,27 @@ def convert_to_3d_tiles(cache_dir, database_url):
         raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
 
+def apply_draco_compression(cache_dir):
+    logging.info("Applying Draco compression to glTF files.")
+    for root, dirs, files in os.walk(cache_dir):
+        for file in files:
+            if file.endswith('.glb'):
+                gltf_file = os.path.join(root, file)
+                compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
+                cmd = [
+                    "gltf-pipeline",
+                    '-i', gltf_file,
+                    '-o', compressed_file,
+                    '--draco.compressionLevel', '7'
+                ]
+                print(" ".join(cmd))
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logging.error(f"Draco compression failed for {gltf_file}: {result.stderr}")
+                else:
+                    os.replace(compressed_file, gltf_file)
+                    logging.info(f"Applied Draco compression to {gltf_file}")
+
 def remove_file(file_path):
     """
     Removes a file from the filesystem.
@@ -345,6 +366,7 @@ def remove_file(file_path):
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
 def main(meta4_file):
+    
     # Ensure DATA_DIR exists
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -393,7 +415,9 @@ def main(meta4_file):
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+            if (ix-1) % 10 == 0:
+                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+                apply_draco_compression(CACHE_DIR)
 
             # Remove the transformed GML file
             remove_file(transformed_path)

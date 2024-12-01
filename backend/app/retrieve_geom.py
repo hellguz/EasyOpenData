@@ -44,13 +44,21 @@ async def retrieve_obj_file(region_geojson, output_path):
         # Query the database for buildings within the polygon
         stmt = select(
             Building.ogc_fid,
-            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+            func.ST_AsGeoJSON(
+                func.ST_Transform(
+                    func.ST_Simplify(Building.geom, 0.1),
+                    25832  # Transform the result to 25832 after filtering
+                )
+            ).label('geom_geojson')
         ).where(
             func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
+                func.ST_MakeValid(Building.geom),  # Building geometries are kept in their original SRID (4326)
+                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))  # Transform the input polygon to 4326
             )
         )
+
+
+
         result = await session.execute(stmt)
         buildings = result.fetchall()
         
