@@ -35,7 +35,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,7 +60,7 @@ async def retrieve_obj(request: RegionRequest):
     try:
         # Generate a unique filename using UUID
         random_filename = f"{uuid.uuid4()}.obj"
-        temp_path = os.path.join("/tempfiles", random_filename)
+        temp_path = os.path.join("/app/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,
