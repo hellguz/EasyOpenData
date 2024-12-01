@@ -246,11 +246,11 @@ def ingest_gml_file(gml_file, database_url):
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
-        #'-overwrite',
+        '-overwrite',
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGON',
+        '-nlt', 'MULTIPOLYGONZ',
         '-dim', 'XYZ',
         '-s_srs', 'EPSG:25832',
         '-t_srs', 'EPSG:4326',
