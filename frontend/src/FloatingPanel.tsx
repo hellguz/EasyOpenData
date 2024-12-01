@@ -44,26 +44,26 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
-  
-// Add this function to handle search
-const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const query = e.target.value;
-  setSearchQuery(query);
-  
-  if (query.length > 2) {
-    setIsSearching(true);
-    try {
-      const results = await onSearch(query);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search error:', error);
+
+  // Add this function to handle search
+  const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.length > 2) {
+      setIsSearching(true);
+      try {
+        const results = await onSearch(query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      }
+      setIsSearching(false);
+    } else {
       setSearchResults([]);
     }
-    setIsSearching(false);
-  } else {
-    setSearchResults([]);
-  }
-};
+  };
 
 
   return (
@@ -88,85 +88,89 @@ const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
       >
         {/* Region Panel */}
         <div
-  className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-  style={{
-    width: "300px",
-    height: "auto",
-    minHeight: "200px",
-    pointerEvents: "auto",
-  }}
->
-  <h5 className="mb-3 text-center">Region</h5>
-  
-  {/* Search Input */}
-  <div className="w-100 mb-3">
-    <input
-      type="text"
-      className="form-control form-control-sm"
-      placeholder="Search location..."
-      value={searchQuery}
-      onChange={handleSearch}
-    />
-    
-    {/* Search Results */}
-    {searchResults.length > 0 && (
-      <div 
-        className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
-        style={{ maxHeight: '150px', zIndex: 1060 }}
-      >
-        {searchResults.map((result, index) => (
-          <div
-            key={index}
-            className="p-2 hover-bg-light cursor-pointer"
-            onClick={() => {
-              onSelectResult(result);
-              setSearchResults([]);
-              setSearchQuery('');
-            }}
-            style={{ cursor: 'pointer' }}
-          >
-            {result.display_name || result.name}
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+          style={{
+            width: "300px",
+            height: "auto",
+            minHeight: "200px",
+            pointerEvents: "auto",
+          }}
+        >
+          <h5 className="mb-3 text-center">Auswahl</h5>
+
+          {/* Search Input */}
+          <div className="w-100 mb-3">
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              placeholder="Search location..."
+              value={searchQuery}
+              onChange={handleSearch}
+            />
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <div
+                className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
+                style={{
+                  maxHeight: '150px',
+                  maxWidth: '300px',
+                  zIndex: 1060
+                }}
+              >
+                {searchResults.map((result, index) => (
+                  <div
+                    key={index}
+                    className="p-2 hover-bg-light cursor-pointer"
+                    onClick={() => {
+                      onSelectResult(result);
+                      setSearchResults([]);
+                      setSearchQuery('');
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {result.display_name || result.name}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isSearching && (
+              <div className="text-center mt-2">
+                <small>Suche...</small>
+              </div>
+            )}
           </div>
-        ))}
-      </div>
-    )}
-    
-    {isSearching && (
-      <div className="text-center mt-2">
-        <small>Searching...</small>
-      </div>
-    )}
-  </div>
 
-  {/* Existing Area and Price Display */}
-  {polygonArea !== null ? (
-    <div className="text-center mb-3">
-        <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-    </div>
-  ) : (
-    <p className="text-center mb-3">No area selected.</p>
-  )}
+          {/* Existing Area and Price Display */}
+          {polygonArea !== null ? (
+            <div className="text-center mb-3">
+              <strong>Gebietfläche:</strong> {polygonArea.toFixed(2)} km²
+            </div>
+          ) : (
+            <p className="text-center mb-3">Zeichnen Sie das Gebiet ein</p>
+          )}
 
-  {/* Existing Buttons */}
-  <div className="btn-group w-100" role="group">
-    <button
-      type="button"
-      className="btn btn-outline-primary"
-      onClick={onDrawPolygon}
-    >
-      Draw Polygon
-    </button>
-    <button
-      type="button"
-      className="btn btn-outline-danger"
-      onClick={onRemovePolygon}
-    >
-      Delete Polygon
-    </button>
-  </div>
-</div>
+          {/* Existing Buttons */}
+          <div className="btn-group w-100" role="group">
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={onDrawPolygon}
+            >
+              Draw Polygon
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-danger"
+              onClick={onRemovePolygon}
+            >
+              Delete Polygon
+            </button>
+          </div>
+        </div>
         {/* Options Panel */}
-        <div
+        {/* <div
           className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
             width: "200px",
@@ -199,7 +203,7 @@ const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
           >
             Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Payment Panel */}
@@ -210,21 +214,15 @@ const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
           minHeight: "200px",
           height: "auto",
           marginLeft: "auto",
-          transition: "height 0.3s ease-in-out",      
+          transition: "height 0.3s ease-in-out",
           pointerEvents: "auto", // Add this line
 
         }}
       >
-        <h5 className="mb-3 text-center">Payment</h5>
+        <h5 className="mb-3 text-center">Herunterladen</h5>
         <Elements stripe={stripePromise}>
           <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
         </Elements>
-        <button
-          className="btn btn-secondary w-100 mt-3"
-          onClick={onFetchObjFile}
-        >
-          Download OBJ Without Payment
-        </button>
       </div>
     </div>
   );

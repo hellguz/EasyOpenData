@@ -47,6 +47,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
   const handleFocus = () => {
     setIsExpanded(true);
   };
+  const handleFocusOut = () => {
+    setIsExpanded(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,19 +105,34 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       setLoading(false);
     }
   };
-
   return (
     <form onSubmit={handleSubmit} className="d-flex flex-column gap-2">
-
       
+      {/* Secure Payment Badge */}
+      <div className="d-flex align-items-center gap-1 text-secondary small">
+        <span className="bi bi-lock-fill"></span>
+        Secure payment via Stripe
+      </div>
+  
+      {/* Price Details */}
+      <div className="text-secondary small">
+        <p>
+          <strong>Order Total:</strong> €{price.toFixed(2)}
+        </p>
+        <p>No additional fees. You’ll only be charged this amount.</p>
+      </div>
+  
       {isExpanded && (
         <div className="mt-2 animate__animated animate__fadeIn">
+          {/* Customer Details */}
           <input
             type="email"
             placeholder="Email *"
             required
             value={customerData.email}
-            onChange={(e) => setCustomerData({...customerData, email: e.target.value})}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, email: e.target.value })
+            }
             className="form-control form-control-sm mb-2"
           />
           <input
@@ -122,7 +140,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
             placeholder="Full Name *"
             required
             value={customerData.name}
-            onChange={(e) => setCustomerData({...customerData, name: e.target.value})}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, name: e.target.value })
+            }
             className="form-control form-control-sm mb-2"
           />
           <input
@@ -130,10 +150,12 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
             placeholder="Street Address *"
             required
             value={customerData.address.line1}
-            onChange={(e) => setCustomerData({
-              ...customerData,
-              address: {...customerData.address, line1: e.target.value}
-            })}
+            onChange={(e) =>
+              setCustomerData({
+                ...customerData,
+                address: { ...customerData.address, line1: e.target.value },
+              })
+            }
             className="form-control form-control-sm mb-2"
           />
           <div className="d-flex gap-2 mb-2">
@@ -142,10 +164,15 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
               placeholder="Postal Code *"
               required
               value={customerData.address.postal_code}
-              onChange={(e) => setCustomerData({
-                ...customerData,
-                address: {...customerData.address, postal_code: e.target.value}
-              })}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: {
+                    ...customerData.address,
+                    postal_code: e.target.value,
+                  },
+                })
+              }
               className="form-control form-control-sm"
             />
             <input
@@ -153,28 +180,47 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
               placeholder="City *"
               required
               value={customerData.address.city}
-              onChange={(e) => setCustomerData({
-                ...customerData,
-                address: {...customerData.address, city: e.target.value}
-              })}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: { ...customerData.address, city: e.target.value },
+                })
+              }
               className="form-control form-control-sm"
             />
           </div>
         </div>
       )}
-            <CardElement 
-        onFocus={handleFocus}
+  
+      {/* Card Element */}
+      <CardElement
+      
+      onFocus={handleFocus}
+      onFocusOut={handleFocusOut}
         options={{
           style: {
             base: {
-              fontSize: '14px',
-            }
-          }
+              fontSize: "14px",
+            },
+          },
         }}
       />
       <div id="payment-message" className="text-danger small"></div>
-      <button 
-        type="submit" 
+  
+      {/* Link to Stripe Security Info */}
+      <div className="small mt-7">
+        <a
+          href="https://stripe.com/docs/security"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-secondary"
+        >
+          Learn more about how your payment information is secured.
+        </a>
+      </div>
+  
+      <button
+        type="submit"
         disabled={!stripe || loading}
         className="btn btn-primary btn-sm mt-2"
       >
@@ -182,5 +228,6 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       </button>
     </form>
   );
+  
 };
 export default CheckoutForm;
