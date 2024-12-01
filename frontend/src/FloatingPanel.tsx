@@ -292,7 +292,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
       {/* Herunterladen Panel */}
       <div
-        className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+        className="bg-white rounded shadow p-3 d-flex flex-column "
         style={{
           width: "300px",
           minHeight: "200px",
