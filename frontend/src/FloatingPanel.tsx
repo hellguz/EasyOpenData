@@ -295,7 +295,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
         className="bg-white rounded shadow p-3 d-flex flex-column "
         style={{
           width: "300px",
-          minHeight: "200px",
+          minHeight: "50px",
           marginLeft: "auto",
           transition: "height 0.3s ease-in-out",
           pointerEvents: "auto",

@@ -10,3 +10,5 @@ Before you run the scripts:
 conda install -c conda-forge gdal libgdal 
 3. Install all other dependencies:
 pip install -r .\backend\requirements.txt
+4. Install gltf-pipeline:
+npm install -g gltf-pipeline
