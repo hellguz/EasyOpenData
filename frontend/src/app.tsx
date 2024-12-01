@@ -20,6 +20,8 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
+import './App.css'
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
