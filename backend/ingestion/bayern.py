@@ -352,13 +352,14 @@ def main(meta4_file):
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for file_info in files:
+    for ix, file_info in enumerate(files, start=1):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
+        logging.info(f"▶️ FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
         # Determine download paths
