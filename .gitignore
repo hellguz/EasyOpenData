@@ -25,3 +25,5 @@ venv/
 .conda
 
 node_modules/
+
+postgres_data/

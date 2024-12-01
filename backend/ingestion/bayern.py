@@ -381,7 +381,7 @@ def main(meta4_file):
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
-        logging.info(f"▶️ FILE {ix}/{len(files)}")
+        logging.info(f"▶️   FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
         # Determine download paths
