@@ -28,29 +28,7 @@ venv/
 
 node_modules/
 
-&&& FILE: ./commands.md
-&&& CONTENT:
-### Generate Backend
-Please create a backend  repo for my project. I will paste README of it in the end of this message.
-I want to use FastAPI+PostGIS for it. I plan to start with 3d buildings, so paste parcels and terrain only as place holders. I plan to create 17 scripts in folder (/data_ingest) (one per bundesland) for uploading their specific .gml files (stored in /data_local/bundesland_name/file1.gml, file2.gml,..)
-
-**___README___**
-
-I want you to reply with ONE code block structured like this:
-
-&&& FILE: path/to/file.ext
-&&& CONTENT:
-content
-of
-the
-file
-
-&&& FILE: path/to/another/file.ext
-&&& CONTENT:
-content
-of
-another
-file
+postgres_data/
 
 &&& FILE: ./docker-compose.yml
 &&& CONTENT:
@@ -64,13 +42,13 @@ services:
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 20
 
   easyopen_backend:
     container_name: easyopen_backend
@@ -105,15 +83,6 @@ services:
 
 volumes:
   postgres_data:
-
-
-&&& FILE: ./init.sql
-&&& CONTENT:
-CREATE DATABASE easyopendata_database;
-
-\c easyopendata_database;
-
-CREATE EXTENSION IF NOT EXISTS postgis;
 
 
 &&& FILE: ./README.md
@@ -385,7 +354,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://easyopen.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -410,7 +379,7 @@ async def retrieve_obj(request: RegionRequest):
     try:
         # Generate a unique filename using UUID
         random_filename = f"{uuid.uuid4()}.obj"
-        temp_path = os.path.join("/tempfiles", random_filename)
+        temp_path = os.path.join("/app/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,
@@ -523,13 +492,21 @@ async def retrieve_obj_file(region_geojson, output_path):
         # Query the database for buildings within the polygon
         stmt = select(
             Building.ogc_fid,
-            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+            func.ST_AsGeoJSON(
+                func.ST_Transform(
+                    func.ST_Simplify(Building.geom, 0.1),
+                    25832  # Transform the result to 25832 after filtering
+                )
+            ).label('geom_geojson')
         ).where(
             func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
+                func.ST_MakeValid(Building.geom),  # Building geometries are kept in their original SRID (4326)
+                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))  # Transform the input polygon to 4326
             )
         )
+
+
+
         result = await session.execute(stmt)
         buildings = result.fetchall()
         
@@ -639,6 +616,37 @@ if __name__ == '__main__':
     asyncio.run(retrieve_obj(region_geojson, output_path))
 
 
+&&& FILE: ./backend\db\index.sql
+&&& CONTENT:
+-- Drop index if it exists, then create it
+DROP INDEX IF EXISTS buildings_geom_idx;
+CREATE INDEX buildings_geom_idx ON building USING GIST(geom);
+
+-- Cluster the table using the index
+CLUSTER building USING buildings_geom_idx;
+
+-- Analyze to update statistics
+ANALYZE building;
+
+&&& FILE: ./backend\db\init.sql
+&&& CONTENT:
+-- Part 1: Database and extension creation (in transaction)
+CREATE DATABASE easyopendata_database;
+\c easyopendata_database;
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Part 2: System settings (must be outside transaction)
+\connect easyopendata_database
+\echo 'Setting system parameters...'
+
+\set ON_ERROR_STOP off
+ALTER SYSTEM SET maintenance_work_mem TO '1GB';
+ALTER SYSTEM SET work_mem TO '256MB';
+ALTER SYSTEM SET max_parallel_workers_per_gather TO 4;
+\set ON_ERROR_STOP on
+
+
+
 &&& FILE: ./backend\ingestion\bayern.py
 &&& CONTENT:
 #!/usr/bin/env python3
@@ -673,11 +681,12 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
+SQL_INDEX_PATH = 'backend/db/index.sql'
 
 # Configure logging
 logging.basicConfig(
@@ -893,7 +902,7 @@ def ingest_gml_file(gml_file, database_url):
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGON',
+        '-nlt', 'MULTIPOLYGONZ',
         '-dim', 'XYZ',
         '-s_srs', 'EPSG:25832',
         '-t_srs', 'EPSG:4326',
@@ -905,6 +914,30 @@ def ingest_gml_file(gml_file, database_url):
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
     logging.info(f"Ingested {gml_file} into database successfully.")
+
+def execute_sql_file(sql_file_path, database_url):
+    """Executes a SQL file in the database."""
+    logging.info(f"Executing SQL file: {sql_file_path}")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            with open(sql_file_path, 'r') as f:
+                cur.execute(f.read())
+            conn.commit()
+        logging.info("SQL file executed successfully")
+    except Exception as e:
+        logging.error(f"Failed to execute SQL file: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def put_buildings_on_ground(database_url):
     """
@@ -974,6 +1007,27 @@ def convert_to_3d_tiles(cache_dir, database_url):
         raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
 
+def apply_draco_compression(cache_dir):
+    logging.info("Applying Draco compression to glTF files.")
+    for root, dirs, files in os.walk(cache_dir):
+        for file in files:
+            if file.endswith('.glb'):
+                gltf_file = os.path.join(root, file)
+                compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
+                cmd = [
+                    "gltf-pipeline",
+                    '-i', gltf_file,
+                    '-o', compressed_file,
+                    '--draco.compressionLevel', '7'
+                ]
+                print(" ".join(cmd))
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logging.error(f"Draco compression failed for {gltf_file}: {result.stderr}")
+                else:
+                    os.replace(compressed_file, gltf_file)
+                    logging.info(f"Applied Draco compression to {gltf_file}")
+
 def remove_file(file_path):
     """
     Removes a file from the filesystem.
@@ -988,6 +1042,7 @@ def remove_file(file_path):
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
 def main(meta4_file):
+    
     # Ensure DATA_DIR exists
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -995,13 +1050,14 @@ def main(meta4_file):
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for file_info in files:
+    for ix, file_info in enumerate(files, start=1):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
+        logging.info(f"▶️   FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
         # Determine download paths
@@ -1031,11 +1087,17 @@ def main(meta4_file):
             # Ingest the transformed GML into the database
             ingest_gml_file(transformed_path, DATABASE_URL)
 
+            # Execute the SQL file after first ingestion
+            if ix == 1:  # Only after first file
+                execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
             # Update building geometries
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+            if (ix-1) % 1000 == 0:
+                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+                apply_draco_compression(CACHE_DIR)
 
             # Remove the transformed GML file
             remove_file(transformed_path)
@@ -1076,27 +1138,13 @@ Before you run the scripts:
 conda install -c conda-forge gdal libgdal 
 3. Install all other dependencies:
 pip install -r .\backend\requirements.txt
+4. Install gltf-pipeline:
+npm install -g gltf-pipeline
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5526.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
-................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5526_trs.gfs
+&&& FILE: ./backend\ingestion\data_local\bayern\792_5432.gml
 &&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryEleme
-................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5526_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
@@ -1128,6 +1176,71 @@ pip install -r .\backend\requirements.txt
 
 &&& FILE: ./backend\ingestion\libs\pg2b3dm.exe
 &&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 2: invalid start byte
+
+&&& FILE: ./backend\tempfiles\0ebaef62-302b-4cb5-b7db-c83d53020ba2.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692466.2220121699 0 5334731.421954182
+v 692466.2220121699 11.428 5334731.421954182
+v 692465.9520113174 11.428 5334728.848945844
+v 692465.9520113174 0 5334728.8489
+................................
+
+&&& FILE: ./backend\tempfiles\1fc79dc8-42f6-40ed-9d9c-1da5b48f3473.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\4e147667-b8f6-4a58-b874-087dde71f6f4.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692346.1879965623 16.396 5334621.376947997
+v 692346.1879965623 0 5334621.376947997
+v 692346.8869687994 0 5334625.6130508045
+v 692347.093996431 0 5334626.878050981
+................................
+
+&&& FILE: ./backend\tempfiles\518a4dc0-1821-4990-b379-54b833b598fd.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692009.9379970876 4.357 5334359.5610187
+v 692012.5230037409 4.358 5334359.49202265
+v 692015.0539863509 4.468 5334358.949020741
+v 692015.5209730046 4.488 5334358.8
+................................
+
+&&& FILE: ./backend\tempfiles\8e80c443-cfcd-467c-9feb-92bf2e18b6da.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692818.6949864172 0 5335090.412017974
+v 692819.3910307497 0 5335094.381968065
+v 692824.4699776318 0 5335093.477968954
+v 692823.7550192552 0 5335089.497032916
+v 69
+................................
+
+&&& FILE: ./backend\tempfiles\df087d27-ace5-4504-bdd4-65f981e3f26a.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692160.4799965809 0 5334348.86996756
+v 692160.4799965809 5.697 5334348.86996756
+v 692161.110030973 5.697 5334349.080054309
+v 692161.110030973 0 5334349.080054309
+
+................................
+
+&&& FILE: ./backend\tempfiles\fb2d0100-cbec-472c-b7a0-79fcf0e674ea.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./frontend\.env
+&&& CONTENT:
+HTTPS=true
 
 &&& FILE: ./frontend\.gitignore
 &&& CONTENT:
@@ -1223,19 +1336,25 @@ export default [
 &&& CONTENT:
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
-  <title>deck.gl Example</title>
-  
+  <title>EasyOpenData</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css" type="text/css">
-  <style>
-    body, body > div {margin: 0; width: 100vw; height: 100vh; overflow: hidden;}
-  </style>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css"
+    type="text/css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
+
 <body>
 </body>
 <script type="module" src="./src/App.tsx"></script>
+
 </html>
 
 &&& FILE: ./frontend\package.json
@@ -1299,6 +1418,17 @@ export default defineConfig({
   plugins: [react()],
 })
 
+
+&&& FILE: ./frontend\yarn.lock
+&&& CONTENT:
+# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+"@ampproject/remapping@^2.2.0":
+  version "2.3.0"
+  resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
+................................
 
 &&& FILE: ./frontend\docs\agb.md
 &&& CONTENT:
@@ -1481,7 +1611,107 @@ Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginn
 &&& CONTENT:
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
 
-&&& FILE: ./frontend\src\app.tsx
+&&& FILE: ./frontend\src\App.css
+&&& CONTENT:
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+body,
+#root {
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Override all fonts */
+* {
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+.ibm-plex-sans-thin {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-extralight {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-light {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-regular {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-medium {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-semibold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-bold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-thin-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-extralight-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-light-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-regular-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-medium-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-semibold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-bold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: italic;
+  }
+  
+
+&&& FILE: ./frontend\src\App.tsx
 &&& CONTENT:
 // Root.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
@@ -1505,13 +1735,15 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
+import './App.css'
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
-const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 49.8988,
-  longitude: 10.9028,   
-  pitch: 45,
+const INITIAL_VIEW_STATE: MapViewState = { 
+  latitude: 48.1351,
+  longitude: 11.5820,
+  pitch: 45, 
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
@@ -2029,6 +2261,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
   const handleFocus = () => {
     setIsExpanded(true);
   };
+  const handleFocusOut = () => {
+    setIsExpanded(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2084,19 +2319,34 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       setLoading(false);
     }
   };
-
   return (
     <form onSubmit={handleSubmit} className="d-flex flex-column gap-2">
-
       
+      {/* Secure Payment Badge */}
+      <div className="d-flex align-items-center gap-1 text-secondary small">
+        <span className="bi bi-lock-fill"></span>
+        Secure payment via Stripe
+      </div>
+  
+      {/* Price Details */}
+      <div className="text-secondary small">
+        <p>
+          <strong>Order Total:</strong> €{price.toFixed(2)}
+        </p>
+        <p>No additional fees. You’ll only be charged this amount.</p>
+      </div>
+  
       {isExpanded && (
         <div className="mt-2 animate__animated animate__fadeIn">
+          {/* Customer Details */}
           <input
             type="email"
             placeholder="Email *"
             required
             value={customerData.email}
-            onChange={(e) => setCustomerData({...customerData, email: e.target.value})}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, email: e.target.value })
+            }
             className="form-control form-control-sm mb-2"
           />
           <input
@@ -2104,7 +2354,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
             placeholder="Full Name *"
             required
             value={customerData.name}
-            onChange={(e) => setCustomerData({...customerData, name: e.target.value})}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, name: e.target.value })
+            }
             className="form-control form-control-sm mb-2"
           />
           <input
@@ -2112,10 +2364,12 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
             placeholder="Street Address *"
             required
             value={customerData.address.line1}
-            onChange={(e) => setCustomerData({
-              ...customerData,
-              address: {...customerData.address, line1: e.target.value}
-            })}
+            onChange={(e) =>
+              setCustomerData({
+                ...customerData,
+                address: { ...customerData.address, line1: e.target.value },
+              })
+            }
             className="form-control form-control-sm mb-2"
           />
           <div className="d-flex gap-2 mb-2">
@@ -2124,10 +2378,15 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
               placeholder="Postal Code *"
               required
               value={customerData.address.postal_code}
-              onChange={(e) => setCustomerData({
-                ...customerData,
-                address: {...customerData.address, postal_code: e.target.value}
-              })}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: {
+                    ...customerData.address,
+                    postal_code: e.target.value,
+                  },
+                })
+              }
               className="form-control form-control-sm"
             />
             <input
@@ -2135,28 +2394,47 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
               placeholder="City *"
               required
               value={customerData.address.city}
-              onChange={(e) => setCustomerData({
-                ...customerData,
-                address: {...customerData.address, city: e.target.value}
-              })}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: { ...customerData.address, city: e.target.value },
+                })
+              }
               className="form-control form-control-sm"
             />
           </div>
         </div>
       )}
-            <CardElement 
-        onFocus={handleFocus}
+  
+      {/* Card Element */}
+      <CardElement
+      
+      onFocus={handleFocus}
+      onFocusOut={handleFocusOut}
         options={{
           style: {
             base: {
-              fontSize: '14px',
-            }
-          }
+              fontSize: "14px",
+            },
+          },
         }}
       />
       <div id="payment-message" className="text-danger small"></div>
-      <button 
-        type="submit" 
+  
+      {/* Link to Stripe Security Info */}
+      <div className="small mt-7">
+        <a
+          href="https://stripe.com/docs/security"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-secondary"
+        >
+          Learn more about how your payment information is secured.
+        </a>
+      </div>
+  
+      <button
+        type="submit"
         disabled={!stripe || loading}
         className="btn btn-primary btn-sm mt-2"
       >
@@ -2164,6 +2442,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       </button>
     </form>
   );
+  
 };
 export default CheckoutForm;
 
@@ -2216,6 +2495,9 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "./CheckoutForm";
 import "bootstrap/dist/css/bootstrap.min.css";
+// Import FontAwesome
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faChevronUp, faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
 // Initialize Stripe with your publishable key
 const stripePromise = loadStripe(
@@ -2230,22 +2512,27 @@ interface FloatingPanelProps {
   onSearch: (query: string) => Promise<any>;
   onSelectResult: (result: any) => void;
 }
+
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
   onDrawPolygon,
   onRemovePolygon,
   onFetchObjFile,
   polygonArea,
   onSearch,
-  onSelectResult
+  onSelectResult,
 }) => {
   const [price, setPrice] = useState<number>(0);
-  const [gelandeActive, setGelandeActive] = useState<boolean>(false);
-  const [gebaudeActive, setGebaudeActive] = useState<boolean>(false);
-  const [flurstuckeActive, setFlurstuckeActive] = useState<boolean>(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // New state for expanded tab
+  const [expandedTab, setExpandedTab] = useState<string | null>(null);
+
+  const [isMobile, setIsMobile] = useState<boolean>(
+    window.innerWidth <= 768
+  );
 
   useEffect(() => {
     if (polygonArea !== null) {
@@ -2257,28 +2544,210 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
-  
-// Add this function to handle search
-const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const query = e.target.value;
-  setSearchQuery(query);
-  
-  if (query.length > 2) {
-    setIsSearching(true);
-    try {
-      const results = await onSearch(query);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search error:', error);
+  // Handle window resize to update isMobile state
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Handle search functionality
+  const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.length > 2) {
+      setIsSearching(true);
+      try {
+        const results = await onSearch(query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      }
+      setIsSearching(false);
+    } else {
       setSearchResults([]);
     }
-    setIsSearching(false);
-  } else {
-    setSearchResults([]);
+  };
+
+  // Extracted content functions for reuse
+  const renderAuswahlContent = () => (
+    <>
+      {/* Search Input */}
+      <div className="w-100 mb-3 position-relative">
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="Search location..."
+          value={searchQuery}
+          onChange={handleSearch}
+        />
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div
+            className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
+            style={{
+              maxHeight: "150px",
+              zIndex: 1060,
+            }}
+          >
+            {searchResults.map((result, index) => (
+              <div
+                key={index}
+                className="p-2 hover-bg-light cursor-pointer"
+                onClick={() => {
+                  onSelectResult(result);
+                  setSearchResults([]);
+                  setSearchQuery("");
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                {result.display_name || result.name}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isSearching && (
+          <div className="text-center mt-2">
+            <small>Suche...</small>
+          </div>
+        )}
+      </div>
+
+      {/* Polygon Area and Price Display */}
+      {polygonArea !== null ? (
+        <div className="text-center mb-3">
+          <strong>Gebietfläche:</strong> {polygonArea.toFixed(2)} km²
+        </div>
+      ) : (
+        <p className="text-center mb-3">Zeichnen Sie das Gebiet ein</p>
+      )}
+
+      {/* Action Buttons */}
+      <div className="btn-group w-100" role="group">
+        <button
+          type="button"
+          className="btn btn-outline-primary"
+          onClick={onDrawPolygon}
+        >
+          Draw Polygon
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-danger"
+          onClick={onRemovePolygon}
+        >
+          Delete Polygon
+        </button>
+      </div>
+    </>
+  );
+
+  const renderHerunterladenContent = () => (
+    <>
+      <Elements stripe={stripePromise}>
+        <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+      </Elements>
+    </>
+  );
+
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <div
+        className="position-fixed"
+        style={{
+          bottom: "40px",
+          left: "0",
+          right: "0",
+          zIndex: 1050,
+          pointerEvents: "none",
+        }}
+      >
+        {/* Auswahl Tab */}
+        <div
+          style={{
+            pointerEvents: "auto",
+            marginBottom: expandedTab === 'Auswahl' ? '0' : '10px',
+          }}
+        >
+          <div
+            className={`bg-white shadow p-3 d-flex justify-content-between align-items-center ${
+              expandedTab === 'Auswahl' ? 'rounded-top' : 'rounded'
+            }`}
+            style={{
+              margin: "0 20px",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setExpandedTab(expandedTab === 'Auswahl' ? null : 'Auswahl');
+            }}
+          >
+            <h5 className="mb-0">Auswahl</h5>
+            {/* Expand/Collapse Icon */}
+            <FontAwesomeIcon
+              icon={expandedTab === 'Auswahl' ? faChevronUp : faChevronDown}
+            />
+          </div>
+          {expandedTab === 'Auswahl' && (
+            <div
+              className="bg-white shadow p-3 rounded-bottom"
+              style={{
+                margin: "0 20px 20px",
+              }}
+            >
+              {renderAuswahlContent()}
+            </div>
+          )}
+        </div>
+
+        {/* Herunterladen Tab */}
+        <div
+          style={{
+            pointerEvents: "auto",
+            marginBottom: expandedTab === 'Herunterladen' ? '0' : '10px',
+          }}
+        >
+          <div
+            className={`bg-white shadow p-3 d-flex justify-content-between align-items-center ${
+              expandedTab === 'Herunterladen' ? 'rounded-top' : 'rounded'
+            }`}
+            style={{
+              margin: "0 20px",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setExpandedTab(expandedTab === 'Herunterladen' ? null : 'Herunterladen');
+            }}
+          >
+            <h5 className="mb-0">Herunterladen</h5>
+            {/* Expand/Collapse Icon */}
+            <FontAwesomeIcon
+              icon={expandedTab === 'Herunterladen' ? faChevronUp : faChevronDown}
+            />
+          </div>
+          {expandedTab === 'Herunterladen' && (
+            <div
+              className="bg-white shadow p-3 rounded-bottom"
+              style={{
+                margin: "0 20px 20px",
+              }}
+            >
+              {renderHerunterladenContent()}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
-};
 
-
+  // Desktop Layout remains unchanged
   return (
     <div
       className="d-flex align-items-end"
@@ -2289,184 +2758,81 @@ const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
         right: "20px",
         gap: "20px",
         zIndex: 1050,
-        pointerEvents: "none", // Add this line
+        pointerEvents: "none",
       }}
     >
       <div
         className="d-flex gap-3"
         style={{
           marginRight: "auto",
-          pointerEvents: "none", // Add this line
+          pointerEvents: "none",
         }}
       >
-        {/* Region Panel */}
-        <div
-  className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-  style={{
-    width: "300px",
-    height: "auto",
-    minHeight: "200px",
-    pointerEvents: "auto",
-  }}
->
-  <h5 className="mb-3 text-center">Region</h5>
-  
-  {/* Search Input */}
-  <div className="w-100 mb-3">
-    <input
-      type="text"
-      className="form-control form-control-sm"
-      placeholder="Search location..."
-      value={searchQuery}
-      onChange={handleSearch}
-    />
-    
-    {/* Search Results */}
-    {searchResults.length > 0 && (
-      <div 
-        className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
-        style={{ maxHeight: '150px', zIndex: 1060 }}
-      >
-        {searchResults.map((result, index) => (
-          <div
-            key={index}
-            className="p-2 hover-bg-light cursor-pointer"
-            onClick={() => {
-              onSelectResult(result);
-              setSearchResults([]);
-              setSearchQuery('');
-            }}
-            style={{ cursor: 'pointer' }}
-          >
-            {result.display_name || result.name}
-          </div>
-        ))}
-      </div>
-    )}
-    
-    {isSearching && (
-      <div className="text-center mt-2">
-        <small>Searching...</small>
-      </div>
-    )}
-  </div>
-
-  {/* Existing Area and Price Display */}
-  {polygonArea !== null ? (
-    <div className="text-center mb-3">
-        <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-    </div>
-  ) : (
-    <p className="text-center mb-3">No area selected.</p>
-  )}
-
-  {/* Existing Buttons */}
-  <div className="btn-group w-100" role="group">
-    <button
-      type="button"
-      className="btn btn-outline-primary"
-      onClick={onDrawPolygon}
-    >
-      Draw Polygon
-    </button>
-    <button
-      type="button"
-      className="btn btn-outline-danger"
-      onClick={onRemovePolygon}
-    >
-      Delete Polygon
-    </button>
-  </div>
-</div>
-        {/* Options Panel */}
+        {/* Auswahl Panel */}
         <div
           className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
           style={{
-            width: "200px",
-            height: "200px",
-            pointerEvents: "auto", // Add this line
+            width: "300px",
+            minHeight: "200px",
+            pointerEvents: "auto",
           }}
         >
-          <h5 className="mb-3 text-center">Options</h5>
-          <button
-            className={`btn w-100 mb-2 ${
-              gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"
-            }`}
-            onClick={() => setGelandeActive(!gelandeActive)}
-          >
-            Gelände {gelandeActive ? "Active" : "Inactive"}
-          </button>
-          <button
-            className={`btn w-100 mb-2 ${
-              gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"
-            }`}
-            onClick={() => setGebaudeActive(!gebaudeActive)}
-          >
-            Gebäude {gebaudeActive ? "Active" : "Inactive"}
-          </button>
-          <button
-            className={`btn w-100 ${
-              flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"
-            }`}
-            onClick={() => setFlurstuckeActive(!flurstuckeActive)}
-          >
-            Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
-          </button>
+          <h5 className="mb-3 text-center">Auswahl</h5>
+          {renderAuswahlContent()}
         </div>
       </div>
 
-      {/* Payment Panel */}
+      {/* Herunterladen Panel */}
       <div
-        className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
+        className="bg-white rounded shadow p-3 d-flex flex-column "
         style={{
           width: "300px",
-          minHeight: "200px",
-          height: "auto",
+          minHeight: "50px",
           marginLeft: "auto",
-          transition: "height 0.3s ease-in-out",      
-          pointerEvents: "auto", // Add this line
-
+          transition: "height 0.3s ease-in-out",
+          pointerEvents: "auto",
         }}
       >
-        <h5 className="mb-3 text-center">Payment</h5>
-        <Elements stripe={stripePromise}>
-          <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-        </Elements>
-        <button
-          className="btn btn-secondary w-100 mt-3"
-          onClick={onFetchObjFile}
-        >
-          Download OBJ Without Payment
-        </button>
+        <h5 className="mb-3 text-center">Herunterladen</h5>
+        {renderHerunterladenContent()}
       </div>
     </div>
   );
 };
+
 export default FloatingPanel;
 
 
 &&& FILE: ./frontend\src\Legals.tsx
 &&& CONTENT:
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const LegalDocumentPanel: React.FC<{
+  documentType: string;
+  isOpen: boolean;
+  setOpenDocument: (doc: string | null) => void;
+}> = ({ documentType, isOpen, setOpenDocument }) => {
   const [content, setContent] = useState('');
 
-  const handleClick = async () => {
-    if (!isOpen) {
-      try {
-        const response = await fetch(`/docs/${documentType}.md`);
-        const text = await response.text();
-        setContent(text);
-      } catch (error) {
-        console.error(`Error loading ${documentType}:`, error);
-        setContent('Failed to load content.');
-      }
+  useEffect(() => {
+    if (isOpen && !content) {
+      const fetchContent = async () => {
+        try {
+          const response = await fetch(`/docs/${documentType}.md`);
+          const text = await response.text();
+          setContent(text);
+        } catch (error) {
+          console.error(`Error loading ${documentType}:`, error);
+          setContent('Failed to load content.');
+        }
+      };
+      fetchContent();
     }
-    setIsOpen(!isOpen);
+  }, [isOpen, content, documentType]);
+
+  const handleClick = () => {
+    setOpenDocument(isOpen ? null : documentType);
   };
 
   return (
@@ -2483,20 +2849,26 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
       </button>
 
       {isOpen && (
-        <div className="bg-white rounded shadow p-3" style={{
-          position: 'absolute',
-          top: '50px',
-          right: '10px',
-          width: '600px',
-          maxHeight: '50vh',
-          overflowY: 'auto',
-          zIndex: 1070,
-        }}>
+        <div
+          className="bg-white rounded shadow p-3"
+          style={{
+            position: 'absolute',
+            top: '50px',
+            right: '10px',
+            maxWidth: '600px',
+            width: '80vw',
+            maxHeight: '50vh',
+            overflowY: 'auto',
+            zIndex: 1070,
+          }}
+        >
           <button
             className="btn btn-sm btn-close float-end"
-            onClick={() => setIsOpen(false)}
+            onClick={() => setOpenDocument(null)}
           />
-          <h5 className="mb-3">{documentType.charAt(0).toUpperCase() + documentType.slice(1)}</h5>
+          <h5 className="mb-3">
+            {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
+          </h5>
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
       )}
@@ -2505,22 +2877,43 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
 };
 
 const LegalDocuments: React.FC = () => {
+  const [openDocument, setOpenDocument] = useState<string | null>(null);
+
   return (
-    <div style={{
-      position: 'absolute',
-      top: '10px',
-      right: '10px',
-      display: 'flex',
-      gap: '20px',
-      zIndex: 1060,
-    }}>
-      <LegalDocumentPanel documentType="impressum" />
-      <LegalDocumentPanel documentType="datenschutz" />
-      <LegalDocumentPanel documentType="agb" />
-      <LegalDocumentPanel documentType="widerruf" />
+    <div
+      style={{
+        position: 'absolute',
+        top: '10px',
+        right: '10px',
+        display: 'flex',
+        gap: '20px',
+        zIndex: 1060,
+      }}
+    >
+      <LegalDocumentPanel
+        documentType="impressum"
+        isOpen={openDocument === 'impressum'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="datenschutz"
+        isOpen={openDocument === 'datenschutz'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="agb"
+        isOpen={openDocument === 'agb'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="widerruf"
+        isOpen={openDocument === 'widerruf'}
+        setOpenDocument={setOpenDocument}
+      />
     </div>
   );
 };
 
 export default LegalDocuments;
+
 
