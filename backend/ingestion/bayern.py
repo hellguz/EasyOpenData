@@ -30,11 +30,12 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
+SQL_INDEX_PATH = 'backend/db/index.sql'
 
 # Configure logging
 logging.basicConfig(
@@ -263,6 +264,30 @@ def ingest_gml_file(gml_file, database_url):
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
     logging.info(f"Ingested {gml_file} into database successfully.")
 
+def execute_sql_file(sql_file_path, database_url):
+    """Executes a SQL file in the database."""
+    logging.info(f"Executing SQL file: {sql_file_path}")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            with open(sql_file_path, 'r') as f:
+                cur.execute(f.read())
+            conn.commit()
+        logging.info("SQL file executed successfully")
+    except Exception as e:
+        logging.error(f"Failed to execute SQL file: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def put_buildings_on_ground(database_url):
     """
     Updates the geometries in the 'building' table to put them on ground level.
@@ -411,11 +436,15 @@ def main(meta4_file):
             # Ingest the transformed GML into the database
             ingest_gml_file(transformed_path, DATABASE_URL)
 
+            # Execute the SQL file after first ingestion
+            if ix == 1:  # Only after first file
+                execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
             # Update building geometries
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            if (ix-1) % 10 == 0:
+            if (ix-1) % 1000 == 0:
                 convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
                 apply_draco_compression(CACHE_DIR)
 
