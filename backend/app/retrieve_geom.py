@@ -8,7 +8,7 @@ from geoalchemy2 import functions as func
 from app.database import async_session
 from app.models import Building
 import os
-from pyproj import Transformer  # For coordinate transformation
+from pyproj import Transformer
 
 async def retrieve_obj_file(region_geojson, output_path):
     """
@@ -43,22 +43,15 @@ async def retrieve_obj_file(region_geojson, output_path):
     async with async_session() as session:
         # Query the database for buildings within the polygon
         stmt = select(
-            Building.ogc_fid,
-            func.ST_AsGeoJSON(
-                func.ST_Transform(
-                    func.ST_Simplify(Building.geom, 0.1),
-                    25832  # Transform the result to 25832 after filtering
-                )
-            ).label('geom_geojson')
+            Building.gml_id,
+            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
         ).where(
             func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),  # Building geometries are kept in their original SRID (4326)
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))  # Transform the input polygon to 4326
+                func.ST_MakeValid(Building.geom),
+                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
             )
         )
-
-
-
+        
         result = await session.execute(stmt)
         buildings = result.fetchall()
         
@@ -73,7 +66,7 @@ async def retrieve_obj_file(region_geojson, output_path):
 
         # Process each building geometry
         for building in buildings:
-            ogc_fid = building.ogc_fid
+            gml_id = building.gml_id
             geom_geojson_str = building.geom_geojson
             if not geom_geojson_str:
                 continue  # Skip if geometry is null
@@ -90,7 +83,7 @@ async def retrieve_obj_file(region_geojson, output_path):
             elif geom_type == 'MultiPolygon':
                 polygons = coordinates
             else:
-                print(f"Skipping unsupported geometry type (ID: {ogc_fid}, Type: {geom_type})")
+                print(f"Skipping unsupported geometry type (ID: {gml_id}, Type: {geom_type})")
                 continue
 
             for polygon in polygons:
@@ -125,7 +118,7 @@ async def retrieve_obj_file(region_geojson, output_path):
                     # Some software may not support holes directly
                     # So, we can skip adding faces for holes or handle them as separate objects
                     # For now, we'll skip adding faces for holes
-                    print(f"Skipping interior ring (hole) in building ID: {ogc_fid}")
+                    print(f"Skipping interior ring (hole) in building ID: {gml_id}")
 
         # Write to OBJ file
         with open(output_path, 'w') as obj_file:

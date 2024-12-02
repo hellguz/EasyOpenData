@@ -30,7 +30,7 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
@@ -362,19 +362,6 @@ def apply_draco_compression(cache_dir):
         for file in files:
             if file.endswith('.glb'):
                 gltf_file = os.path.join(root, file)
-
-                # Check if the first line of the file contains "draco"
-                try:
-                    with open(gltf_file, 'rb') as f:
-                        first_line = f.readline().decode('utf-8', errors='ignore')
-                        if "draco" in first_line.lower():
-                            logging.info(f"File {gltf_file} already contains Draco; skipping compression.")
-                            continue
-                except Exception as e:
-                    logging.error(f"Error reading file {gltf_file}: {e}")
-                    continue
-
-                # Proceed with Draco compression
                 compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
                 cmd = [
                     "gltf-pipeline",
@@ -457,7 +444,7 @@ def main(meta4_file):
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            if (ix-1) % 20 == 0:
+            if (ix-1) % 1000 == 0:
                 convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
                 apply_draco_compression(CACHE_DIR)
 
@@ -479,8 +466,6 @@ def main(meta4_file):
     logging.info("All files processed.")
 
 if __name__ == '__main__':
-    meta4_file = META4_PATH
-    if not os.path.isfile(meta4_file):
-        logging.error(f"Meta4 file '{meta4_file}' does not exist.")
-        sys.exit(1)
-    main(meta4_file)
+    
+    convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+    #apply_draco_compression(CACHE_DIR)
