@@ -30,7 +30,7 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
@@ -457,7 +457,7 @@ def main(meta4_file):
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            if (ix-1) % 10 == 0 or ix == len(files):
+            if ix == len(files):
                 convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
                 apply_draco_compression(CACHE_DIR)
 

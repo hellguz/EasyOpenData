@@ -47,7 +47,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       if (polygonArea < 0.05) {
         setPrice(0);
       } else {
-        setPrice(5 * polygonArea);
+        setPrice(20 * polygonArea);
       }
     }
   }, [polygonArea]);
@@ -141,17 +141,17 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div className="btn-group w-100" role="group">
         <button
           type="button"
-          className="btn btn-outline-primary"
+          className="btn btn-primary"
           onClick={onDrawPolygon}
         >
-          Draw Polygon
+          Polygon einzeichnen
         </button>
         <button
           type="button"
-          className="btn btn-outline-danger"
+          className="btn btn-danger"
           onClick={onRemovePolygon}
         >
-          Delete Polygon
+          Entfernen
         </button>
       </div>
     </>

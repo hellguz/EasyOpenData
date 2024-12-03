@@ -35,12 +35,17 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
   // If price is 0, render only the download button
   if (price === 0) {
     return (
+      <>
+      <div className="text-center mb-3">
+      Grundstücke unter 0.05 km² können kostenfrei heruntergeladen werden
+      </div>
       <button 
         onClick={onFetchObjFile}
         className="btn btn-primary btn-sm mt-2"
       >
         Download File
       </button>
+      </>
     );
   }
 
