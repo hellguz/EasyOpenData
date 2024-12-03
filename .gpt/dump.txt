@@ -28,50 +28,30 @@ venv/
 
 node_modules/
 
-&&& FILE: ./commands.md
-&&& CONTENT:
-### Generate Backend
-Please create a backend  repo for my project. I will paste README of it in the end of this message.
-I want to use FastAPI+PostGIS for it. I plan to start with 3d buildings, so paste parcels and terrain only as place holders. I plan to create 17 scripts in folder (/data_ingest) (one per bundesland) for uploading their specific .gml files (stored in /data_local/bundesland_name/file1.gml, file2.gml,..)
-
-**___README___**
-
-I want you to reply with ONE code block structured like this:
-
-&&& FILE: path/to/file.ext
-&&& CONTENT:
-content
-of
-the
-file
-
-&&& FILE: path/to/another/file.ext
-&&& CONTENT:
-content
-of
-another
-file
+postgres_data/
 
 &&& FILE: ./docker-compose.yml
 &&& CONTENT:
 services:
   postgis:
+    container_name: easyopen_db
     image: postgis/postgis:17-3.5
     restart: always
     ports:
-      - 5432:5432
+      - 8735:5432
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 20
 
-  backend:
+  easyopen_backend:
+    container_name: easyopen_backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -88,7 +68,8 @@ services:
       postgis:
         condition: service_healthy
 
-  frontend:
+  easyopen_frontend:
+    container_name: easyopen_frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -98,196 +79,139 @@ services:
     ports:
       - 5173:5173
     environment:
-      VITE_BACKEND_URL: http://localhost:5400
-
+      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
 
 volumes:
   postgres_data:
 
 
-&&& FILE: ./init.sql
-&&& CONTENT:
-CREATE DATABASE easyopendata_database;
-
-\c easyopendata_database;
-
-CREATE EXTENSION IF NOT EXISTS postgis;
-
-
 &&& FILE: ./README.md
 &&& CONTENT:
 # EasyOpenData
+
 ## Open Data Extractor for German Spatial Datasets
 
-## Overview
-This project aims to provide an easy-to-use platform for accessing and downloading spatial data from German open data sources, covering all Bundesländer. The system standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
+### Overview
 
-Users can interact with a map, select areas of interest (via polygons or rectangles), and choose the data layers they wish to download. Available data types include:
-- Parcels
-- Terrain
-- 3D Buildings (LOD1/LOD2)
+EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
+
+Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
+
+- **3D Buildings (LOD1/LOD2)**
 
 The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
 
 ---
 
-## Key Features
+### Key Features
+
 - **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
-- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export in multiple formats (e.g., GeoJSON, glTF).
-- **Dynamic Data Processing**: Only fetches and processes data for the area selected by the user, ensuring efficiency.
+- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
+- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
 - **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
+- **Payment Integration**: Secure payment processing via Stripe.
 - **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
 
 ---
 
-## Technologies Used
+### Technologies Used
 
-### **Backend**
+#### Backend
 
 - **PostGIS**: Spatial database for storing and querying geographic data efficiently.
 - **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
-- **GDAL**: Used for data conversion between formats like CityGML, GeoJSON, and glTF.
-- **Py3Dtiles/Trimesh**: For converting 3D data to glTF format dynamically.
+- **GDAL**: Used for data conversion between formats.
 - **Docker**: Containerized deployment for portability and scalability.
+- **Stripe API**: For handling payment transactions.
 
-### **Frontend**
+#### Frontend
 
-- **React + Leaflet**: Interactive map interface for 2D visualization and area selection.
-- **CesiumJS**: 3D visualization for previewing datasets like LOD1/LOD2 buildings.
-
-### **Infrastructure**
-
-- **PostgreSQL + PostGIS**: Backend database for spatial data storage and indexing.
-- **NGINX**: For serving static files and proxying API requests.
-- **Cloud Storage**: For storing processed datasets ready for download (e.g., AWS S3, Google Cloud Storage).
+- **React**: JavaScript library for building user interfaces.
+- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
+- **Deck.gl**: For rendering 3D data on the map.
+- **Mapbox Draw**: Allows users to draw shapes on the map.
 
 ---
 
-## Workflow
+### Getting Started
 
-1. **Data Ingestion**:
-   - Import spatial data from various Bundesländer open data portals.
-   - Convert datasets into a unified format (e.g., CityGML or PostGIS-compatible geometry).
+#### Prerequisites
 
-2. **Data Storage**:
-   - Store standardized data in a PostGIS database with spatial indexing for efficient querying.
+- **Docker** and **Docker Compose** installed on your system.
+- **Node.js** and **npm/yarn** (for frontend development).
+- **Python 3.10+** (for backend development).
 
-3. **User Interaction**:
-   - Users draw polygons/rectangles on the map to define areas of interest.
-   - Backend processes the request, fetching relevant data using spatial queries.
+#### Setup Instructions
 
-4. **Data Processing**:
-   - Convert queried data to web-friendly formats:
-     - GeoJSON for 2D previews.
-     - glTF for 3D previews.
-   - Generate downloadable files in formats requested by the user.
+##### Clone the Repository
 
-5. **Data Delivery**:
-   - Users download processed data directly from the browser or receive it via email after payment.
+```bash
+git clone https://github.com/your-repo/easyopendata.git
+cd easyopendata
+```
 
----
+##### Environment Variables
 
-## Project Goals
+Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
 
-1. **Standardization**: Harmonize data formats across all Bundesländer for consistent access and processing.
-2. **Ease of Use**: Create a user-friendly interface for both novice and advanced users.
-3. **Scalability**: Design a backend architecture capable of handling large datasets and high user demand.
-4. **Flexibility**: Enable the export of data in various formats (e.g., GeoJSON, glTF, Shapefile).
+##### Run with Docker Compose
 
----
+```bash
+docker-compose up --build
+```
 
-## Example Usage
+This command will:
 
-### **Frontend**
+- Start the PostGIS database.
+- Build and run the backend FastAPI server.
+- Build and run the frontend React application.
 
-1. User opens the webpage and views a map interface.
-2. Selects an area of interest by drawing a polygon or rectangle.
-3. Chooses the desired data layers (e.g., 3D buildings).
-4. Proceeds to payment and downloads the processed data.
+##### Access the Application
 
-### **Backend**
-
-1. Receives the user’s area and data type requests via API.
-2. Queries PostGIS for intersecting objects within the selected area.
-3. Dynamically converts data into the requested format (e.g., glTF).
-4. Returns the processed data for download.
+- **Frontend**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:5400](http://localhost:5400)
 
 ---
 
-## Setup
+### Usage
 
-### **Backend**
-
-1. Install PostgreSQL and PostGIS:
-
-   ```bash
-   sudo apt install postgresql postgis
-   ```
-
-2. Clone the repository and install dependencies:
-
-   ```bash
-   git clone https://github.com/your-repo/open-data-extractor.git
-   cd open-data-extractor/backend
-   pip install -r requirements.txt
-   ```
-
-3. Import sample data into PostGIS:
-
-   ```bash
-   ogr2ogr -f "PostgreSQL" PG:"dbname=your_db user=your_user password=your_pass" sample_data.gml
-   ```
-
-4. Run the FastAPI server:
-
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-### **Frontend**
-
-1. Install Node.js and dependencies:
-
-   ```bash
-   cd open-data-extractor/frontend
-   npm install
-   ```
-
-2. Run the React development server:
-
-   ```bash
-   npm start
-   ```
+1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
+2. **Select an Area**: Use the drawing tools to select an area on the map.
+3. **Choose Data Layers**: Select the data layers you wish to download.
+4. **Payment**: Proceed to payment if required.
+5. **Download Data**: After processing, download your data in the desired format.
 
 ---
 
-## Future Roadmap
+### Project Structure
 
-- Add support for additional data layers (e.g., terrain, parcels).
-- Implement caching for frequently requested data.
-- Introduce user accounts for managing downloads and licenses.
-- Explore additional formats for exporting data (e.g., OBJ, IFC).
-- Expand coverage beyond Germany to other European countries.
+- **backend/**: Contains the FastAPI backend application.
+  - `app/`: FastAPI application code.
+  - `db/`: Database initialization scripts.
+  - `ingestion/`: Scripts for data ingestion and processing.
+- **frontend/**: Contains the React frontend application.
+  - `src/`: React application source code.
+  - `public/`: Static assets.
 
 ---
 
-## Contributing
+### Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
 
 ---
 
-## License
+### License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ---
 
-## Contact
+### Contact
 
 For questions, feedback, or support, contact us at:
 
-- **Email**: support@opendataextractor.com
+- **Email**: support@easyopendata.com
 
 &&& FILE: ./backend\Dockerfile
 &&& CONTENT:
@@ -303,6 +227,197 @@ COPY . /app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+
+&&& FILE: ./backend\README.md
+&&& CONTENT:
+# EasyOpenData Backend
+
+## Overview
+
+The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the frontend application. It interacts with a PostGIS database to store and query spatial data.
+
+---
+
+## Key Components
+
+- **FastAPI Application**: Provides RESTful APIs for data retrieval and processing.
+- **PostGIS Database**: Stores spatial data and provides efficient spatial queries.
+- **Data Ingestion Scripts**: Scripts to download, transform, and ingest data into the database.
+- **Payment Processing**: Integration with Stripe API for handling payments.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Docker** and **Docker Compose**
+- **Python 3.10+**
+- **GDAL** and **OGR** libraries
+- **Conda** (optional, for managing environments)
+- **Node.js** and **npm** (for gltf-pipeline)
+
+### Running with Docker
+
+The easiest way to run the backend is using Docker Compose.
+
+#### Build and Run
+
+```bash
+docker-compose up --build
+```
+
+This will start the PostGIS database and the FastAPI backend.
+
+#### Accessing the Backend API
+
+- The backend API will be available at: [http://localhost:5400](http://localhost:5400)
+
+### Manual Setup
+
+If you prefer to run the backend without Docker, follow these steps.
+
+#### 1. Create a Virtual Environment
+
+Using Conda:
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install Dependencies
+
+Install GDAL and its libraries:
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+Install other dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+#### 3. Install gltf-pipeline
+
+```bash
+npm install -g gltf-pipeline
+```
+
+#### 4. Setup the Database
+
+Ensure PostgreSQL and PostGIS are installed.
+
+```bash
+sudo apt install postgresql postgis
+```
+
+Create the database and extensions:
+
+```sql
+CREATE DATABASE easyopendata_database;
+\c easyopendata_database;
+CREATE EXTENSION postgis;
+```
+
+#### 5. Run Database Initialization Scripts
+
+```bash
+psql -U postgres -d easyopendata_database -f backend/db/init.sql
+```
+
+#### 6. Run the FastAPI Application
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+---
+
+## Data Ingestion
+
+The `backend/ingestion` directory contains scripts to download and process data.
+
+### Ingesting Data
+
+1. **Navigate to the ingestion directory**
+
+```bash
+cd backend/ingestion
+```
+
+2. **Run the Ingestion Script**
+
+The `bayern.py` script processes Meta4 files to download and ingest data.
+
+```bash
+python bayern.py
+```
+
+**Note**: Ensure you have the necessary Meta4 files in `data_sources/` and that you have adjusted the `META4_PATH` in the script.
+
+### Requirements
+
+- **lxml**
+- **psycopg2**
+- **GDAL/OGR** command-line tools (`ogr2ogr`)
+- **pg2b3dm** executable (must be in `libs/`)
+
+---
+
+## Directory Structure
+
+- **app/**: FastAPI application code.
+  - `main.py`: Main application file.
+  - `database.py`: Database connection setup.
+  - `models.py`: Database models and Pydantic schemas.
+  - `retrieve_geom.py`: Functions to retrieve and process geometries.
+
+- **db/**: Database scripts.
+  - `init.sql`: Database initialization script.
+  - `index.sql`: Indexing script for the database.
+
+- **ingestion/**: Data ingestion scripts.
+  - `bayern.py`: Script to process and ingest data.
+  - `data_sources/`: Directory containing Meta4 files.
+  - `data_local/`: Directory where downloaded data will be stored.
+  - `libs/`: Contains necessary executables like `pg2b3dm.exe`.
+
+---
+
+## API Endpoints
+
+- **GET /**: Root endpoint to check if the backend is running.
+- **POST /retrieve_obj**: Accepts a GeoJSON region and returns an OBJ file with the buildings within that region.
+- **POST /create-payment-intent**: Creates a Stripe payment intent for processing payments.
+
+---
+
+## Environment Variables
+
+- **DATABASE_URL**: The connection string for the PostGIS database.
+- **STRIPE_API_KEY**: Your Stripe secret API key for payment processing.
+
+---
+
+## Payment Processing
+
+The backend integrates with Stripe to handle payments. Ensure you have set your Stripe API keys in the environment variables.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the backend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -330,7 +445,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.models import Base
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql+asyncpg://postgres:barcelona@localhost:8735/easyopendata_database')
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 async_session = sessionmaker(
@@ -380,18 +495,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0) 
-
-# Configure CORS
-origins = [
-    "http://localhost:5173",  # Frontend origin
-    # Add other origins if needed
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Add your frontend URL
+    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -416,7 +523,7 @@ async def retrieve_obj(request: RegionRequest):
     try:
         # Generate a unique filename using UUID
         random_filename = f"{uuid.uuid4()}.obj"
-        temp_path = os.path.join("/tempfiles", random_filename)
+        temp_path = os.path.join("/app/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,
@@ -471,7 +578,7 @@ Base = declarative_base()
 class Building(Base):
     __tablename__ = 'building'
 
-    ogc_fid = Column(Integer, primary_key=True)
+    gml_id = Column(String, primary_key=True)
     name = Column(String)
     geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
 
@@ -493,7 +600,7 @@ from geoalchemy2 import functions as func
 from app.database import async_session
 from app.models import Building
 import os
-from pyproj import Transformer  # For coordinate transformation
+from pyproj import Transformer
 
 async def retrieve_obj_file(region_geojson, output_path):
     """
@@ -528,7 +635,7 @@ async def retrieve_obj_file(region_geojson, output_path):
     async with async_session() as session:
         # Query the database for buildings within the polygon
         stmt = select(
-            Building.ogc_fid,
+            Building.gml_id,
             func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
         ).where(
             func.ST_Intersects(
@@ -536,6 +643,7 @@ async def retrieve_obj_file(region_geojson, output_path):
                 func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
             )
         )
+        
         result = await session.execute(stmt)
         buildings = result.fetchall()
         
@@ -550,7 +658,7 @@ async def retrieve_obj_file(region_geojson, output_path):
 
         # Process each building geometry
         for building in buildings:
-            ogc_fid = building.ogc_fid
+            gml_id = building.gml_id
             geom_geojson_str = building.geom_geojson
             if not geom_geojson_str:
                 continue  # Skip if geometry is null
@@ -567,7 +675,7 @@ async def retrieve_obj_file(region_geojson, output_path):
             elif geom_type == 'MultiPolygon':
                 polygons = coordinates
             else:
-                print(f"Skipping unsupported geometry type (ID: {ogc_fid}, Type: {geom_type})")
+                print(f"Skipping unsupported geometry type (ID: {gml_id}, Type: {geom_type})")
                 continue
 
             for polygon in polygons:
@@ -602,7 +710,7 @@ async def retrieve_obj_file(region_geojson, output_path):
                     # Some software may not support holes directly
                     # So, we can skip adding faces for holes or handle them as separate objects
                     # For now, we'll skip adding faces for holes
-                    print(f"Skipping interior ring (hole) in building ID: {ogc_fid}")
+                    print(f"Skipping interior ring (hole) in building ID: {gml_id}")
 
         # Write to OBJ file
         with open(output_path, 'w') as obj_file:
@@ -614,35 +722,60 @@ async def retrieve_obj_file(region_geojson, output_path):
         print(f"OBJ file successfully written to {output_path}")
         return
 
-# Example usage
-if __name__ == '__main__':
-    # Load the input region GeoJSON
-    region_geojson = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "id": "bef0b7ecb5e2a869ea655de233909ed2",
-                "type": "Feature",
-                "properties": {},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [11.078828018081367, 49.452387361598454],
-                            [11.075765898190326, 49.452622450748436],
-                            [11.07450436712378, 49.45031424385303],
-                            [11.076197865379754, 49.449993191955855],
-                            [11.08040312808447, 49.44850087839157],
-                            [11.085839287965683, 49.452705969665345],
-                            [11.078828018081367, 49.452387361598454]
-                        ]
-                    ]
-                }
-            }
-        ]
-    }
-    output_path = 'output.obj'
-    asyncio.run(retrieve_obj(region_geojson, output_path))
+
+&&& FILE: ./backend\db\index.sql
+&&& CONTENT:
+-- Create the index if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_indexes 
+        WHERE schemaname = 'public' 
+        AND tablename = 'building' 
+        AND indexname = 'buildings_geom_idx'
+    ) THEN
+        CREATE INDEX buildings_geom_idx ON building USING GIST(geom);
+    END IF;
+END $$;
+
+-- Add the unique constraint if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_constraint 
+        WHERE conname = 'gml_id_unique' 
+        AND conrelid = 'public.building'::regclass
+    ) THEN
+        ALTER TABLE public.building ADD CONSTRAINT gml_id_unique UNIQUE (gml_id);
+    END IF;
+END $$;
+
+-- Cluster the table using the index
+CLUSTER building USING buildings_geom_idx;
+
+-- Analyze to update statistics
+ANALYZE building;
+
+
+&&& FILE: ./backend\db\init.sql
+&&& CONTENT:
+-- Part 1: Database and extension creation (in transaction)
+CREATE DATABASE easyopendata_database;
+\c easyopendata_database;
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Part 2: System settings (must be outside transaction)
+\connect easyopendata_database
+\echo 'Setting system parameters...'
+
+\set ON_ERROR_STOP off
+ALTER SYSTEM SET maintenance_work_mem TO '1GB';
+ALTER SYSTEM SET work_mem TO '256MB';
+ALTER SYSTEM SET max_parallel_workers_per_gather TO 4;
+\set ON_ERROR_STOP on
+
 
 
 &&& FILE: ./backend\ingestion\bayern.py
@@ -679,10 +812,12 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
+PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
+SQL_INDEX_PATH = 'backend/db/index.sql'
 
 # Configure logging
 logging.basicConfig(
@@ -898,7 +1033,7 @@ def ingest_gml_file(gml_file, database_url):
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGON',
+        '-nlt', 'MULTIPOLYGONZ',
         '-dim', 'XYZ',
         '-s_srs', 'EPSG:25832',
         '-t_srs', 'EPSG:4326',
@@ -910,6 +1045,30 @@ def ingest_gml_file(gml_file, database_url):
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
     logging.info(f"Ingested {gml_file} into database successfully.")
+
+def execute_sql_file(sql_file_path, database_url):
+    """Executes a SQL file in the database."""
+    logging.info(f"Executing SQL file: {sql_file_path}")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            with open(sql_file_path, 'r') as f:
+                cur.execute(f.read())
+            conn.commit()
+        logging.info("SQL file executed successfully")
+    except Exception as e:
+        logging.error(f"Failed to execute SQL file: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def put_buildings_on_ground(database_url):
     """
@@ -945,28 +1104,29 @@ def put_buildings_on_ground(database_url):
 
 def convert_to_3d_tiles(cache_dir, database_url):
     """
-    Converts buildings from the database to 3D tiles using pg2b3dm_new.
+    Converts buildings from the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
     """
-    logging.info("Converting buildings to 3D tiles with pg2b3dm_new.")
+    logging.info("Converting buildings to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
+    port=url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
-        'pg2b3dm_new',
-        '-h', host,
+        PG2B3DM_PATH,
+        '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
         '-t', 'building',
         '-d', dbname,
         '-o', cache_dir, 
-        '--use_implicit_tiling', 'false'
+        # '--use_implicit_tiling', 'false'
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -974,9 +1134,43 @@ def convert_to_3d_tiles(cache_dir, database_url):
         env['PGPASSWORD'] = url.password
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     if result.returncode != 0:
-        logging.error(f"pg2b3dm_new failed: {result.stderr}")
-        raise RuntimeError(f"pg2b3dm_new failed: {result.stderr}")
+        logging.error(f"pg2b3dm failed: {result.stderr}")
+        raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
+
+def apply_draco_compression(cache_dir):
+    logging.info("Applying Draco compression to glTF files.")
+    for root, dirs, files in os.walk(cache_dir):
+        for file in files:
+            if file.endswith('.glb'):
+                gltf_file = os.path.join(root, file)
+
+                # Check if the first line of the file contains "draco"
+                try:
+                    with open(gltf_file, 'rb') as f:
+                        first_line = f.readline().decode('utf-8', errors='ignore')
+                        if "draco" in first_line.lower():
+                            logging.info(f"File {gltf_file} already contains Draco; skipping compression.")
+                            continue
+                except Exception as e:
+                    logging.error(f"Error reading file {gltf_file}: {e}")
+                    continue
+
+                # Proceed with Draco compression
+                compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
+                cmd = [
+                    "gltf-pipeline",
+                    '-i', gltf_file,
+                    '-o', compressed_file,
+                    '--draco.compressionLevel', '7'
+                ]
+                print(" ".join(cmd))
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logging.error(f"Draco compression failed for {gltf_file}: {result.stderr}")
+                else:
+                    os.replace(compressed_file, gltf_file)
+                    logging.info(f"Applied Draco compression to {gltf_file}")
 
 def remove_file(file_path):
     """
@@ -992,6 +1186,7 @@ def remove_file(file_path):
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
 def main(meta4_file):
+    
     # Ensure DATA_DIR exists
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -999,13 +1194,14 @@ def main(meta4_file):
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for file_info in files:
+    for ix, file_info in enumerate(files, start=1):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
+        logging.info(f"▶️   FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
         # Determine download paths
@@ -1035,11 +1231,17 @@ def main(meta4_file):
             # Ingest the transformed GML into the database
             ingest_gml_file(transformed_path, DATABASE_URL)
 
+            # Execute the SQL file after first ingestion
+            if ix == 1:  # Only after first file
+                execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
             # Update building geometries
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+            if (ix-1) % 20 == 0:
+                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+                apply_draco_compression(CACHE_DIR)
 
             # Remove the transformed GML file
             remove_file(transformed_path)
@@ -1066,85 +1268,152 @@ if __name__ == '__main__':
     main(meta4_file)
 
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528.gml
+&&& FILE: ./backend\ingestion\README.md
+&&& CONTENT:
+# EasyOpenData Data Ingestion
+
+## Overview
+
+The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into the PostGIS database. It also includes tools for generating 3D tilesets from the database.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Conda** (optional, for managing Python environments)
+- **GDAL** and **OGR** libraries
+- **Python 3.x**
+- **Node.js** and **npm** (for `gltf-pipeline`)
+
+### Steps
+
+#### 1. Create a Conda Environment (Optional)
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install GDAL and Libraries
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+#### 3. Install Python Dependencies
+
+```bash
+pip install -r ../../requirements.txt
+```
+
+#### 4. Install gltf-pipeline
+
+```bash
+npm install -g gltf-pipeline
+```
+
+---
+
+## Data Ingestion Scripts
+
+### `bayern.py`
+
+This script sequentially downloads GML files from a Meta4 file, transforms them by embedding polygons, ingests them into a PostgreSQL database, converts them to 3D tiles, and removes the original files.
+
+#### Usage
+
+```bash
+python bayern.py
+```
+
+#### Notes
+
+- Ensure that the `META4_PATH` variable in the script points to a valid `.meta4` file in the `data_sources/` directory.
+- The script requires the `pg2b3dm.exe` executable to be present in the `libs/` directory.
+
+### Directory Structure
+
+- **data_sources/**: Contains `.meta4` files that list the URLs of GML data to download.
+- **data_local/**: Directory where downloaded GML files are stored temporarily.
+- **libs/**: Contains necessary executables like `pg2b3dm.exe`.
+
+---
+
+## Additional Information
+
+- **GDAL/OGR**: Used for converting and ingesting GML files into PostGIS.
+- **pg2b3dm**: Tool for converting PostGIS data into 3D tiles compatible with CesiumJS.
+- **gltf-pipeline**: Used for optimizing and compressing glTF files.
+
+---
+
+## Tips
+
+- **Error Handling**: The scripts include logging to help diagnose issues during the ingestion process.
+- **Performance**: Adjust database settings in `init.sql` and `index.sql` for better performance during bulk data ingestion.
+
+---
+
+## Contributing
+
+Contributions to improve data ingestion scripts are welcome. Please ensure that any new scripts or changes are well-documented and tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530.gml
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gfs
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gfs
 &&& CONTENT:
 <GMLFeatureClassList>
   <GMLFeatureClass>
     <Name>Building</Name>
     <ElementPath>Building</ElementPath>
     <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>3183</FeatureCo
+    <GeometryElementPath>lod2Solid</GeometryEleme
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\632_5528_trs.gml
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gml
 &&& CONTENT:
 <?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524.gml
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310.gml
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gfs
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gfs
 &&& CONTENT:
 <GMLFeatureClassList>
   <GMLFeatureClass>
     <Name>Building</Name>
     <ElementPath>Building</ElementPath>
     <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>1090</FeatureCo
+    <GeometryElementPath>lod2Solid</GeometryEleme
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5524_trs.gml
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gml
 &&& CONTENT:
 <?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528.gml
+&&& FILE: ./backend\ingestion\data_local\bayern\680_5336.gml
 &&& CONTENT:
 <?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryElementPath>
-    <!--POLYHEDRALSURFACEZ-->
-    <GeometryType>1015</GeometryType>
-    <SRSName>urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH</SRSName>
-    <DatasetSpecificInfo>
-      <FeatureCount>6875</FeatureCo
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\634_5528_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygml/vegetation/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:tran="http://www.opengis.net/citygml/transportation/1.0" xmlns:grp="http://www.opengis.net/cit
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
@@ -1153,10 +1422,7 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-26T22:13:07Z</published>
-  <file name="636_5524.gml">
-    <size>17451544</size>
-    <hash type="sha-256">a2a226df7ce76c817c5c112531104349fe6ed09735e1083a5b5644c2387f2f38</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</u
+  <file name="636_5524.g
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bayern.meta4
@@ -1165,10 +1431,7 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-19T22:09:01Z</published>
-  <file name="792_5432.gml">
-    <size>10477602</size>
-    <hash type="sha-256">9796ed6c748821e06ff874296c6a8727d4ba25c596bd35cc8d8633f5133c235e</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/792_5432.gml</u
+  <file name="792_5432.g
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\munchen.meta4
@@ -1177,11 +1440,151 @@ if __name__ == '__main__':
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
   <published>2024-11-19T22:08:58Z</published>
-  <file name="680_5342.gml">
-    <size>4250333</size>
-    <hash type="sha-256">1353eebc758692b08ad7e3b10bfa39d032cb2e64831b89871fe748e5f40d80a5</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/680_5342.gml</ur
+  <file name="680_5342.g
 ................................
+
+&&& FILE: ./backend\ingestion\libs\pg2b3dm.exe
+&&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 2: invalid start byte
+
+&&& FILE: ./backend\tempfiles\0ebaef62-302b-4cb5-b7db-c83d53020ba2.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692466.2220121699 0 5334731.421954182
+v 692466.2220121699 11.428 5334731.421954182
+v 692465.9520113174 11.428 5334728.848945844
+v 692465.9520113174 0 5334728.8489
+................................
+
+&&& FILE: ./backend\tempfiles\13bbe29e-46f0-494e-afde-b7e48d2a2b2e.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 680567.9310030596 3.508 5342543.4299777085
+v 680566.789971829 3.508 5342543.155011388
+v 680566.789971829 0 5342543.155011388
+v 680567.9310030596 0 5342543.4299777
+................................
+
+&&& FILE: ./backend\tempfiles\1fc79dc8-42f6-40ed-9d9c-1da5b48f3473.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\2a394fde-a09c-42ba-8168-890445a45cd7.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 684244.8699987399 0 5343079.640031528
+v 684244.8699987399 13.263 5343079.640031528
+v 684225.6209640335 14.26 5343077.449997416
+v 684206.369987038 13.263 5343075.2
+................................
+
+&&& FILE: ./backend\tempfiles\37627956-7228-462d-98f8-fbba26605ef0.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\3772f021-baeb-4916-bbfc-e1884f54c094.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 681044.1539687354 0 5343742.204972287
+v 681044.1539687354 5.777 5343742.204972287
+v 680992.2840366996 5.767 5343747.450959618
+v 680992.2840366996 0 5343747.450959
+................................
+
+&&& FILE: ./backend\tempfiles\4e147667-b8f6-4a58-b874-087dde71f6f4.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692346.1879965623 16.396 5334621.376947997
+v 692346.1879965623 0 5334621.376947997
+v 692346.8869687994 0 5334625.6130508045
+v 692347.093996431 0 5334626.878050981
+................................
+
+&&& FILE: ./backend\tempfiles\518a4dc0-1821-4990-b379-54b833b598fd.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692009.9379970876 4.357 5334359.5610187
+v 692012.5230037409 4.358 5334359.49202265
+v 692015.0539863509 4.468 5334358.949020741
+v 692015.5209730046 4.488 5334358.8
+................................
+
+&&& FILE: ./backend\tempfiles\538f2ac5-4ed3-43dc-ae34-9736446f0ed8.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 684129.4400338647 0 5342679.989994051
+v 684113.7999785779 0 5342676.399946041
+v 684113.7999785779 5.154 5342676.399946041
+v 684128.9959698505 5.154 5342679.887993
+................................
+
+&&& FILE: ./backend\tempfiles\5fcd10c0-8110-479c-9425-b813eaf33866.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 687793.1499662541 3.116 5330409.703961996
+v 687791.8770091551 3.116 5330414.617998084
+v 687791.8770091551 0 5330414.617998084
+v 687793.1499662541 0 5330409.703961
+................................
+
+&&& FILE: ./backend\tempfiles\75530f8b-fe84-471c-ae5f-997e8629a7e4.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\77c12452-c4ee-46c3-b5f1-0db94727d43e.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\8e15ee79-8a7a-4fdd-a135-3a4b0e2cba44.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 687629.5080292135 12.24 5330674.962039919
+v 687633.8260145726 10.65 5330675.627970491
+v 687633.8260145726 12.76 5330675.627970491
+v 687631.4249967044 12.76 533067
+................................
+
+&&& FILE: ./backend\tempfiles\8e80c443-cfcd-467c-9feb-92bf2e18b6da.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692818.6949864172 0 5335090.412017974
+v 692819.3910307497 0 5335094.381968065
+v 692824.4699776318 0 5335093.477968954
+v 692823.7550192552 0 5335089.497032916
+v 69
+................................
+
+&&& FILE: ./backend\tempfiles\df087d27-ace5-4504-bdd4-65f981e3f26a.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 692160.4799965809 0 5334348.86996756
+v 692160.4799965809 5.697 5334348.86996756
+v 692161.110030973 5.697 5334349.080054309
+v 692161.110030973 0 5334349.080054309
+
+................................
+
+&&& FILE: ./backend\tempfiles\fb2d0100-cbec-472c-b7a0-79fcf0e674ea.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./frontend\.env
+&&& CONTENT:
+HTTPS=true
 
 &&& FILE: ./frontend\.gitignore
 &&& CONTENT:
@@ -1219,7 +1622,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package.json and yarn.lock first for dependency installation
-COPY package.json yarn.lock ./
+COPY package.json ./
 
 # Install dependencies
 RUN yarn install 
@@ -1277,19 +1680,25 @@ export default [
 &&& CONTENT:
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
-  <title>deck.gl Example</title>
-  
+  <title>EasyOpenData</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css" type="text/css">
-  <style>
-    body, body > div {margin: 0; width: 100vw; height: 100vh; overflow: hidden;}
-  </style>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css"
+    type="text/css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
+
 <body>
 </body>
 <script type="module" src="./src/App.tsx"></script>
+
 </html>
 
 &&& FILE: ./frontend\package.json
@@ -1304,13 +1713,6 @@ export default [
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
-  },
-  "dependencies": {
-    "@deck.gl/core": "^9.0.0",
-    "@deck.gl/layers": "^9.0.0",
-    "@deck.gl/mapbox": "^9.0.0",
-    "@loaders.gl/3d-tiles": "^4.2.0",
-    "@mapbox/mapbox-gl-draw": "^1.4.3",
 
 ................................
 
@@ -1320,18 +1722,133 @@ export default [
 
 ## Overview
 
-This is a simple frontend HTML page that displays 2D buildings of Nürnberg using Leaflet. It fetches building data from the backend and renders them on an interactive map.
+The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and download spatial data. It integrates with the backend API and handles payment processing via Stripe.
 
-## Setup
+---
 
-1. **Serve the Frontend**
+## Key Features
 
-   Use Python's HTTP server to serve the frontend files.
+- **Interactive Map Interface**: Built with React and MapLibre GL JS for map rendering.
+- **Drawing Tools**: Allows users to draw polygons to select regions.
+- **3D Visualization**: Uses Deck.gl to render 3D buildings.
+- **Search Functionality**: Integrated with Nominatim for location search.
+- **Payment Processing**: Secure payments via Stripe.
+- **Responsive Design**: Adapts to mobile and desktop screens.
 
-   ```bash
-   cd frontend
-   python -m http.server 8080
+---
 
+## Setup Instructions
+
+### Prerequisites
+
+- **Node.js** and **npm** or **yarn**
+
+### Installation
+
+1. **Install Dependencies**
+
+```bash
+cd frontend
+yarn install
+# or
+npm install
+```
+
+### Running the Development Server
+
+```bash
+yarn dev
+# or
+npm run dev
+```
+
+The application will be available at [http://localhost:5173](http://localhost:5173)
+
+### Build for Production
+
+```bash
+yarn build
+# or
+npm run build
+```
+
+The production build will be in the `dist/` directory.
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the `frontend` directory to set environment variables.
+
+- **VITE_BACKEND_URL**: The URL of the backend API.
+
+Example `.env` file:
+
+```
+VITE_BACKEND_URL=http://localhost:5400
+```
+
+### Map Style
+
+The map uses a custom style defined in `src/basemap.json`. You can customize the map style by modifying this file or replacing it with another style.
+
+---
+
+## Project Structure
+
+- **src/**: Contains the source code of the React application.
+  - `App.tsx`: Main application component.
+  - `CheckoutForm.tsx`: Handles payment form and Stripe integration.
+  - `FloatingPanel.tsx`: UI component for user interactions.
+  - `Legals.tsx`: Displays legal documents.
+  - `draw-control.ts`: Custom control for drawing polygons.
+  - `basemap.json`: Custom map style.
+
+- **public/**: Contains static assets.
+
+---
+
+## Key Components
+
+- **Map Integration**: Uses MapLibre GL JS for map rendering and Mapbox Draw for drawing tools.
+- **3D Rendering**: Deck.gl is used to render 3D buildings.
+- **Payment Integration**: Stripe is integrated using `@stripe/react-stripe-js` and `@stripe/stripe-js`.
+- **Legal Documents**: Legal documents are displayed using `ReactMarkdown`.
+
+---
+
+## Customization
+
+- **Map Style**: Modify `src/basemap.json` to change the map appearance.
+- **API Endpoints**: Ensure `VITE_BACKEND_URL` points to the correct backend API.
+- **Stripe Keys**: Update the publishable key in `FloatingPanel.tsx` and ensure the backend has the correct secret key.
+
+---
+
+## Legal Documents
+
+The `docs/` directory contains Markdown files for legal documents such as:
+
+- `agb.md`: Terms and Conditions
+- `datenschutz.md`: Privacy Policy
+- `impressum.md`: Imprint
+- `widerruf.md`: Cancellation Policy
+
+These documents are displayed in the application using the `Legals.tsx` component.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the frontend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./frontend\tsconfig.json
 &&& CONTENT:
@@ -1369,19 +1886,112 @@ export default defineConfig({
 
 "@ampproject/remapping@^2.2.0":
   version "2.3.0"
-  resolved "https://registry.yarnpkg.com/@ampproject/remapping/-/remapping-2.3.0.tgz#ed441b6fa600072520ce18b43d2c8cc8caecc7f4"
-  integrity sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==
-  dependencies:
-    "@jridgew
+  resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
-
-&&& FILE: ./frontend\docs\widerruf.md
-&&& CONTENT:
-Hey Mama! I'm on the Internet
 
 &&& FILE: ./frontend\public\vite.svg
 &&& CONTENT:
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
+
+&&& FILE: ./frontend\src\App.css
+&&& CONTENT:
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+body,
+#root {
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Override all fonts */
+* {
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+.ibm-plex-sans-thin {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-extralight {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-light {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-regular {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-medium {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-semibold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-bold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-thin-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-extralight-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-light-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-regular-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-medium-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-semibold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-bold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: italic;
+  }
+  
 
 &&& FILE: ./frontend\src\App.tsx
 &&& CONTENT:
@@ -1407,13 +2017,15 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
+import './App.css'
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
-const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 49.8988,
-  longitude: 10.9028,   
-  pitch: 45,
+const INITIAL_VIEW_STATE: MapViewState = { 
+  latitude: 48.1351,
+  longitude: 11.5820,
+  pitch: 45, 
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
@@ -1616,6 +2228,23 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     }),
   ];
 
+  const handleSearch = async (query: string) => {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=de`
+    );
+    const data = await response.json();
+    return data;
+  };
+  
+  const handleSelectResult = (result: any) => {
+    // Fly to the selected location
+    const map = mapRef.current.getMap();
+
+    map.flyTo({
+      center: [parseFloat(result.lon), parseFloat(result.lat)],
+      zoom: 14
+    });
+  };
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
@@ -1666,6 +2295,8 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onRemovePolygon={handleRemovePolygon}
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
+  onSearch={handleSearch}
+  onSelectResult={handleSelectResult}
       />
       
       <LegalDocuments />
@@ -1678,171 +2309,6 @@ interface DrawControlProps {
   onUpdate: (e: any) => void;
   onDelete: (e: any) => void;
 }
-
-// const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
-//   (props, ref) => {
-//     useControl(
-//       ({ map }) => {
-//         const draw = new MapboxDraw({
-//           displayControlsDefault: false,
-//           controls: {
-//             polygon: false,
-//             trash: false,
-//           },
-//           defaultMode: "simple_select",
-//           styles: [
-//             // === Active Polygon Styles ===
-//             // Active polygon fill
-//             {
-//               id: "gl-draw-polygon-fill",
-//               type: "fill",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "fill-color": "#ff0000", // Red color
-//                 "fill-opacity": 0.7, // 70% opacity
-//               },
-//             },
-//             // Active polygon outline
-//             {
-//               id: "gl-draw-polygon-stroke-active",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               layout: {},
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Inactive Polygon Styles ===
-//             // Inactive polygon fill
-//             {
-//               id: "gl-draw-polygon-fill-inactive",
-//               type: "fill",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["==", "mode", "static"],
-//               ],
-//               paint: {
-//                 "fill-color": "#ff0000", // Red color
-//                 "fill-opacity": 0.7, // 70% opacity
-//               },
-//             },
-//             // Inactive polygon outline
-//             {
-//               id: "gl-draw-polygon-stroke-inactive",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["==", "mode", "static"],
-//               ],
-//               layout: {},
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Line During Drawing ===
-//             {
-//               id: "gl-draw-polygon-and-line",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "LineString"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               layout: {
-//                 "line-cap": "round",
-//                 "line-join": "round",
-//               },
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-dasharray": [0.2, 2],
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Vertex Points During Drawing ===
-//             {
-//               id: "gl-draw-polygon-and-line-vertex",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["!=", "meta", "midpoint"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ff0000", // Red color
-//                 "circle-stroke-color": "#ffffff",
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//             // === Midpoint Points ===
-//             {
-//               id: "gl-draw-polygon-and-line-midpoint",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["==", "meta", "midpoint"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ffffff",
-//                 "circle-stroke-color": "#ff0000", // Red stroke
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//             // === Vertex Points Inactive ===
-//             {
-//               id: "gl-draw-polygon-and-line-vertex-inactive",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["!=", "meta", "midpoint"],
-//                 ["==", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ff0000", // Red color
-//                 "circle-stroke-color": "#ffffff",
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//           ],
-//         });
-//         map.addControl(draw);
-
-//         // Prevent adding the source multiple times
-//         const existingSource = map.getSource("mapbox-gl-draw-cold");
-//         if (existingSource) {
-//           map.removeControl(draw);
-//           return;
-//         }
-
-//         if (ref && typeof ref !== "function") {
-//           ref.current = draw;
-//         }
-//         return draw;
-//       },
-//       { position: "top-left" }
-//     );
-
-//     return null;
-//   }
-// );
 
 const container = document.body.appendChild(document.createElement("div"));
 createRoot(container).render(<Root />);
@@ -1858,14 +2324,7 @@ createRoot(container).render(<Root />);
     "mapbox:groups": {
       "101da9f13b64a08fa4b6ac1168e89e5f": {
         "collapsed": false,
-        "name": "Places"
-      },
-      "a14c9607bc7954ba1df7205bf660433f": {"name": "Boundaries"},
-      "b6371a3f2f5a9932464fa3867530a2e5": {
-        "collapsed": false,
-        "name": "Transportation"
-      }
- 
+        "name"
 ................................
 
 &&& FILE: ./frontend\src\CheckoutForm.tsx
@@ -1878,71 +2337,231 @@ interface CheckoutFormProps {
   onFetchObjFile: () => void;
 }
 
+interface CustomerData {
+  email: string;
+  name: string;
+  address: {
+    line1: string;
+    postal_code: string;
+    city: string;
+    country: string;
+  };
+}
 const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [customerData, setCustomerData] = useState<CustomerData>({
+    email: "",
+    name: "",
+    address: {
+      line1: "",
+      postal_code: "",
+      city: "",
+      country: "DE",
+    },
+  });
+
+  // If price is 0, render only the download button
+  if (price === 0) {
+    return (
+      <button 
+        onClick={onFetchObjFile}
+        className="btn btn-primary btn-sm mt-2"
+      >
+        Download File
+      </button>
+    );
+  }
+
+  const handleFocus = () => {
+    setIsExpanded(true);
+  };
+  const handleFocusOut = () => {
+    setIsExpanded(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!stripe || !elements) return;
 
-    if (!stripe || !elements) {
-      console.error("Stripe has not loaded yet.");
+    if (!customerData.email || !customerData.name || !customerData.address.line1 || 
+        !customerData.address.postal_code || !customerData.address.city) {
+      document.getElementById("payment-message")!.textContent = "Please fill in all required fields.";
       return;
     }
 
     setLoading(true);
 
     try {
-      // Create PaymentIntent on the server
       const response = await fetch(import.meta.env.VITE_BACKEND_URL + "/create-payment-intent", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ amount: Math.round(price * 100) }), // Amount in cents
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          amount: Math.round(price * 100),
+          customer: customerData
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to create PaymentIntent.");
-      }
+      if (!response.ok) throw new Error("Failed to create PaymentIntent.");
 
       const { clientSecret } = await response.json();
 
-      // Confirm Card Payment
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
+          billing_details: {
+            name: customerData.name,
+            email: customerData.email,
+            address: {
+              line1: customerData.address.line1,
+              postal_code: customerData.address.postal_code,
+              city: customerData.address.city,
+              country: customerData.address.country,
+            },
+          },
           card: elements.getElement(CardElement)!,
         },
       });
 
       if (result.error) {
-        console.error(result.error.message);
         document.getElementById("payment-message")!.textContent = result.error.message;
       } else if (result.paymentIntent?.status === "succeeded") {
-        document.getElementById("payment-message")!.textContent =
-          "Success! Thank you! Your download should start soon.";
-        onFetchObjFile(); // Trigger download
+        document.getElementById("payment-message")!.textContent = "Success! Your download will start soon.";
+        onFetchObjFile();
       }
     } catch (error) {
-      console.error("An error occurred during payment:", error);
+      console.error("Payment error:", error);
     } finally {
       setLoading(false);
     }
   };
-
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: "10px" }}>
-      <CardElement />
-      <button type="submit" disabled={!stripe || loading} style={{ marginTop: "10px" }}>
+    <form onSubmit={handleSubmit} className="d-flex flex-column gap-2">
+      
+      {/* Secure Payment Badge */}
+      <div className="d-flex align-items-center gap-1 text-secondary small">
+        <span className="bi bi-lock-fill"></span>
+        Secure payment via Stripe
+      </div>
+  
+      {/* Price Details */}
+      <div className="text-secondary small">
+        <p>
+          <strong>Order Total:</strong> €{price.toFixed(2)}
+        </p>
+        <p>No additional fees. You’ll only be charged this amount.</p>
+      </div>
+  
+      {isExpanded && (
+        <div className="mt-2 animate__animated animate__fadeIn">
+          {/* Customer Details */}
+          <input
+            type="email"
+            placeholder="Email *"
+            required
+            value={customerData.email}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, email: e.target.value })
+            }
+            className="form-control form-control-sm mb-2"
+          />
+          <input
+            type="text"
+            placeholder="Full Name *"
+            required
+            value={customerData.name}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, name: e.target.value })
+            }
+            className="form-control form-control-sm mb-2"
+          />
+          <input
+            type="text"
+            placeholder="Street Address *"
+            required
+            value={customerData.address.line1}
+            onChange={(e) =>
+              setCustomerData({
+                ...customerData,
+                address: { ...customerData.address, line1: e.target.value },
+              })
+            }
+            className="form-control form-control-sm mb-2"
+          />
+          <div className="d-flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Postal Code *"
+              required
+              value={customerData.address.postal_code}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: {
+                    ...customerData.address,
+                    postal_code: e.target.value,
+                  },
+                })
+              }
+              className="form-control form-control-sm"
+            />
+            <input
+              type="text"
+              placeholder="City *"
+              required
+              value={customerData.address.city}
+              onChange={(e) =>
+                setCustomerData({
+                  ...customerData,
+                  address: { ...customerData.address, city: e.target.value },
+                })
+              }
+              className="form-control form-control-sm"
+            />
+          </div>
+        </div>
+      )}
+  
+      {/* Card Element */}
+      <CardElement
+      
+      onFocus={handleFocus}
+      onFocusOut={handleFocusOut}
+        options={{
+          style: {
+            base: {
+              fontSize: "14px",
+            },
+          },
+        }}
+      />
+      <div id="payment-message" className="text-danger small"></div>
+  
+      {/* Link to Stripe Security Info */}
+      <div className="small mt-7">
+        <a
+          href="https://stripe.com/docs/security"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-secondary"
+        >
+          Learn more about how your payment information is secured.
+        </a>
+      </div>
+  
+      <button
+        type="submit"
+        disabled={!stripe || loading}
+        className="btn btn-primary btn-sm mt-2"
+      >
         {loading ? "Processing..." : `Pay €${price.toFixed(2)}`}
       </button>
     </form>
   );
+  
 };
-
 export default CheckoutForm;
-
 
 &&& FILE: ./frontend\src\draw-control.ts
 &&& CONTENT:
@@ -1993,15 +2612,22 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "./CheckoutForm";
 import "bootstrap/dist/css/bootstrap.min.css";
+// Import FontAwesome
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faChevronUp, faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe("pk_test_51QPRSaBOkj4LYo3SFaocSCkjnAbwkNv2DUWMWuDQ6bQptzetjFzAzx4DdvqFXzql0OcqW6wH0RpBfIs5v041CIpP00JUVxAyAm");
+const stripePromise = loadStripe(
+  "pk_test_51QPRSaBOkj4LYo3SFaocSCkjnAbwkNv2DUWMWuDQ6bQptzetjFzAzx4DdvqFXzql0OcqW6wH0RpBfIs5v041CIpP00JUVxAyAm"
+);
 
 interface FloatingPanelProps {
   onDrawPolygon: () => void;
   onRemovePolygon: () => void;
   onFetchObjFile: () => void;
   polygonArea: number | null; // in square kilometers
+  onSearch: (query: string) => Promise<any>;
+  onSelectResult: (result: any) => void;
 }
 
 const FloatingPanel: React.FC<FloatingPanelProps> = ({
@@ -2009,11 +2635,21 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
   onRemovePolygon,
   onFetchObjFile,
   polygonArea,
+  onSearch,
+  onSelectResult,
 }) => {
   const [price, setPrice] = useState<number>(0);
-  const [gelandeActive, setGelandeActive] = useState<boolean>(false);
-  const [gebaudeActive, setGebaudeActive] = useState<boolean>(false);
-  const [flurstuckeActive, setFlurstuckeActive] = useState<boolean>(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // New state for expanded tab
+  const [expandedTab, setExpandedTab] = useState<string | null>(null);
+
+  const [isMobile, setIsMobile] = useState<boolean>(
+    window.innerWidth <= 768
+  );
 
   useEffect(() => {
     if (polygonArea !== null) {
@@ -2025,114 +2661,259 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
     }
   }, [polygonArea]);
 
-  return (
+  // Handle window resize to update isMobile state
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Handle search functionality
+  const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.length > 2) {
+      setIsSearching(true);
+      try {
+        const results = await onSearch(query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      }
+      setIsSearching(false);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  // Extracted content functions for reuse
+  const renderAuswahlContent = () => (
     <>
-      
+      {/* Search Input */}
+      <div className="w-100 mb-3 position-relative">
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="Search location..."
+          value={searchQuery}
+          onChange={handleSearch}
+        />
 
-      {/* Existing Panels: Row Layout */}
-      <div
-        className="d-flex align-items-end justify-content-center"
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "20px",
-          right: "20px",
-          gap: "20px", // Constant gap between panels
-          zIndex: 1050,
-        }}
-      >
-      {/* Fourth Panel: Toggle Options */}
-      <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-          width: "200px",
-          height: "auto",
-          zIndex: 1050,
-          marginLeft: "20px",
-        }}
-      >
-        <h5 className="mb-3 text-center">Options</h5>
-        <button
-          className={`btn w-100 mb-2 ${gelandeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGelandeActive(!gelandeActive)}
-        >
-          Gelände {gelandeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 mb-2 ${gebaudeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setGebaudeActive(!gebaudeActive)}
-        >
-          Gebäude {gebaudeActive ? "Active" : "Inactive"}
-        </button>
-        <button
-          className={`btn w-100 ${flurstuckeActive ? "btn-outline-primary" : "btn-outline-secondary"}`}
-          onClick={() => setFlurstuckeActive(!flurstuckeActive)}
-        >
-          Flurstücke {flurstuckeActive ? "Active" : "Inactive"}
-        </button>
-      </div>
-        {/* Panel 1: Area Selection */}
-         {/* Merged Panel: Pricing & Polygon Actions */}
-         <div
-          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
-          style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
-          }}
-        >
-          <h5 className="mb-3 text-center">Region</h5>
-          {polygonArea !== null ? (
-            <div className="text-center mb-3">
-              <p>
-                <strong>Polygon Area:</strong> {polygonArea.toFixed(2)} km²
-              </p>
-              <p>
-                <strong>Price:</strong> €{price.toFixed(2)}
-              </p>
-            </div>
-          ) : (
-            <p className="text-center mb-3">No area selected.</p>
-          )}
-          <div className="btn-group w-100" role="group">
-            <button
-              type="button"
-              className="btn btn-outline-primary"
-              onClick={onDrawPolygon}
-            >
-              Draw Polygon
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-danger"
-              onClick={onRemovePolygon}
-            >
-              Delete Polygon
-            </button>
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div
+            className="position-absolute bg-white shadow-sm rounded mt-1 w-100 overflow-auto"
+            style={{
+              maxHeight: "150px",
+              zIndex: 1060,
+            }}
+          >
+            {searchResults.map((result, index) => (
+              <div
+                key={index}
+                className="p-2 hover-bg-light cursor-pointer"
+                onClick={() => {
+                  onSelectResult(result);
+                  setSearchResults([]);
+                  setSearchQuery("");
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                {result.display_name || result.name}
+              </div>
+            ))}
           </div>
-        </div>
+        )}
 
-        {/* Panel 3: Payment */}
-        <div
-          className="bg-white rounded shadow p-3 d-flex flex-column justify-content-center"
-          style={{
-            flex: 1, // Panels take equal width
-            maxWidth: "400px",
-            minWidth: "200px",
-            height: "200px", // Unified height
-          }}
-        >
-          <h5 className="mb-3 text-center">Payment</h5>
-          <Elements stripe={stripePromise}>
-            <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
-          </Elements>
-          <button className="btn btn-secondary w-100 mt-3" onClick={onFetchObjFile}>
-            Download OBJ Without Payment
-          </button>
+        {isSearching && (
+          <div className="text-center mt-2">
+            <small>Suche...</small>
+          </div>
+        )}
+      </div>
+
+      {/* Polygon Area and Price Display */}
+      {polygonArea !== null ? (
+        <div className="text-center mb-3">
+          <strong>Gebietfläche:</strong> {polygonArea.toFixed(2)} km²
         </div>
+      ) : (
+        <p className="text-center mb-3">Zeichnen Sie das Gebiet ein</p>
+      )}
+
+      {/* Action Buttons */}
+      <div className="btn-group w-100" role="group">
+        <button
+          type="button"
+          className="btn btn-outline-primary"
+          onClick={onDrawPolygon}
+        >
+          Draw Polygon
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-danger"
+          onClick={onRemovePolygon}
+        >
+          Delete Polygon
+        </button>
       </div>
     </>
+  );
+
+  const renderHerunterladenContent = () => (
+    <>
+      <Elements stripe={stripePromise}>
+        <CheckoutForm price={price} onFetchObjFile={onFetchObjFile} />
+      </Elements>
+    </>
+  );
+
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <div
+        className="position-fixed"
+        style={{
+          bottom: "40px",
+          left: "0",
+          right: "0",
+          zIndex: 1050,
+          pointerEvents: "none",
+        }}
+      >
+        {/* Auswahl Tab */}
+        <div
+          style={{
+            pointerEvents: "auto",
+            marginBottom: expandedTab === 'Auswahl' ? '0' : '10px',
+          }}
+        >
+          <div
+            className={`bg-white shadow p-3 d-flex justify-content-between align-items-center ${
+              expandedTab === 'Auswahl' ? 'rounded-top' : 'rounded'
+            }`}
+            style={{
+              margin: "0 20px",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setExpandedTab(expandedTab === 'Auswahl' ? null : 'Auswahl');
+            }}
+          >
+            <h5 className="mb-0">Auswahl</h5>
+            {/* Expand/Collapse Icon */}
+            <FontAwesomeIcon
+              icon={expandedTab === 'Auswahl' ? faChevronUp : faChevronDown}
+            />
+          </div>
+          {expandedTab === 'Auswahl' && (
+            <div
+              className="bg-white shadow p-3 rounded-bottom"
+              style={{
+                margin: "0 20px 20px",
+              }}
+            >
+              {renderAuswahlContent()}
+            </div>
+          )}
+        </div>
+
+        {/* Herunterladen Tab */}
+        <div
+          style={{
+            pointerEvents: "auto",
+            marginBottom: expandedTab === 'Herunterladen' ? '0' : '10px',
+          }}
+        >
+          <div
+            className={`bg-white shadow p-3 d-flex justify-content-between align-items-center ${
+              expandedTab === 'Herunterladen' ? 'rounded-top' : 'rounded'
+            }`}
+            style={{
+              margin: "0 20px",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setExpandedTab(expandedTab === 'Herunterladen' ? null : 'Herunterladen');
+            }}
+          >
+            <h5 className="mb-0">Herunterladen</h5>
+            {/* Expand/Collapse Icon */}
+            <FontAwesomeIcon
+              icon={expandedTab === 'Herunterladen' ? faChevronUp : faChevronDown}
+            />
+          </div>
+          {expandedTab === 'Herunterladen' && (
+            <div
+              className="bg-white shadow p-3 rounded-bottom"
+              style={{
+                margin: "0 20px 20px",
+              }}
+            >
+              {renderHerunterladenContent()}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout remains unchanged
+  return (
+    <div
+      className="d-flex align-items-end"
+      style={{
+        position: "absolute",
+        bottom: "20px",
+        left: "20px",
+        right: "20px",
+        gap: "20px",
+        zIndex: 1050,
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        className="d-flex gap-3"
+        style={{
+          marginRight: "auto",
+          pointerEvents: "none",
+        }}
+      >
+        {/* Auswahl Panel */}
+        <div
+          className="bg-white rounded shadow p-3 d-flex flex-column align-items-center justify-content-center"
+          style={{
+            width: "300px",
+            minHeight: "200px",
+            pointerEvents: "auto",
+          }}
+        >
+          <h5 className="mb-3 text-center">Auswahl</h5>
+          {renderAuswahlContent()}
+        </div>
+      </div>
+
+      {/* Herunterladen Panel */}
+      <div
+        className="bg-white rounded shadow p-3 d-flex flex-column "
+        style={{
+          width: "300px",
+          minHeight: "50px",
+          marginLeft: "auto",
+          transition: "height 0.3s ease-in-out",
+          pointerEvents: "auto",
+        }}
+      >
+        <h5 className="mb-3 text-center">Herunterladen</h5>
+        {renderHerunterladenContent()}
+      </div>
+    </div>
   );
 };
 
@@ -2141,25 +2922,34 @@ export default FloatingPanel;
 
 &&& FILE: ./frontend\src\Legals.tsx
 &&& CONTENT:
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const LegalDocumentPanel: React.FC<{
+  documentType: string;
+  isOpen: boolean;
+  setOpenDocument: (doc: string | null) => void;
+}> = ({ documentType, isOpen, setOpenDocument }) => {
   const [content, setContent] = useState('');
 
-  const handleClick = async () => {
-    if (!isOpen) {
-      try {
-        const response = await fetch(`/docs/${documentType}.md`);
-        const text = await response.text();
-        setContent(text);
-      } catch (error) {
-        console.error(`Error loading ${documentType}:`, error);
-        setContent('Failed to load content.');
-      }
+  useEffect(() => {
+    if (isOpen && !content) {
+      const fetchContent = async () => {
+        try {
+          const response = await fetch(`/docs/${documentType}.md`);
+          const text = await response.text();
+          setContent(text);
+        } catch (error) {
+          console.error(`Error loading ${documentType}:`, error);
+          setContent('Failed to load content.');
+        }
+      };
+      fetchContent();
     }
-    setIsOpen(!isOpen);
+  }, [isOpen, content, documentType]);
+
+  const handleClick = () => {
+    setOpenDocument(isOpen ? null : documentType);
   };
 
   return (
@@ -2176,20 +2966,26 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
       </button>
 
       {isOpen && (
-        <div className="bg-white rounded shadow p-3" style={{
-          position: 'absolute',
-          top: '50px',
-          right: '10px',
-          width: '300px',
-          maxHeight: '80vh',
-          overflowY: 'auto',
-          zIndex: 1070,
-        }}>
+        <div
+          className="bg-white rounded shadow p-3"
+          style={{
+            position: 'absolute',
+            top: '50px',
+            right: '10px',
+            maxWidth: '600px',
+            width: '80vw',
+            maxHeight: '50vh',
+            overflowY: 'auto',
+            zIndex: 1070,
+          }}
+        >
           <button
             className="btn btn-sm btn-close float-end"
-            onClick={() => setIsOpen(false)}
+            onClick={() => setOpenDocument(null)}
           />
-          <h5 className="mb-3">{documentType.charAt(0).toUpperCase() + documentType.slice(1)}</h5>
+          <h5 className="mb-3">
+            {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
+          </h5>
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
       )}
@@ -2198,22 +2994,43 @@ const LegalDocumentPanel: React.FC<{ documentType: string }> = ({ documentType }
 };
 
 const LegalDocuments: React.FC = () => {
+  const [openDocument, setOpenDocument] = useState<string | null>(null);
+
   return (
-    <div style={{
-      position: 'absolute',
-      top: '10px',
-      right: '10px',
-      display: 'flex',
-      gap: '20px',
-      zIndex: 1060,
-    }}>
-      <LegalDocumentPanel documentType="impressum" />
-      <LegalDocumentPanel documentType="datenschutz" />
-      <LegalDocumentPanel documentType="agb" />
-      <LegalDocumentPanel documentType="widerruf" />
+    <div
+      style={{
+        position: 'absolute',
+        top: '10px',
+        right: '10px',
+        display: 'flex',
+        gap: '20px',
+        zIndex: 1060,
+      }}
+    >
+      <LegalDocumentPanel
+        documentType="impressum"
+        isOpen={openDocument === 'impressum'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="datenschutz"
+        isOpen={openDocument === 'datenschutz'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="agb"
+        isOpen={openDocument === 'agb'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="widerruf"
+        isOpen={openDocument === 'widerruf'}
+        setOpenDocument={setOpenDocument}
+      />
     </div>
   );
 };
 
 export default LegalDocuments;
+
 

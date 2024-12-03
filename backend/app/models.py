@@ -7,7 +7,7 @@ Base = declarative_base()
 class Building(Base):
     __tablename__ = 'building'
 
-    ogc_fid = Column(Integer, primary_key=True)
+    gml_id = Column(String, primary_key=True)
     name = Column(String)
     geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
 

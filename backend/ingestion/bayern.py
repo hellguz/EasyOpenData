@@ -30,11 +30,12 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:5432/easyopendata_database')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
+SQL_INDEX_PATH = 'backend/db/index.sql'
 
 # Configure logging
 logging.basicConfig(
@@ -250,7 +251,7 @@ def ingest_gml_file(gml_file, database_url):
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGON',
+        '-nlt', 'MULTIPOLYGONZ',
         '-dim', 'XYZ',
         '-s_srs', 'EPSG:25832',
         '-t_srs', 'EPSG:4326',
@@ -262,6 +263,30 @@ def ingest_gml_file(gml_file, database_url):
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
     logging.info(f"Ingested {gml_file} into database successfully.")
+
+def execute_sql_file(sql_file_path, database_url):
+    """Executes a SQL file in the database."""
+    logging.info(f"Executing SQL file: {sql_file_path}")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            with open(sql_file_path, 'r') as f:
+                cur.execute(f.read())
+            conn.commit()
+        logging.info("SQL file executed successfully")
+    except Exception as e:
+        logging.error(f"Failed to execute SQL file: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def put_buildings_on_ground(database_url):
     """
@@ -309,16 +334,17 @@ def convert_to_3d_tiles(cache_dir, database_url):
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
+    port=url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
         PG2B3DM_PATH,
-        '-h', host,
+        '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
         '-t', 'building',
         '-d', dbname,
         '-o', cache_dir, 
-        '--use_implicit_tiling', 'false'
+        # '--use_implicit_tiling', 'false'
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -329,6 +355,40 @@ def convert_to_3d_tiles(cache_dir, database_url):
         logging.error(f"pg2b3dm failed: {result.stderr}")
         raise RuntimeError(f"pg2b3dm failed: {result.stderr}")
     logging.info("3D tiles generated successfully.")
+
+def apply_draco_compression(cache_dir):
+    logging.info("Applying Draco compression to glTF files.")
+    for root, dirs, files in os.walk(cache_dir):
+        for file in files:
+            if file.endswith('.glb'):
+                gltf_file = os.path.join(root, file)
+
+                # Check if the first line of the file contains "draco"
+                try:
+                    with open(gltf_file, 'rb') as f:
+                        first_line = f.readline().decode('utf-8', errors='ignore')
+                        if "draco" in first_line.lower():
+                            logging.info(f"File {gltf_file} already contains Draco; skipping compression.")
+                            continue
+                except Exception as e:
+                    logging.error(f"Error reading file {gltf_file}: {e}")
+                    continue
+
+                # Proceed with Draco compression
+                compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
+                cmd = [
+                    "gltf-pipeline",
+                    '-i', gltf_file,
+                    '-o', compressed_file,
+                    '--draco.compressionLevel', '7'
+                ]
+                print(" ".join(cmd))
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logging.error(f"Draco compression failed for {gltf_file}: {result.stderr}")
+                else:
+                    os.replace(compressed_file, gltf_file)
+                    logging.info(f"Applied Draco compression to {gltf_file}")
 
 def remove_file(file_path):
     """
@@ -344,6 +404,7 @@ def remove_file(file_path):
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
 def main(meta4_file):
+    
     # Ensure DATA_DIR exists
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -351,13 +412,14 @@ def main(meta4_file):
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for file_info in files:
+    for ix, file_info in enumerate(files, start=1):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
+        logging.info(f"▶️   FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
         # Determine download paths
@@ -387,11 +449,17 @@ def main(meta4_file):
             # Ingest the transformed GML into the database
             ingest_gml_file(transformed_path, DATABASE_URL)
 
+            # Execute the SQL file after first ingestion
+            if ix == 1:  # Only after first file
+                execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
             # Update building geometries
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+            if (ix-1) % 20 == 0:
+                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
+                apply_draco_compression(CACHE_DIR)
 
             # Remove the transformed GML file
             remove_file(transformed_path)
