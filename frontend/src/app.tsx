@@ -70,24 +70,16 @@ function Root() {
       map.addControl(drawRef.current);
     }
   }, []);
-  const onTilesetLoad = (tileset: Tileset3D) => {
-    const { cartographicCenter, zoom } = tileset;
-    setViewState((prev) => ({
-      ...prev,
-      longitude: cartographicCenter[0],
-      latitude: cartographicCenter[1],
-      zoom,
-    }));
-  };
+  // const onTilesetLoad = (tileset: Tileset3D) => {
+  //   const { cartographicCenter, zoom } = tileset;
+  //   setViewState((prev) => ({
+  //     ...prev,
+  //     longitude: cartographicCenter[0],
+  //     latitude: cartographicCenter[1],
+  //     zoom,
+  //   }));
+  // };
 
-  onTileLoad: (tile) => {
-    tile.content.traverse((object) => {
-      if (object.isMesh) {
-        // Adjust colors if needed
-        object.material.color.setHex(0xffffff);
-      }
-    });
-  }
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -212,15 +204,21 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     new Tile3DLayer({
       id: "tile-3d-layer",
       data: TILESET_URL,
-      pickable: true,
-      autoHighlight: false,
-      onClick: (info, event) => console.log("Clicked:", info, event),
-      getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
-      onTilesetLoad,
-      visible: true,
+      // pickable: true,
+      // autoHighlight: false,
+      // onClick: (info, event) => console.log("Clicked:", info, event),
+      // getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
+      // onTilesetLoad,
+      visible: isLod2Visible,
       // For ScenegraphLayer (b3dm or i3dm format)
       _lighting: 'pbr',
       effects: [lightingEffect],
+      loadOptions: {
+        tileset: {
+          maximumScreenSpaceError: 16, // Adjust this value as needed
+          viewDistanceScale: 1.5 // Adjust this value as needed
+        }
+      },
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
