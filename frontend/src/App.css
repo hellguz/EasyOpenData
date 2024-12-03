@@ -1,11 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
-body,
-#root {
-    margin: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
+html, body {
+   
+  height: 100svh; /* Ensure the root elements cover the entire viewport */
+  overflow: hidden; /* Prevent scrolling */
+  margin: 0; /* Remove any default margins */
 }
+
 
 /* Override all fonts */
 * {

@@ -26,8 +26,8 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
 const INITIAL_VIEW_STATE: MapViewState = { 
-  latitude: 48.1351,
-  longitude: 11.5820,
+  latitude: 49.8917,
+  longitude: 10.8863,  
   pitch: 45, 
   maxPitch: 60,
   bearing: 0,
