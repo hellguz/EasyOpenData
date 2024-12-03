@@ -344,7 +344,7 @@ def convert_to_3d_tiles(cache_dir, database_url):
         '-t', 'building',
         '-d', dbname,
         '-o', cache_dir, 
-        '--use_implicit_tiling', 'false'
+        # '--use_implicit_tiling', 'false'
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()

@@ -129,33 +129,3 @@ async def retrieve_obj_file(region_geojson, output_path):
 
         print(f"OBJ file successfully written to {output_path}")
         return
-
-# Example usage
-if __name__ == '__main__':
-    # Load the input region GeoJSON
-    region_geojson = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "id": "bef0b7ecb5e2a869ea655de233909ed2",
-                "type": "Feature",
-                "properties": {},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [11.078828018081367, 49.452387361598454],
-                            [11.075765898190326, 49.452622450748436],
-                            [11.07450436712378, 49.45031424385303],
-                            [11.076197865379754, 49.449993191955855],
-                            [11.08040312808447, 49.44850087839157],
-                            [11.085839287965683, 49.452705969665345],
-                            [11.078828018081367, 49.452387361598454]
-                        ]
-                    ]
-                }
-            }
-        ]
-    }
-    output_path = 'output.obj'
-    asyncio.run(retrieve_obj(region_geojson, output_path))

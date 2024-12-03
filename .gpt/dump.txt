@@ -88,177 +88,130 @@ volumes:
 &&& FILE: ./README.md
 &&& CONTENT:
 # EasyOpenData
+
 ## Open Data Extractor for German Spatial Datasets
 
-## Overview
-This project aims to provide an easy-to-use platform for accessing and downloading spatial data from German open data sources, covering all Bundesländer. The system standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
+### Overview
 
-Users can interact with a map, select areas of interest (via polygons or rectangles), and choose the data layers they wish to download. Available data types include:
-- Parcels
-- Terrain
-- 3D Buildings (LOD1/LOD2)
+EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
+
+Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
+
+- **3D Buildings (LOD1/LOD2)**
 
 The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
 
 ---
 
-## Key Features
+### Key Features
+
 - **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
-- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export in multiple formats (e.g., GeoJSON, glTF).
-- **Dynamic Data Processing**: Only fetches and processes data for the area selected by the user, ensuring efficiency.
+- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
+- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
 - **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
+- **Payment Integration**: Secure payment processing via Stripe.
 - **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
 
 ---
 
-## Technologies Used
+### Technologies Used
 
-### **Backend**
+#### Backend
 
 - **PostGIS**: Spatial database for storing and querying geographic data efficiently.
 - **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
-- **GDAL**: Used for data conversion between formats like CityGML, GeoJSON, and glTF.
-- **Py3Dtiles/Trimesh**: For converting 3D data to glTF format dynamically.
+- **GDAL**: Used for data conversion between formats.
 - **Docker**: Containerized deployment for portability and scalability.
+- **Stripe API**: For handling payment transactions.
 
-### **Frontend**
+#### Frontend
 
-- **React + Leaflet**: Interactive map interface for 2D visualization and area selection.
-- **CesiumJS**: 3D visualization for previewing datasets like LOD1/LOD2 buildings.
-
-### **Infrastructure**
-
-- **PostgreSQL + PostGIS**: Backend database for spatial data storage and indexing.
-- **NGINX**: For serving static files and proxying API requests.
-- **Cloud Storage**: For storing processed datasets ready for download (e.g., AWS S3, Google Cloud Storage).
+- **React**: JavaScript library for building user interfaces.
+- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
+- **Deck.gl**: For rendering 3D data on the map.
+- **Mapbox Draw**: Allows users to draw shapes on the map.
 
 ---
 
-## Workflow
+### Getting Started
 
-1. **Data Ingestion**:
-   - Import spatial data from various Bundesländer open data portals.
-   - Convert datasets into a unified format (e.g., CityGML or PostGIS-compatible geometry).
+#### Prerequisites
 
-2. **Data Storage**:
-   - Store standardized data in a PostGIS database with spatial indexing for efficient querying.
+- **Docker** and **Docker Compose** installed on your system.
+- **Node.js** and **npm/yarn** (for frontend development).
+- **Python 3.10+** (for backend development).
 
-3. **User Interaction**:
-   - Users draw polygons/rectangles on the map to define areas of interest.
-   - Backend processes the request, fetching relevant data using spatial queries.
+#### Setup Instructions
 
-4. **Data Processing**:
-   - Convert queried data to web-friendly formats:
-     - GeoJSON for 2D previews.
-     - glTF for 3D previews.
-   - Generate downloadable files in formats requested by the user.
+##### Clone the Repository
 
-5. **Data Delivery**:
-   - Users download processed data directly from the browser or receive it via email after payment.
+```bash
+git clone https://github.com/your-repo/easyopendata.git
+cd easyopendata
+```
 
----
+##### Environment Variables
 
-## Project Goals
+Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
 
-1. **Standardization**: Harmonize data formats across all Bundesländer for consistent access and processing.
-2. **Ease of Use**: Create a user-friendly interface for both novice and advanced users.
-3. **Scalability**: Design a backend architecture capable of handling large datasets and high user demand.
-4. **Flexibility**: Enable the export of data in various formats (e.g., GeoJSON, glTF, Shapefile).
+##### Run with Docker Compose
 
----
+```bash
+docker-compose up --build
+```
 
-## Example Usage
+This command will:
 
-### **Frontend**
+- Start the PostGIS database.
+- Build and run the backend FastAPI server.
+- Build and run the frontend React application.
 
-1. User opens the webpage and views a map interface.
-2. Selects an area of interest by drawing a polygon or rectangle.
-3. Chooses the desired data layers (e.g., 3D buildings).
-4. Proceeds to payment and downloads the processed data.
+##### Access the Application
 
-### **Backend**
-
-1. Receives the user’s area and data type requests via API.
-2. Queries PostGIS for intersecting objects within the selected area.
-3. Dynamically converts data into the requested format (e.g., glTF).
-4. Returns the processed data for download.
+- **Frontend**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:5400](http://localhost:5400)
 
 ---
 
-## Setup
+### Usage
 
-### **Backend**
-
-1. Install PostgreSQL and PostGIS:
-
-   ```bash
-   sudo apt install postgresql postgis
-   ```
-
-2. Clone the repository and install dependencies:
-
-   ```bash
-   git clone https://github.com/your-repo/open-data-extractor.git
-   cd open-data-extractor/backend
-   pip install -r requirements.txt
-   ```
-
-3. Import sample data into PostGIS:
-
-   ```bash
-   ogr2ogr -f "PostgreSQL" PG:"dbname=your_db user=your_user password=your_pass" sample_data.gml
-   ```
-
-4. Run the FastAPI server:
-
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-### **Frontend**
-
-1. Install Node.js and dependencies:
-
-   ```bash
-   cd open-data-extractor/frontend
-   npm install
-   ```
-
-2. Run the React development server:
-
-   ```bash
-   npm start
-   ```
+1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
+2. **Select an Area**: Use the drawing tools to select an area on the map.
+3. **Choose Data Layers**: Select the data layers you wish to download.
+4. **Payment**: Proceed to payment if required.
+5. **Download Data**: After processing, download your data in the desired format.
 
 ---
 
-## Future Roadmap
+### Project Structure
 
-- Add support for additional data layers (e.g., terrain, parcels).
-- Implement caching for frequently requested data.
-- Introduce user accounts for managing downloads and licenses.
-- Explore additional formats for exporting data (e.g., OBJ, IFC).
-- Expand coverage beyond Germany to other European countries.
+- **backend/**: Contains the FastAPI backend application.
+  - `app/`: FastAPI application code.
+  - `db/`: Database initialization scripts.
+  - `ingestion/`: Scripts for data ingestion and processing.
+- **frontend/**: Contains the React frontend application.
+  - `src/`: React application source code.
+  - `public/`: Static assets.
 
 ---
 
-## Contributing
+### Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
 
 ---
 
-## License
+### License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ---
 
-## Contact
+### Contact
 
 For questions, feedback, or support, contact us at:
 
-- **Email**: support@opendataextractor.com
+- **Email**: support@easyopendata.com
 
 &&& FILE: ./backend\Dockerfile
 &&& CONTENT:
@@ -274,6 +227,197 @@ COPY . /app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+
+&&& FILE: ./backend\README.md
+&&& CONTENT:
+# EasyOpenData Backend
+
+## Overview
+
+The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the frontend application. It interacts with a PostGIS database to store and query spatial data.
+
+---
+
+## Key Components
+
+- **FastAPI Application**: Provides RESTful APIs for data retrieval and processing.
+- **PostGIS Database**: Stores spatial data and provides efficient spatial queries.
+- **Data Ingestion Scripts**: Scripts to download, transform, and ingest data into the database.
+- **Payment Processing**: Integration with Stripe API for handling payments.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Docker** and **Docker Compose**
+- **Python 3.10+**
+- **GDAL** and **OGR** libraries
+- **Conda** (optional, for managing environments)
+- **Node.js** and **npm** (for gltf-pipeline)
+
+### Running with Docker
+
+The easiest way to run the backend is using Docker Compose.
+
+#### Build and Run
+
+```bash
+docker-compose up --build
+```
+
+This will start the PostGIS database and the FastAPI backend.
+
+#### Accessing the Backend API
+
+- The backend API will be available at: [http://localhost:5400](http://localhost:5400)
+
+### Manual Setup
+
+If you prefer to run the backend without Docker, follow these steps.
+
+#### 1. Create a Virtual Environment
+
+Using Conda:
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install Dependencies
+
+Install GDAL and its libraries:
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+Install other dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+#### 3. Install gltf-pipeline
+
+```bash
+npm install -g gltf-pipeline
+```
+
+#### 4. Setup the Database
+
+Ensure PostgreSQL and PostGIS are installed.
+
+```bash
+sudo apt install postgresql postgis
+```
+
+Create the database and extensions:
+
+```sql
+CREATE DATABASE easyopendata_database;
+\c easyopendata_database;
+CREATE EXTENSION postgis;
+```
+
+#### 5. Run Database Initialization Scripts
+
+```bash
+psql -U postgres -d easyopendata_database -f backend/db/init.sql
+```
+
+#### 6. Run the FastAPI Application
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+---
+
+## Data Ingestion
+
+The `backend/ingestion` directory contains scripts to download and process data.
+
+### Ingesting Data
+
+1. **Navigate to the ingestion directory**
+
+```bash
+cd backend/ingestion
+```
+
+2. **Run the Ingestion Script**
+
+The `bayern.py` script processes Meta4 files to download and ingest data.
+
+```bash
+python bayern.py
+```
+
+**Note**: Ensure you have the necessary Meta4 files in `data_sources/` and that you have adjusted the `META4_PATH` in the script.
+
+### Requirements
+
+- **lxml**
+- **psycopg2**
+- **GDAL/OGR** command-line tools (`ogr2ogr`)
+- **pg2b3dm** executable (must be in `libs/`)
+
+---
+
+## Directory Structure
+
+- **app/**: FastAPI application code.
+  - `main.py`: Main application file.
+  - `database.py`: Database connection setup.
+  - `models.py`: Database models and Pydantic schemas.
+  - `retrieve_geom.py`: Functions to retrieve and process geometries.
+
+- **db/**: Database scripts.
+  - `init.sql`: Database initialization script.
+  - `index.sql`: Indexing script for the database.
+
+- **ingestion/**: Data ingestion scripts.
+  - `bayern.py`: Script to process and ingest data.
+  - `data_sources/`: Directory containing Meta4 files.
+  - `data_local/`: Directory where downloaded data will be stored.
+  - `libs/`: Contains necessary executables like `pg2b3dm.exe`.
+
+---
+
+## API Endpoints
+
+- **GET /**: Root endpoint to check if the backend is running.
+- **POST /retrieve_obj**: Accepts a GeoJSON region and returns an OBJ file with the buildings within that region.
+- **POST /create-payment-intent**: Creates a Stripe payment intent for processing payments.
+
+---
+
+## Environment Variables
+
+- **DATABASE_URL**: The connection string for the PostGIS database.
+- **STRIPE_API_KEY**: Your Stripe secret API key for payment processing.
+
+---
+
+## Payment Processing
+
+The backend integrates with Stripe to handle payments. Ensure you have set your Stripe API keys in the environment variables.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the backend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -434,7 +578,7 @@ Base = declarative_base()
 class Building(Base):
     __tablename__ = 'building'
 
-    ogc_fid = Column(Integer, primary_key=True)
+    gml_id = Column(String, primary_key=True)
     name = Column(String)
     geom = Column(Geometry('MULTIPOLYGONZ', srid=4326))  # Adjust geometry type as needed
 
@@ -456,7 +600,7 @@ from geoalchemy2 import functions as func
 from app.database import async_session
 from app.models import Building
 import os
-from pyproj import Transformer  # For coordinate transformation
+from pyproj import Transformer
 
 async def retrieve_obj_file(region_geojson, output_path):
     """
@@ -491,22 +635,15 @@ async def retrieve_obj_file(region_geojson, output_path):
     async with async_session() as session:
         # Query the database for buildings within the polygon
         stmt = select(
-            Building.ogc_fid,
-            func.ST_AsGeoJSON(
-                func.ST_Transform(
-                    func.ST_Simplify(Building.geom, 0.1),
-                    25832  # Transform the result to 25832 after filtering
-                )
-            ).label('geom_geojson')
+            Building.gml_id,
+            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
         ).where(
             func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),  # Building geometries are kept in their original SRID (4326)
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))  # Transform the input polygon to 4326
+                func.ST_MakeValid(Building.geom),
+                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
             )
         )
-
-
-
+        
         result = await session.execute(stmt)
         buildings = result.fetchall()
         
@@ -521,7 +658,7 @@ async def retrieve_obj_file(region_geojson, output_path):
 
         # Process each building geometry
         for building in buildings:
-            ogc_fid = building.ogc_fid
+            gml_id = building.gml_id
             geom_geojson_str = building.geom_geojson
             if not geom_geojson_str:
                 continue  # Skip if geometry is null
@@ -538,7 +675,7 @@ async def retrieve_obj_file(region_geojson, output_path):
             elif geom_type == 'MultiPolygon':
                 polygons = coordinates
             else:
-                print(f"Skipping unsupported geometry type (ID: {ogc_fid}, Type: {geom_type})")
+                print(f"Skipping unsupported geometry type (ID: {gml_id}, Type: {geom_type})")
                 continue
 
             for polygon in polygons:
@@ -573,7 +710,7 @@ async def retrieve_obj_file(region_geojson, output_path):
                     # Some software may not support holes directly
                     # So, we can skip adding faces for holes or handle them as separate objects
                     # For now, we'll skip adding faces for holes
-                    print(f"Skipping interior ring (hole) in building ID: {ogc_fid}")
+                    print(f"Skipping interior ring (hole) in building ID: {gml_id}")
 
         # Write to OBJ file
         with open(output_path, 'w') as obj_file:
@@ -585,48 +722,42 @@ async def retrieve_obj_file(region_geojson, output_path):
         print(f"OBJ file successfully written to {output_path}")
         return
 
-# Example usage
-if __name__ == '__main__':
-    # Load the input region GeoJSON
-    region_geojson = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "id": "bef0b7ecb5e2a869ea655de233909ed2",
-                "type": "Feature",
-                "properties": {},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [11.078828018081367, 49.452387361598454],
-                            [11.075765898190326, 49.452622450748436],
-                            [11.07450436712378, 49.45031424385303],
-                            [11.076197865379754, 49.449993191955855],
-                            [11.08040312808447, 49.44850087839157],
-                            [11.085839287965683, 49.452705969665345],
-                            [11.078828018081367, 49.452387361598454]
-                        ]
-                    ]
-                }
-            }
-        ]
-    }
-    output_path = 'output.obj'
-    asyncio.run(retrieve_obj(region_geojson, output_path))
-
 
 &&& FILE: ./backend\db\index.sql
 &&& CONTENT:
--- Drop index if it exists, then create it
-DROP INDEX IF EXISTS buildings_geom_idx;
-CREATE INDEX buildings_geom_idx ON building USING GIST(geom);
+-- Create the index if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_indexes 
+        WHERE schemaname = 'public' 
+        AND tablename = 'building' 
+        AND indexname = 'buildings_geom_idx'
+    ) THEN
+        CREATE INDEX buildings_geom_idx ON building USING GIST(geom);
+    END IF;
+END $$;
+
+-- Add the unique constraint if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_constraint 
+        WHERE conname = 'gml_id_unique' 
+        AND conrelid = 'public.building'::regclass
+    ) THEN
+        ALTER TABLE public.building ADD CONSTRAINT gml_id_unique UNIQUE (gml_id);
+    END IF;
+END $$;
 
 -- Cluster the table using the index
 CLUSTER building USING buildings_geom_idx;
 
 -- Analyze to update statistics
 ANALYZE building;
+
 
 &&& FILE: ./backend\db\init.sql
 &&& CONTENT:
@@ -681,7 +812,7 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
+META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
@@ -995,7 +1126,7 @@ def convert_to_3d_tiles(cache_dir, database_url):
         '-t', 'building',
         '-d', dbname,
         '-o', cache_dir, 
-        '--use_implicit_tiling', 'false'
+        # '--use_implicit_tiling', 'false'
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -1013,6 +1144,19 @@ def apply_draco_compression(cache_dir):
         for file in files:
             if file.endswith('.glb'):
                 gltf_file = os.path.join(root, file)
+
+                # Check if the first line of the file contains "draco"
+                try:
+                    with open(gltf_file, 'rb') as f:
+                        first_line = f.readline().decode('utf-8', errors='ignore')
+                        if "draco" in first_line.lower():
+                            logging.info(f"File {gltf_file} already contains Draco; skipping compression.")
+                            continue
+                except Exception as e:
+                    logging.error(f"Error reading file {gltf_file}: {e}")
+                    continue
+
+                # Proceed with Draco compression
                 compressed_file = os.path.join(root, f"{os.path.splitext(file)[0]}_draco.glb")
                 cmd = [
                     "gltf-pipeline",
@@ -1095,7 +1239,7 @@ def main(meta4_file):
             put_buildings_on_ground(DATABASE_URL)
 
             # Convert to 3D tiles
-            if (ix-1) % 1000 == 0:
+            if (ix-1) % 20 == 0:
                 convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
                 apply_draco_compression(CACHE_DIR)
 
@@ -1126,25 +1270,150 @@ if __name__ == '__main__':
 
 &&& FILE: ./backend\ingestion\README.md
 &&& CONTENT:
-These scripts can be executed to download 3D Bulidings data from gml files, ingest them in the database, and create a Tileset of 3D Tiles from the database.
+# EasyOpenData Data Ingestion
 
-Before you run the scripts:
+## Overview
 
-1. Create a conda environment in the root project folder (EasyOpenData):
-...
-2. activate the new environment:
-...
-3. Install GDAL with libraries:
-conda install -c conda-forge gdal libgdal 
-3. Install all other dependencies:
-pip install -r .\backend\requirements.txt
-4. Install gltf-pipeline:
+The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into the PostGIS database. It also includes tools for generating 3D tilesets from the database.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Conda** (optional, for managing Python environments)
+- **GDAL** and **OGR** libraries
+- **Python 3.x**
+- **Node.js** and **npm** (for `gltf-pipeline`)
+
+### Steps
+
+#### 1. Create a Conda Environment (Optional)
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install GDAL and Libraries
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+#### 3. Install Python Dependencies
+
+```bash
+pip install -r ../../requirements.txt
+```
+
+#### 4. Install gltf-pipeline
+
+```bash
 npm install -g gltf-pipeline
+```
 
+---
 
-&&& FILE: ./backend\ingestion\data_local\bayern\792_5432.gml
+## Data Ingestion Scripts
+
+### `bayern.py`
+
+This script sequentially downloads GML files from a Meta4 file, transforms them by embedding polygons, ingests them into a PostgreSQL database, converts them to 3D tiles, and removes the original files.
+
+#### Usage
+
+```bash
+python bayern.py
+```
+
+#### Notes
+
+- Ensure that the `META4_PATH` variable in the script points to a valid `.meta4` file in the `data_sources/` directory.
+- The script requires the `pg2b3dm.exe` executable to be present in the `libs/` directory.
+
+### Directory Structure
+
+- **data_sources/**: Contains `.meta4` files that list the URLs of GML data to download.
+- **data_local/**: Directory where downloaded GML files are stored temporarily.
+- **libs/**: Contains necessary executables like `pg2b3dm.exe`.
+
+---
+
+## Additional Information
+
+- **GDAL/OGR**: Used for converting and ingesting GML files into PostGIS.
+- **pg2b3dm**: Tool for converting PostGIS data into 3D tiles compatible with CesiumJS.
+- **gltf-pipeline**: Used for optimizing and compressing glTF files.
+
+---
+
+## Tips
+
+- **Error Handling**: The scripts include logging to help diagnose issues during the ingestion process.
+- **Performance**: Adjust database settings in `init.sql` and `index.sql` for better performance during bulk data ingestion.
+
+---
+
+## Contributing
+
+Contributions to improve data ingestion scripts are welcome. Please ensure that any new scripts or changes are well-documented and tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530.gml
 &&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
+................................
 
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryEleme
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gfs
+&&& CONTENT:
+<GMLFeatureClassList>
+  <GMLFeatureClass>
+    <Name>Building</Name>
+    <ElementPath>Building</ElementPath>
+    <GeometryName>lod2Solid</GeometryName>
+    <GeometryElementPath>lod2Solid</GeometryEleme
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gml
+&&& CONTENT:
+<?xml version='1.0' encoding='UTF-8'?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
+................................
+
+&&& FILE: ./backend\ingestion\data_local\bayern\680_5336.gml
+&&& CONTENT:
+<?xml version="1.0" encoding="UTF-8"?>
+<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
@@ -1186,11 +1455,45 @@ v 692465.9520113174 11.428 5334728.848945844
 v 692465.9520113174 0 5334728.8489
 ................................
 
+&&& FILE: ./backend\tempfiles\13bbe29e-46f0-494e-afde-b7e48d2a2b2e.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 680567.9310030596 3.508 5342543.4299777085
+v 680566.789971829 3.508 5342543.155011388
+v 680566.789971829 0 5342543.155011388
+v 680567.9310030596 0 5342543.4299777
+................................
+
 &&& FILE: ./backend\tempfiles\1fc79dc8-42f6-40ed-9d9c-1da5b48f3473.obj
 &&& CONTENT:
 # OBJ file generated from buildings
 
 
+................................
+
+&&& FILE: ./backend\tempfiles\2a394fde-a09c-42ba-8168-890445a45cd7.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 684244.8699987399 0 5343079.640031528
+v 684244.8699987399 13.263 5343079.640031528
+v 684225.6209640335 14.26 5343077.449997416
+v 684206.369987038 13.263 5343075.2
+................................
+
+&&& FILE: ./backend\tempfiles\37627956-7228-462d-98f8-fbba26605ef0.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\3772f021-baeb-4916-bbfc-e1884f54c094.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 681044.1539687354 0 5343742.204972287
+v 681044.1539687354 5.777 5343742.204972287
+v 680992.2840366996 5.767 5343747.450959618
+v 680992.2840366996 0 5343747.450959
 ................................
 
 &&& FILE: ./backend\tempfiles\4e147667-b8f6-4a58-b874-087dde71f6f4.obj
@@ -1209,6 +1512,47 @@ v 692009.9379970876 4.357 5334359.5610187
 v 692012.5230037409 4.358 5334359.49202265
 v 692015.0539863509 4.468 5334358.949020741
 v 692015.5209730046 4.488 5334358.8
+................................
+
+&&& FILE: ./backend\tempfiles\538f2ac5-4ed3-43dc-ae34-9736446f0ed8.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 684129.4400338647 0 5342679.989994051
+v 684113.7999785779 0 5342676.399946041
+v 684113.7999785779 5.154 5342676.399946041
+v 684128.9959698505 5.154 5342679.887993
+................................
+
+&&& FILE: ./backend\tempfiles\5fcd10c0-8110-479c-9425-b813eaf33866.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 687793.1499662541 3.116 5330409.703961996
+v 687791.8770091551 3.116 5330414.617998084
+v 687791.8770091551 0 5330414.617998084
+v 687793.1499662541 0 5330409.703961
+................................
+
+&&& FILE: ./backend\tempfiles\75530f8b-fe84-471c-ae5f-997e8629a7e4.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\77c12452-c4ee-46c3-b5f1-0db94727d43e.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+
+
+................................
+
+&&& FILE: ./backend\tempfiles\8e15ee79-8a7a-4fdd-a135-3a4b0e2cba44.obj
+&&& CONTENT:
+# OBJ file generated from buildings
+v 687629.5080292135 12.24 5330674.962039919
+v 687633.8260145726 10.65 5330675.627970491
+v 687633.8260145726 12.76 5330675.627970491
+v 687631.4249967044 12.76 533067
 ................................
 
 &&& FILE: ./backend\tempfiles\8e80c443-cfcd-467c-9feb-92bf2e18b6da.obj
@@ -1378,18 +1722,133 @@ export default [
 
 ## Overview
 
-This is a simple frontend HTML page that displays 2D buildings of Nürnberg using Leaflet. It fetches building data from the backend and renders them on an interactive map.
+The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and download spatial data. It integrates with the backend API and handles payment processing via Stripe.
 
-## Setup
+---
 
-1. **Serve the Frontend**
+## Key Features
 
-   Use Python's HTTP server to serve the frontend files.
+- **Interactive Map Interface**: Built with React and MapLibre GL JS for map rendering.
+- **Drawing Tools**: Allows users to draw polygons to select regions.
+- **3D Visualization**: Uses Deck.gl to render 3D buildings.
+- **Search Functionality**: Integrated with Nominatim for location search.
+- **Payment Processing**: Secure payments via Stripe.
+- **Responsive Design**: Adapts to mobile and desktop screens.
 
-   ```bash
-   cd frontend
-   python -m http.server 8080
+---
 
+## Setup Instructions
+
+### Prerequisites
+
+- **Node.js** and **npm** or **yarn**
+
+### Installation
+
+1. **Install Dependencies**
+
+```bash
+cd frontend
+yarn install
+# or
+npm install
+```
+
+### Running the Development Server
+
+```bash
+yarn dev
+# or
+npm run dev
+```
+
+The application will be available at [http://localhost:5173](http://localhost:5173)
+
+### Build for Production
+
+```bash
+yarn build
+# or
+npm run build
+```
+
+The production build will be in the `dist/` directory.
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the `frontend` directory to set environment variables.
+
+- **VITE_BACKEND_URL**: The URL of the backend API.
+
+Example `.env` file:
+
+```
+VITE_BACKEND_URL=http://localhost:5400
+```
+
+### Map Style
+
+The map uses a custom style defined in `src/basemap.json`. You can customize the map style by modifying this file or replacing it with another style.
+
+---
+
+## Project Structure
+
+- **src/**: Contains the source code of the React application.
+  - `App.tsx`: Main application component.
+  - `CheckoutForm.tsx`: Handles payment form and Stripe integration.
+  - `FloatingPanel.tsx`: UI component for user interactions.
+  - `Legals.tsx`: Displays legal documents.
+  - `draw-control.ts`: Custom control for drawing polygons.
+  - `basemap.json`: Custom map style.
+
+- **public/**: Contains static assets.
+
+---
+
+## Key Components
+
+- **Map Integration**: Uses MapLibre GL JS for map rendering and Mapbox Draw for drawing tools.
+- **3D Rendering**: Deck.gl is used to render 3D buildings.
+- **Payment Integration**: Stripe is integrated using `@stripe/react-stripe-js` and `@stripe/stripe-js`.
+- **Legal Documents**: Legal documents are displayed using `ReactMarkdown`.
+
+---
+
+## Customization
+
+- **Map Style**: Modify `src/basemap.json` to change the map appearance.
+- **API Endpoints**: Ensure `VITE_BACKEND_URL` points to the correct backend API.
+- **Stripe Keys**: Update the publishable key in `FloatingPanel.tsx` and ensure the backend has the correct secret key.
+
+---
+
+## Legal Documents
+
+The `docs/` directory contains Markdown files for legal documents such as:
+
+- `agb.md`: Terms and Conditions
+- `datenschutz.md`: Privacy Policy
+- `impressum.md`: Imprint
+- `widerruf.md`: Cancellation Policy
+
+These documents are displayed in the application using the `Legals.tsx` component.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the frontend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./frontend\tsconfig.json
 &&& CONTENT:
@@ -1429,183 +1888,6 @@ export default defineConfig({
   version "2.3.0"
   resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
-
-&&& FILE: ./frontend\docs\agb.md
-&&& CONTENT:
-# Allgemeine Geschäftsbedingungen
-
-## 1. Geltungsbereich
-
-Diese Allgemeinen Geschäftsbedingungen gelten für alle Bestellungen, die Kunden über unsere Website [Ihre Website-URL] tätigen.
-
-## 2. Vertragsschluss
-
-Der Vertrag kommt zustande, wenn wir Ihre Bestellung durch eine Auftragsbestätigung per E-Mail unmittelbar nach dem Erhalt Ihrer Bestellung annehmen.
-
-## 3. Preise und Zahlungsbedingungen
-
-Alle Preise sind Endpreise und enthalten die gesetzliche Mehrwertsteuer. Die Zahlung erfolgt per [Ihre Zahlungsmethoden, z.B. Kreditkarte, PayPal].
-
-## 4. Lieferung und Downloadbereitstellung
-
-Die bestellten Daten werden nach Zahlungseingang zum Download bereitgestellt oder per E-Mail zugesandt.
-
-## 5. Widerrufsrecht
-
-Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
-
-## 6. Haftungsausschluss
-
-Wir übernehmen keine Haftung für die Richtigkeit, Vollständigkeit und Aktualität der bereitgestellten Daten.
-
-## 7. Urheberrecht
-
-Die heruntergeladenen Daten dürfen nur für den persönlichen Gebrauch verwendet werden. Eine Weitergabe an Dritte ist nicht gestattet.
-
-## 8. Datenschutz
-
-Wir verarbeiten Ihre personenbezogenen Daten gemäß unserer Datenschutzerklärung.
-
-## 9. Schlussbestimmungen
-
-Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist [Ihr Gerichtsstand].
-
-&&& FILE: ./frontend\docs\datenschutz.md
-&&& CONTENT:
-# Datenschutzerklärung
-
-Stand: [Aktuelles Datum]
-
-## 1. Datenschutz auf einen Blick
-
-### Allgemeine Hinweise
-Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
-
-### Datenerfassung auf dieser Website
-
-#### Wer ist verantwortlich für die Datenerfassung auf dieser Website?
-Die Datenverarbeitung auf dieser Website erfolgt durch den Websitebetreiber. Dessen Kontaktdaten können Sie dem Impressum dieser Website entnehmen.
-
-#### Wie erfassen wir Ihre Daten?
-Ihre Daten werden zum einen dadurch erhoben, dass Sie uns diese mitteilen. Hierbei kann es sich z.B. um Daten handeln, die Sie in ein Kontaktformular eingeben.
-
-Andere Daten werden automatisch beim Besuch der Website durch unsere IT-Systeme erfasst. Das sind vor allem technische Daten (z.B. Internetbrowser, Betriebssystem oder Uhrzeit des Seitenaufrufs).
-
-#### Wofür nutzen wir Ihre Daten?
-Ein Teil der Daten wird erhoben, um eine fehlerfreie Bereitstellung der Website zu gewährleisten. Andere Daten können zur Analyse Ihres Nutzerverhaltens verwendet werden.
-
-#### Welche Rechte haben Sie bezüglich Ihrer Daten?
-Sie haben jederzeit das Recht unentgeltlich Auskunft über Herkunft, Empfänger und Zweck Ihrer gespeicherten personenbezogenen Daten zu erhalten. Sie haben außerdem ein Recht, die Berichtigung, Sperrung oder Löschung dieser Daten zu verlangen. Hierzu sowie zu weiteren Fragen zum Thema Datenschutz können Sie sich jederzeit unter der im Impressum angegebenen Adresse an uns wenden.
-
-## 2. Allgemeine Hinweise und Pflichtinformationen
-
-### Datenschutz
-Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerklärung.
-
-### Hinweis zur verantwortlichen Stelle
-Die verantwortliche Stelle für die Datenverarbeitung auf dieser Website ist:
-
-[Ihr Name]
-[Ihre Straße und Hausnummer]
-[Ihre Postleitzahl und Stadt]
-
-Telefon: [Ihre Telefonnummer]
-E-Mail: [Ihre E-Mail-Adresse]
-
-Verantwortliche Stelle ist die natürliche oder juristische Person, die allein oder gemeinsam mit anderen über die Zwecke und Mittel der Verarbeitung von personenbezogenen Daten (z.B. Namen, E-Mail-Adressen o. Ä.) entscheidet.
-
-## 3. Datenerfassung auf unserer Website
-
-### Cookies
-Die Internetseiten verwenden teilweise so genannte Cookies. Cookies richten auf Ihrem Rechner keinen Schaden an und enthalten keine Viren. Cookies dienen dazu, unser Angebot nutzerfreundlicher, effektiver und sicherer zu machen.
-
-### Server-Log-Dateien
-Der Provider der Seiten erhebt und speichert automatisch Informationen in so genannten Server-Log-Dateien, die Ihr Browser automatisch an uns übermittelt. Dies sind:
-
-- Browsertyp und Browserversion
-- verwendetes Betriebssystem
-- Referrer URL
-- Hostname des zugreifenden Rechners
-- Uhrzeit der Serveranfrage
-- IP-Adresse
-
-Eine Zusammenführung dieser Daten mit anderen Datenquellen wird nicht vorgenommen.
-
-### Kontaktformular
-Wenn Sie uns per Kontaktformular Anfragen zukommen lassen, werden Ihre Angaben aus dem Anfrageformular inklusive der von Ihnen dort angegebenen Kontaktdaten zwecks Bearbeitung der Anfrage und für den Fall von Anschlussfragen bei uns gespeichert. Diese Daten geben wir nicht ohne Ihre Einwilligung weiter.
-
-### Zahlungsdaten
-Bei der Bezahlung über unsere Website werden Ihre Zahlungsdaten zur Abwicklung der Transaktion an unseren Zahlungsdienstleister übermittelt. Diese Daten werden verschlüsselt übertragen und nur für den Zweck der Zahlungsabwicklung verwendet.
-
-## 4. Analyse Tools und Werbung
-
-[Falls Sie Analyse-Tools wie Google Analytics verwenden, fügen Sie hier die entsprechenden Informationen ein]
-
-## 5. Plugins und Tools
-
-[Falls Sie Plugins oder Tools von Drittanbietern verwenden, fügen Sie hier die entsprechenden Informationen ein]
-
-## 6. Ihre Rechte als betroffene Person
-
-Sie haben das Recht:
-
-- gemäß Art. 15 DSGVO Auskunft über Ihre von uns verarbeiteten personenbezogenen Daten zu verlangen;
-- gemäß Art. 16 DSGVO unverzüglich die Berichtigung unrichtiger oder Vervollständigung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
-- gemäß Art. 17 DSGVO die Löschung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
-- gemäß Art. 18 DSGVO die Einschränkung der Verarbeitung Ihrer personenbezogenen Daten zu verlangen;
-- gemäß Art. 20 DSGVO Ihre personenbezogenen Daten, die Sie uns bereitgestellt haben, in einem strukturierten, gängigen und maschinenlesbaren Format zu erhalten oder die Übermittlung an einen anderen Verantwortlichen zu verlangen;
-- gemäß Art. 21 DSGVO Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten einzulegen;
-- gemäß Art. 77 DSGVO sich bei einer Aufsichtsbehörde zu beschweren.
-
-
-&&& FILE: ./frontend\docs\impressum.md
-&&& CONTENT:
-# Impressum
-
-Angaben gemäß § 5 TMG:
-
-[Ihr Name]
-[Ihre Straße und Hausnummer]
-[Ihre Postleitzahl und Stadt]
-
-## Kontakt
-Telefon: [Ihre Telefonnummer]
-E-Mail: [Ihre E-Mail-Adresse]
-
-## Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV:
-[Ihr Name]
-[Ihre Adresse]
-
-## Haftungsausschluss
-
-### Haftung für Inhalte
-Die Inhalte unserer Seiten wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.
-
-### Haftung für Links
-Unser Angebot enthält Links zu externen Webseiten Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen.
-
-### Urheberrecht
-Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.
-
-&&& FILE: ./frontend\docs\widerruf.md
-&&& CONTENT:
-# Widerrufsbelehrung
-
-## Widerrufsrecht
-
-Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
-
-Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
-
-Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
-
-Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
-
-## Folgen des Widerrufs
-
-Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
-
-Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
 
 &&& FILE: ./frontend\public\vite.svg
 &&& CONTENT:
@@ -2027,171 +2309,6 @@ interface DrawControlProps {
   onUpdate: (e: any) => void;
   onDelete: (e: any) => void;
 }
-
-// const DrawControl = React.forwardRef<MapboxDraw, DrawControlProps>(
-//   (props, ref) => {
-//     useControl(
-//       ({ map }) => {
-//         const draw = new MapboxDraw({
-//           displayControlsDefault: false,
-//           controls: {
-//             polygon: false,
-//             trash: false,
-//           },
-//           defaultMode: "simple_select",
-//           styles: [
-//             // === Active Polygon Styles ===
-//             // Active polygon fill
-//             {
-//               id: "gl-draw-polygon-fill",
-//               type: "fill",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "fill-color": "#ff0000", // Red color
-//                 "fill-opacity": 0.7, // 70% opacity
-//               },
-//             },
-//             // Active polygon outline
-//             {
-//               id: "gl-draw-polygon-stroke-active",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               layout: {},
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Inactive Polygon Styles ===
-//             // Inactive polygon fill
-//             {
-//               id: "gl-draw-polygon-fill-inactive",
-//               type: "fill",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["==", "mode", "static"],
-//               ],
-//               paint: {
-//                 "fill-color": "#ff0000", // Red color
-//                 "fill-opacity": 0.7, // 70% opacity
-//               },
-//             },
-//             // Inactive polygon outline
-//             {
-//               id: "gl-draw-polygon-stroke-inactive",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Polygon"],
-//                 ["==", "mode", "static"],
-//               ],
-//               layout: {},
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Line During Drawing ===
-//             {
-//               id: "gl-draw-polygon-and-line",
-//               type: "line",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "LineString"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               layout: {
-//                 "line-cap": "round",
-//                 "line-join": "round",
-//               },
-//               paint: {
-//                 "line-color": "#ff0000", // Red color
-//                 "line-dasharray": [0.2, 2],
-//                 "line-width": 2,
-//               },
-//             },
-//             // === Vertex Points During Drawing ===
-//             {
-//               id: "gl-draw-polygon-and-line-vertex",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["!=", "meta", "midpoint"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ff0000", // Red color
-//                 "circle-stroke-color": "#ffffff",
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//             // === Midpoint Points ===
-//             {
-//               id: "gl-draw-polygon-and-line-midpoint",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["==", "meta", "midpoint"],
-//                 ["!=", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ffffff",
-//                 "circle-stroke-color": "#ff0000", // Red stroke
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//             // === Vertex Points Inactive ===
-//             {
-//               id: "gl-draw-polygon-and-line-vertex-inactive",
-//               type: "circle",
-//               filter: [
-//                 "all",
-//                 ["==", "$type", "Point"],
-//                 ["!=", "meta", "midpoint"],
-//                 ["==", "mode", "static"],
-//               ],
-//               paint: {
-//                 "circle-radius": 5,
-//                 "circle-color": "#ff0000", // Red color
-//                 "circle-stroke-color": "#ffffff",
-//                 "circle-stroke-width": 2,
-//               },
-//             },
-//           ],
-//         });
-//         map.addControl(draw);
-
-//         // Prevent adding the source multiple times
-//         const existingSource = map.getSource("mapbox-gl-draw-cold");
-//         if (existingSource) {
-//           map.removeControl(draw);
-//           return;
-//         }
-
-//         if (ref && typeof ref !== "function") {
-//           ref.current = draw;
-//         }
-//         return draw;
-//       },
-//       { position: "top-left" }
-//     );
-
-//     return null;
-//   }
-// );
 
 const container = document.body.appendChild(document.createElement("div"));
 createRoot(container).render(<Root />);
