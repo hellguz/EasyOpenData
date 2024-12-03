@@ -1,0 +1,51 @@
+services:
+  postgis:
+    container_name: easyopen_db
+    image: postgis/postgis:17-3.5
+    restart: always
+    ports:
+      - 8735:5432
+    environment:
+      POSTGRES_PASSWORD: barcelona
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  easyopen_backend:
+    container_name: easyopen_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 5400 --reload
+    volumes:
+      - ./backend:/app
+      - ./backend/tileset:/app/tileset
+      - ./backend/tempfiles:/app/tempfiles
+    ports:
+      - 5400:5400
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@postgis:5432/easyopendata_database
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  easyopen_frontend:
+    container_name: easyopen_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - 5173:5173
+    environment:
+      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
+
+volumes:
+  postgres_data:
