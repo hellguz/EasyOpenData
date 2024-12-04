@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const LegalDocumentPanel: React.FC<{
   documentType: string;
@@ -62,7 +63,7 @@ const LegalDocumentPanel: React.FC<{
           <h5 className="mb-3">
             {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
           </h5>
-          <ReactMarkdown>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       )}
     </>
@@ -83,11 +84,16 @@ const LegalDocuments: React.FC = () => {
         zIndex: 1060,
       }}
     >
-      <LegalDocumentPanel
-        documentType="impressum"
-        isOpen={openDocument === 'impressum'}
-        setOpenDocument={setOpenDocument}
-      />
+    <LegalDocumentPanel
+      documentType="quellen"
+      isOpen={openDocument === 'quellen'}
+      setOpenDocument={setOpenDocument}
+    />
+    <LegalDocumentPanel
+      documentType="impressum"
+      isOpen={openDocument === 'impressum'}
+      setOpenDocument={setOpenDocument}
+    />
       <LegalDocumentPanel
         documentType="datenschutz"
         isOpen={openDocument === 'datenschutz'}

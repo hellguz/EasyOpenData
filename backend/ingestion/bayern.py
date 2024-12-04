@@ -30,7 +30,7 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'backend/tileset'
