@@ -21,7 +21,7 @@ import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
 import './App.css'
-
+ 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
 
@@ -169,7 +169,7 @@ function Root() {
     setViewState(event.viewState);
 
     // Toggle visibility based on zoom level
-    if (newZoom < 15) {
+    if (newZoom < 13) {
       setIsLod2Visible(false);
     } else {
       setIsLod2Visible(true);

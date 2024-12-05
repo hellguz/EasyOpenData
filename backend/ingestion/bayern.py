@@ -4,7 +4,7 @@ process_meta4.py
 
 A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
 ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
-append to the main building table, and remove the original files.
+merge the tilesets iteratively, append to the main building table, and remove the original files.
 
 Usage:
     python process_meta4.py file.meta4
@@ -16,6 +16,7 @@ Requirements:
     - ogr2ogr (from GDAL)
     - pg2b3dm_new command available in PATH
     - gltf-pipeline (for Draco compression)
+    - Node.js and npm (for 3d-tiles-tools)
 """
 
 import sys
@@ -326,12 +327,12 @@ def update_geometries(database_url, table_name):
     finally:
         conn.close()
 
-def convert_to_3d_tiles(cache_dir, database_url, table_name):
+def convert_to_3d_tiles(output_dir, database_url, table_name):
     """
     Converts buildings from the specified table in the database to 3D tiles using pg2b3dm.
 
     Args:
-        cache_dir (str): Output directory for 3D tiles.
+        output_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
         table_name (str): Table to convert to 3D tiles.
     """
@@ -350,8 +351,8 @@ def convert_to_3d_tiles(cache_dir, database_url, table_name):
         '-c', 'geom',
         '-t', table_name,
         '-d', dbname,
-        '-o', cache_dir, 
-        # '--use_implicit_tiling', 'false'  # Uncomment if needed
+        '-o', output_dir, 
+        '--use_implicit_tiling', 'false'  # Uncomment if needed
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -535,13 +536,20 @@ def remove_file(file_path):
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
 def main(meta4_file):
-    # Ensure DATA_DIR and CACHE_DIR exist
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    # Define Tileset Directories
+    main_tileset_dir = os.path.join(CACHE_DIR, 'main_tileset')
+    temp_tileset_dir = os.path.join(CACHE_DIR, 'temp_tileset')
+    merged_tileset_dir = os.path.join(CACHE_DIR, 'merged_tileset')
+    combined_tileset_dir = os.path.join(CACHE_DIR, 'combined_tileset')
+
+    # Ensure directories exist
+    os.makedirs(main_tileset_dir, exist_ok=True)
+    os.makedirs(temp_tileset_dir, exist_ok=True)
+    os.makedirs(merged_tileset_dir, exist_ok=True)
+    os.makedirs(combined_tileset_dir, exist_ok=True)
 
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
-
 
     for ix, file_info in enumerate(files, start=1):
         file_name = file_info['name']
@@ -552,7 +560,6 @@ def main(meta4_file):
 
         logging.info(f"▶️   FILE {ix}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
-
 
         # Determine download paths
         download_path = os.path.join(DATA_DIR, file_name)
@@ -585,10 +592,74 @@ def main(meta4_file):
             update_geometries(DATABASE_URL, TEMP_TABLE)
 
             # Convert the temporary table to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL, TEMP_TABLE)
+            convert_to_3d_tiles(temp_tileset_dir, DATABASE_URL, TEMP_TABLE)
 
             # Apply Draco compression to the newly generated tiles
-            apply_draco_compression(CACHE_DIR)
+            apply_draco_compression(temp_tileset_dir)
+
+            if ix == 1:
+                # For the first file, initialize the main tileset by moving contents
+                logging.info(f"Initializing main tileset with {file_name}.")
+                # Move all contents from temp_tileset_dir to main_tileset_dir
+                for item in os.listdir(temp_tileset_dir):
+                    s = os.path.join(temp_tileset_dir, item)
+                    d = os.path.join(main_tileset_dir, item)
+                    if os.path.isdir(s):
+                        shutil.move(s, d)
+                    else:
+                        shutil.move(s, d)
+                logging.info(f"Initialized main tileset with {file_name}.")
+            else:
+                # For subsequent files, merge with the main tileset
+                logging.info(f"Merging temp tileset with main tileset for {file_name}.")
+
+                # Run the merge command
+                merge_cmd = [
+                    'npx',
+                    '3d-tiles-tools',
+                    'mergeJson',
+                    '-i', main_tileset_dir + "/tileset.json",
+                    '-i', temp_tileset_dir + "/tileset.json",
+                    '-o', merged_tileset_dir+ "/tileset.json",
+                    '-f'
+                ]
+                logging.info(" ".join(merge_cmd))
+
+                merge_result = subprocess.run(merge_cmd, shell=True, text=True)
+                if merge_result.returncode != 0:
+                    logging.error(f"Failed to merge tilesets: {merge_result.stderr}")
+                    raise RuntimeError(f"Failed to merge tilesets: {merge_result.stderr}")
+                logging.info(f"Merged temp tileset with main tileset for {file_name} successfully.")
+
+                # Run the combine command to inline the merged tileset
+                combine_cmd = [
+                    'npx',
+                    '3d-tiles-tools',
+                    'combine',
+                    '-i', merged_tileset_dir,
+                    '-o', combined_tileset_dir,
+                    '-f'
+                ]
+                logging.info(" ".join(combine_cmd))
+                combine_result = subprocess.run(combine_cmd, shell=True, text=True)
+                if combine_result.returncode != 0:
+                    logging.error(f"Failed to combine merged tilesets: {combine_result.stderr}")
+                    raise RuntimeError(f"Failed to combine merged tilesets: {combine_result.stderr}")
+                logging.info(f"Combined merged tileset into main tileset for {file_name} successfully.")
+
+                shutil.rmtree(main_tileset_dir)
+                for item in os.listdir(combined_tileset_dir):
+                    s = os.path.join(combined_tileset_dir, item)
+                    d = os.path.join(main_tileset_dir, item)
+                    if os.path.isdir(s):
+                        shutil.move(s, d)
+                    else:
+                        shutil.move(s, d)
+
+                # Cleanup temporary and merged tileset directories
+                shutil.rmtree(temp_tileset_dir)
+                # shutil.rmtree(merged_tileset_dir)
+                # logging.info(f"Cleaned up temporary directories for {file_name}.")
 
             # Append data from temporary table to main table
             append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
@@ -596,10 +667,6 @@ def main(meta4_file):
             # Drop the temporary table
             drop_temp_table(DATABASE_URL, TEMP_TABLE)
 
-            if ix == 1:
-                # Execute SQL indexing file once before processing
-                execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
-                
             # Remove the transformed GML file
             remove_file(transformed_path)
             # Remove the transformed GFS file if it exists
