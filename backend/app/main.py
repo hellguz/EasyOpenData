@@ -101,4 +101,4 @@ async def create_payment_intent(data: PaymentIntentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-app.mount("/tileset", StaticFiles(directory="tileset/main_tileset"), name="tileset")
+app.mount("/tileset", StaticFiles(directory="tileset"), name="tileset")
