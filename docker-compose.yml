@@ -45,7 +45,7 @@ services:
     ports:
       - 5173:5173
     environment:
-      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
+      VITE_BACKEND_URL: http://localhost:5400
 
 volumes:
   postgres_data:
