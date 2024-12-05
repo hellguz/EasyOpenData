@@ -406,6 +406,7 @@ def apply_draco_compression(cache_dir):
 def append_temp_to_main(database_url, temp_table, main_table):
     """
     Appends data from the temporary table to the main table by copying only the common columns.
+    Handles duplicates by ignoring records that violate primary key constraints.
 
     Args:
         database_url (str): PostgreSQL connection URL.
@@ -454,13 +455,35 @@ def append_temp_to_main(database_url, temp_table, main_table):
 
             logging.info(f"Common columns for insertion: {columns_str}")
 
-            # Execute the INSERT statement
+            # Fetch primary key columns from the main table
+            cur.execute(f"""
+                SELECT a.attname
+                FROM pg_index i
+                JOIN pg_attribute a ON a.attrelid = i.indrelid
+                                     AND a.attnum = ANY(i.indkey)
+                WHERE i.indrelid = '{main_table}'::regclass
+                  AND i.indisprimary;
+            """)
+            pk_columns = [row[0] for row in cur.fetchall()]
+            if not pk_columns:
+                raise ValueError(f"No primary key defined for table '{main_table}'.")
+
+            # Construct the ON CONFLICT clause
+            conflict_target = ', '.join([f'"{col}"' for col in pk_columns])
+            on_conflict_clause = f"ON CONFLICT ({conflict_target}) DO NOTHING"
+
+            logging.info(f"Using ON CONFLICT clause on columns: {conflict_target}")
+
+            # Execute the INSERT statement with ON CONFLICT
             cur.execute(f"""
                 INSERT INTO {main_table} ({columns_str})
-                SELECT {columns_str} FROM {temp_table};
+                SELECT {columns_str} FROM {temp_table}
+                {on_conflict_clause};
             """)
+
+            inserted_count = cur.rowcount
             conn.commit()
-        logging.info(f"Data appended from '{temp_table}' to '{main_table}' successfully.")
+            logging.info(f"Data appended from '{temp_table}' to '{main_table}' successfully. Inserted {inserted_count} records.")
     except Exception as e:
         logging.error(f"Failed to append data from '{temp_table}' to '{main_table}': {e}")
         conn.rollback()
