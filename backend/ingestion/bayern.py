@@ -543,13 +543,15 @@ def remove_file(file_path):
     except OSError as e:
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
+import os
 import json
 import math
-import os
 
 def merge_tilesets_into_one(output_path, input_tilesets):
     """
     Merges multiple region-based tilesets into a single tileset.json that references all of them as external.
+    If some tilesets do not exist or do not have a region boundingVolume, they are skipped.
+    If no valid tilesets remain, creates a minimal tileset with no children.
     
     Args:
         output_path (str): Path to the final merged tileset.json output file.
@@ -559,34 +561,60 @@ def merge_tilesets_into_one(output_path, input_tilesets):
         None. Writes the merged tileset.json to output_path.
     """
     
-    # Load all tilesets
+    # Load all valid tilesets
     loaded_tilesets = []
     for ts_path in input_tilesets:
-        with open(ts_path, 'r', encoding='utf-8') as f:
-            ts = json.load(f)
-            loaded_tilesets.append((ts_path, ts))
+        if not os.path.isfile(ts_path):
+            # Skip if the file doesn't exist
+            continue
+        try:
+            with open(ts_path, 'r', encoding='utf-8') as f:
+                ts = json.load(f)
+                loaded_tilesets.append((ts_path, ts))
+        except (IOError, json.JSONDecodeError):
+            # Skip if the file cannot be read or is not valid JSON
+            continue
     
-    # Collect regions from all input tilesets
-    # We assume each input tileset has a root with a region boundingVolume
-    # region = [west, south, east, north, minHeight, maxHeight]
+    # Filter down to only those with a region boundingVolume
     all_regions = []
+    valid_tilesets = []
     for ts_path, ts in loaded_tilesets:
-        region = None
         root = ts.get("root", {})
         bv = root.get("boundingVolume", {})
+        region = bv.get("region")
         
-        if "region" not in bv:
-            raise ValueError(f"Tileset {ts_path} does not have a region boundingVolume. Please convert it first.")
-        
-        region = bv["region"]
-        if len(region) != 6:
-            raise ValueError(f"Region in {ts_path} should have 6 values: [west, south, east, north, minH, maxH]")
-        all_regions.append(region)
+        if region and isinstance(region, list) and len(region) == 6:
+            all_regions.append(region)
+            valid_tilesets.append((ts_path, ts))
+        # If there's no valid region, skip this tileset
     
-    # Compute the encompassing region
-    # west, south = min of all wests, souths
-    # east, north = max of all easts, norths
-    # minH, maxH = min of all minHeights, max of all maxHeights
+    if not valid_tilesets:
+        # No valid tilesets found, create an empty tileset
+        # with a minimal boundingVolume and no children.
+        # We'll use a generic region that covers no area.
+        # For example, we can pick a degenerate region:
+        degenerate_region = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        empty_tileset = {
+            "asset": {
+                "version": "1.1"
+            },
+            "geometricError": 0,
+            "root": {
+                "boundingVolume": {
+                    "region": degenerate_region
+                },
+                "refine": "ADD",
+                "geometricError": 0,
+                "children": []
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(empty_tileset, f, indent=2)
+        print(f"No valid tilesets found. Created an empty merged tileset at {output_path}")
+        return
+    
+    # Compute the encompassing region for all valid tilesets
     west = min(r[0] for r in all_regions)
     south = min(r[1] for r in all_regions)
     east = max(r[2] for r in all_regions)
@@ -597,13 +625,8 @@ def merge_tilesets_into_one(output_path, input_tilesets):
 
     # Construct children for the merged tileset
     children = []
-    for ts_path, ts in loaded_tilesets:
-        # We reference the tileset.json of each child.
-        # This reference should be relative to the merged tileset directory.
-        # If all tilesets reside in a common directory or a known structure, adjust accordingly.
-        
-        # Compute relative path from the output directory
-        output_dir = os.path.dirname(os.path.abspath(output_path))
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    for ts_path, ts in valid_tilesets:
         ts_abs = os.path.abspath(ts_path)
         rel_path = os.path.relpath(ts_abs, output_dir)
         
@@ -618,8 +641,7 @@ def merge_tilesets_into_one(output_path, input_tilesets):
         children.append(child)
 
     # Determine the maximum geometricError for the parent tileset
-    # For simplicity, take the max geometricError of all children
-    parent_geometric_error = max(ts["root"]["geometricError"] for _, ts in loaded_tilesets)
+    parent_geometric_error = max(ts["root"]["geometricError"] for _, ts in valid_tilesets)
     
     # Create the merged tileset JSON structure
     merged_tileset = { 
@@ -666,6 +688,10 @@ def main(meta4_file):
     drop_temp_table(DATABASE_URL, TEMP_TABLE)
 
     for ix, file_info in enumerate(files):
+        
+        # if ix < 130 * BATCH_N:
+        #     continue
+        
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
