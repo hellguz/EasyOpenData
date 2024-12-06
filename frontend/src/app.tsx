@@ -209,14 +209,15 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
       // onClick: (info, event) => console.log("Clicked:", info, event),
       // getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
       // onTilesetLoad,
+      
       visible: isLod2Visible,
       // For ScenegraphLayer (b3dm or i3dm format)
       _lighting: 'pbr',
       effects: [lightingEffect],
       loadOptions: {
         tileset: {
-          maximumScreenSpaceError: 16, // Adjust this value as needed
-          viewDistanceScale: 1.5 // Adjust this value as needed
+          // maximumScreenSpaceError: 16, // Adjust this value as needed
+          // viewDistanceScale: 1.5 // Adjust this value as needed
         }
       },
       // Additional sublayer props for fine-grained control

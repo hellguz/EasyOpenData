@@ -351,7 +351,7 @@ def convert_to_3d_tiles(cache_dir, database_url, table_name):
         '-t', table_name,
         '-d', dbname,
         '-o', cache_dir, 
-        # '--use_implicit_tiling', 'false'  # Uncomment if needed
+         '--use_implicit_tiling', 'false'  # Uncomment if needed
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -534,25 +534,145 @@ def remove_file(file_path):
     except OSError as e:
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
+import json
+import math
+import os
+
+def merge_tilesets_into_one(output_path, input_tilesets):
+    """
+    Merges multiple region-based tilesets into a single tileset.json that references all of them as external.
+    
+    Args:
+        output_path (str): Path to the final merged tileset.json output file.
+        input_tilesets (list[str]): Paths to the input tileset.json files to merge.
+
+    Returns:
+        None. Writes the merged tileset.json to output_path.
+    """
+    
+    # Load all tilesets
+    loaded_tilesets = []
+    for ts_path in input_tilesets:
+        with open(ts_path, 'r', encoding='utf-8') as f:
+            ts = json.load(f)
+            loaded_tilesets.append((ts_path, ts))
+    
+    # Collect regions from all input tilesets
+    # We assume each input tileset has a root with a region boundingVolume
+    # region = [west, south, east, north, minHeight, maxHeight]
+    all_regions = []
+    for ts_path, ts in loaded_tilesets:
+        region = None
+        root = ts.get("root", {})
+        bv = root.get("boundingVolume", {})
+        
+        if "region" not in bv:
+            raise ValueError(f"Tileset {ts_path} does not have a region boundingVolume. Please convert it first.")
+        
+        region = bv["region"]
+        if len(region) != 6:
+            raise ValueError(f"Region in {ts_path} should have 6 values: [west, south, east, north, minH, maxH]")
+        all_regions.append(region)
+    
+    # Compute the encompassing region
+    # west, south = min of all wests, souths
+    # east, north = max of all easts, norths
+    # minH, maxH = min of all minHeights, max of all maxHeights
+    west = min(r[0] for r in all_regions)
+    south = min(r[1] for r in all_regions)
+    east = max(r[2] for r in all_regions)
+    north = max(r[3] for r in all_regions)
+    minH = min(r[4] for r in all_regions)
+    maxH = max(r[5] for r in all_regions)
+    merged_region = [west, south, east, north, minH, maxH]
+
+    # Construct children for the merged tileset
+    children = []
+    for ts_path, ts in loaded_tilesets:
+        # We reference the tileset.json of each child.
+        # This reference should be relative to the merged tileset directory.
+        # If all tilesets reside in a common directory or a known structure, adjust accordingly.
+        
+        # Compute relative path from the output directory
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        ts_abs = os.path.abspath(ts_path)
+        rel_path = os.path.relpath(ts_abs, output_dir)
+        
+        child = {
+            "boundingVolume": ts["root"]["boundingVolume"],
+            "geometricError": ts["root"]["geometricError"],
+            "refine": ts["root"].get("refine", "ADD").upper(),
+            "content": {
+                "uri": rel_path
+            }
+        }
+        children.append(child)
+
+    # Determine the maximum geometricError for the parent tileset
+    # For simplicity, take the max geometricError of all children
+    parent_geometric_error = max(ts["root"]["geometricError"] for _, ts in loaded_tilesets)
+    
+    # Create the merged tileset JSON structure
+    merged_tileset = {
+        "asset": {
+            "version": "1.1"
+        },
+        "geometricError": parent_geometric_error,
+        "root": {
+            "boundingVolume": {
+                "region": merged_region
+            },
+            "refine": "ADD",
+            "geometricError": parent_geometric_error,
+            "children": children
+        }
+    }
+
+    # Write the merged tileset to disk
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(merged_tileset, f, indent=2)
+    print(f"Merged tileset written to {output_path}")
+
+
+# Example usage:
+# merge_tilesets_into_one(
+#     "output/merged_tileset.json",
+#     [
+#         "input/tilesetA/tileset.json",
+#         "input/tilesetB/tileset.json",
+#         "input/tilesetC/tileset.json"
+#     ]
+# )
+
+
+
 def main(meta4_file):
     # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-
+    BATCH_N = 5
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
+    # Drop the temporary table
+    drop_temp_table(DATABASE_URL, TEMP_TABLE)
 
-    for ix, file_info in enumerate(files, start=1):
+    for ix, file_info in enumerate(files):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
-        logging.info(f"▶️   FILE {ix}/{len(files)}")
+        logging.info(f"▶️   FILE {ix+1}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
 
+
+        temp_tileset_dir = os.path.join(CACHE_DIR, 'sub', str(ix // BATCH_N))  
+        main_tileset_dir = CACHE_DIR
+           
+        os.makedirs(main_tileset_dir, exist_ok=True)   
+        os.makedirs(temp_tileset_dir, exist_ok=True)
 
         # Determine download paths
         download_path = os.path.join(DATA_DIR, file_name)
@@ -584,19 +704,44 @@ def main(meta4_file):
             # Update geometries in the temporary table
             update_geometries(DATABASE_URL, TEMP_TABLE)
 
-            # Convert the temporary table to 3D tiles
-            convert_to_3d_tiles(CACHE_DIR, DATABASE_URL, TEMP_TABLE)
 
-            # Apply Draco compression to the newly generated tiles
-            apply_draco_compression(CACHE_DIR)
 
-            # Append data from temporary table to main table
-            append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
+            if ix % BATCH_N == 0 or ix == len(files) - 1:            
+                # Convert the temporary table to 3D tiles
+                convert_to_3d_tiles(temp_tileset_dir, DATABASE_URL, TEMP_TABLE)
 
-            # Drop the temporary table
-            drop_temp_table(DATABASE_URL, TEMP_TABLE)
+                # Apply Draco compression to the newly generated tiles
+                #apply_draco_compression(temp_tileset_dir)
 
-            if ix == 1:
+                # Append data from temporary table to main table
+                append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
+
+                # Drop the temporary table
+                drop_temp_table(DATABASE_URL, TEMP_TABLE)
+
+                batch_count = ix // BATCH_N + 1
+
+                # Collect all input tileset.json paths
+                input_tileset_paths = [
+                    os.path.join(CACHE_DIR, 'sub', str(b), 'tileset.json')
+                    for b in range(batch_count)
+                ]
+
+                merged_tileset_path = os.path.join(CACHE_DIR, 'tileset.json')
+
+                logging.info(f"Merging {len(input_tileset_paths)} tilesets into {merged_tileset_path}...")
+
+                try:
+                    # Call our custom merging function
+                    merge_tilesets_into_one(merged_tileset_path, input_tileset_paths)
+                    logging.info("Merged tileset into main tileset successfully.")
+                except Exception as e:
+                    logging.error(f"Failed to combine merged tilesets: {e}")
+                    raise RuntimeError(f"Failed to combine merged tilesets: {e}")
+
+            # npx 3d-tiles-tools combine -i backend/tileset\ -o backend/tileset_combined -f
+
+            if ix == 0:
                 # Execute SQL indexing file once before processing
                 execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
                 
