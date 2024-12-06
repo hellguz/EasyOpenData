@@ -3,7 +3,8 @@
 process_meta4.py
 
 A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
-ingest them into a PostgreSQL database, convert them to 3D tiles, and remove the original files.
+ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
+append to the main building table, and remove the original files.
 
 Usage:
     python process_meta4.py file.meta4
@@ -14,11 +15,11 @@ Requirements:
     - psycopg2
     - ogr2ogr (from GDAL)
     - pg2b3dm_new command available in PATH
+    - gltf-pipeline (for Draco compression)
 """
 
 import sys
 import os
-import glob
 import subprocess
 import hashlib
 import logging
@@ -36,6 +37,9 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localh
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 SQL_INDEX_PATH = 'backend/db/index.sql'
+TEMP_TABLE = 'ix_building'  # Temporary table name
+MAIN_TABLE = 'building'      # Main building table name
+BATCH_N = 20 # number of gml files for which there will be created a separate tileset
 
 # Configure logging
 logging.basicConfig(
@@ -172,30 +176,30 @@ def transform_gml(input_file, output_file):
         output_file (str): Path to the output transformed GML file.
     """
     # Parse the GML file
-    print(f"Parsing input GML file: {input_file}")
+    logging.info(f"Parsing input GML file: {input_file}")
     parser = etree.XMLParser(remove_blank_text=True)
     tree = etree.parse(input_file, parser)
     root = tree.getroot()
 
     # Extract all namespaces
     namespaces = get_all_namespaces(tree)
-    # print("Namespaces detected:")
+    # logging.debug("Namespaces detected:")
     # for prefix, uri in namespaces.items():
-    #     print(f"  Prefix: '{prefix}' => URI: '{uri}'")
+    #     logging.debug(f"  Prefix: '{prefix}' => URI: '{uri}'")
 
     # Build a dictionary of gml:id to Polygon elements for quick lookup
-    print("Indexing all <gml:Polygon> elements by gml:id...")
+    logging.info("Indexing all <gml:Polygon> elements by gml:id...")
     polygon_dict = {}
     for polygon in root.xpath('.//gml:Polygon', namespaces=namespaces):
         polygon_id = polygon.get('{http://www.opengis.net/gml}id')
         if polygon_id:
             polygon_dict[polygon_id] = polygon
-    print(f"Indexed {len(polygon_dict)} polygons.")
+    logging.info(f"Indexed {len(polygon_dict)} polygons.")
 
     # Find all <gml:surfaceMember> elements with xlink:href
-    print("Finding all <gml:surfaceMember> elements with xlink:href...")
+    logging.info("Finding all <gml:surfaceMember> elements with xlink:href...")
     surface_members = root.xpath('.//gml:surfaceMember[@xlink:href]', namespaces=namespaces)
-    print(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
+    logging.info(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
 
     for sm in surface_members:
         href = sm.get('{http://www.w3.org/1999/xlink}href')
@@ -203,10 +207,10 @@ def transform_gml(input_file, output_file):
             continue
         # Extract the referenced polygon ID (remove the '#' prefix)
         polygon_id = href.lstrip('#')
-        # print(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
+        # logging.debug(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
         polygon = polygon_dict.get(polygon_id)
         if not polygon:
-            print(f"Warning: Polygon with gml:id='{polygon_id}' not found. Skipping.")
+            logging.warning(f"Polygon with gml:id='{polygon_id}' not found. Skipping.")
             continue
         # Deep copy the polygon element
         polygon_copy = etree.fromstring(etree.tostring(polygon))
@@ -215,10 +219,10 @@ def transform_gml(input_file, output_file):
         # Replace the surfaceMember's xlink:href attribute with the actual Polygon
         sm.clear()  # Remove existing children and attributes
         sm.append(polygon_copy)
-        # print(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
+        # logging.debug(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
 
     # Optionally, remove standalone <gml:Polygon> elements that were referenced
-    # print("Removing standalone <gml:Polygon> elements that were referenced...")
+    # logging.info("Removing standalone <gml:Polygon> elements that were referenced...")
     # removed_count = 0
     # for polygon_id in polygon_dict.keys():
     #     # Find and remove the standalone polygon
@@ -228,26 +232,28 @@ def transform_gml(input_file, output_file):
     #         if parent is not None:
     #             parent.remove(polygon)
     #             removed_count += 1
-    #             print(f"Removed standalone Polygon ID: {polygon_id}.")
-    # print(f"Removed {removed_count} standalone polygons.")
+    #             logging.debug(f"Removed standalone Polygon ID: {polygon_id}.")
+    # logging.info(f"Removed {removed_count} standalone polygons.")
 
     # Write the transformed GML to the output file
-    print(f"Writing transformed GML to: {output_file}")
+    logging.info(f"Writing transformed GML to: {output_file}")
     tree.write(output_file, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    print("Transformation complete.")
-def ingest_gml_file(gml_file, database_url):
+    logging.info("Transformation complete.")
+
+def ingest_gml_file(gml_file, database_url, table_name):
     """
-    Ingests a GML file into a PostgreSQL database using ogr2ogr.
+    Ingests a GML file into a PostgreSQL database using ogr2ogr into a specified table.
 
     Args:
         gml_file (str): Path to the GML file.
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Target table name for ingestion.
     """
-    logging.info(f"Ingesting GML file into database: {gml_file}")
+    logging.info(f"Ingesting GML file into database table '{table_name}': {gml_file}")
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
-        # '-overwrite',
+        '-nln', table_name,              # Specify the target table name
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
@@ -262,7 +268,7 @@ def ingest_gml_file(gml_file, database_url):
     if result.returncode != 0:
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
-    logging.info(f"Ingested {gml_file} into database successfully.")
+    logging.info(f"Ingested {gml_file} into table '{table_name}' successfully.")
 
 def execute_sql_file(sql_file_path, database_url):
     """Executes a SQL file in the database."""
@@ -288,14 +294,15 @@ def execute_sql_file(sql_file_path, database_url):
     finally:
         conn.close()
 
-def put_buildings_on_ground(database_url):
+def update_geometries(database_url, table_name):
     """
-    Updates the geometries in the 'building' table to put them on ground level.
+    Updates the geometries in the specified table to put them on ground level.
 
     Args:
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Table to update.
     """
-    logging.info("Updating building geometries to ground level.")
+    logging.info(f"Updating geometries to ground level in table '{table_name}'.")
     url = urlparse(database_url)
     conn = psycopg2.connect(
         dbname=url.path[1:],
@@ -306,45 +313,46 @@ def put_buildings_on_ground(database_url):
     )
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE building
+            cur.execute(f"""
+                UPDATE {table_name}
                 SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
                 WHERE ST_ZMin(geom) != 0;
             """)
             conn.commit()
-            logging.info("Building geometries updated successfully.")
+        logging.info(f"Geometries in table '{table_name}' updated successfully.")
     except Exception as e:
-        logging.error(f"Failed to update building geometries: {e}")
+        logging.error(f"Failed to update geometries in table '{table_name}': {e}")
         conn.rollback()
         raise
     finally:
         conn.close()
 
-def convert_to_3d_tiles(cache_dir, database_url):
+def convert_to_3d_tiles(cache_dir, database_url, table_name):
     """
-    Converts buildings from the database to 3D tiles using pg2b3dm.
+    Converts buildings from the specified table in the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Table to convert to 3D tiles.
     """
-    logging.info("Converting buildings to 3D tiles with pg2b3dm.")
+    logging.info(f"Converting table '{table_name}' to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
-    port=url.port
+    port = url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
         PG2B3DM_PATH,
         '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
-        '-t', 'building',
+        '-t', table_name,
         '-d', dbname,
         '-o', cache_dir, 
-        # '--use_implicit_tiling', 'false'
+         '--use_implicit_tiling', 'false'  # Uncomment if needed
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -357,6 +365,12 @@ def convert_to_3d_tiles(cache_dir, database_url):
     logging.info("3D tiles generated successfully.")
 
 def apply_draco_compression(cache_dir):
+    """
+    Applies Draco compression to all .glb files in the specified directory.
+
+    Args:
+        cache_dir (str): Directory containing .glb files.
+    """
     logging.info("Applying Draco compression to glTF files.")
     for root, dirs, files in os.walk(cache_dir):
         for file in files:
@@ -390,6 +404,124 @@ def apply_draco_compression(cache_dir):
                     os.replace(compressed_file, gltf_file)
                     logging.info(f"Applied Draco compression to {gltf_file}")
 
+def append_temp_to_main(database_url, temp_table, main_table):
+    """
+    Appends data from the temporary table to the main table by copying only the common columns.
+    Handles duplicates by ignoring records that violate primary key constraints.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        temp_table (str): Temporary table name.
+        main_table (str): Main table name.
+    """
+    logging.info(f"Appending data from '{temp_table}' to '{main_table}'.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            # Fetch column names from main table
+            cur.execute(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{main_table}'
+                ORDER BY ordinal_position;
+            """)
+            main_columns = [row[0] for row in cur.fetchall()]
+
+            # Fetch column names from temporary table
+            cur.execute(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{temp_table}'
+                ORDER BY ordinal_position;
+            """)
+            temp_columns = [row[0] for row in cur.fetchall()]
+
+            # Identify common columns
+            common_columns = list(set(main_columns) & set(temp_columns))
+            if not common_columns:
+                raise ValueError("No common columns found between temporary and main tables.")
+
+            # Sort common columns based on main table's order
+            common_columns.sort(key=lambda x: main_columns.index(x))
+
+            # Construct column lists for INSERT and SELECT
+            columns_str = ', '.join([f'"{col}"' for col in common_columns])
+
+            logging.info(f"Common columns for insertion: {columns_str}")
+
+            # Fetch primary key columns from the main table
+            cur.execute(f"""
+                SELECT a.attname
+                FROM pg_index i
+                JOIN pg_attribute a ON a.attrelid = i.indrelid
+                                     AND a.attnum = ANY(i.indkey)
+                WHERE i.indrelid = '{main_table}'::regclass
+                  AND i.indisprimary;
+            """)
+            pk_columns = [row[0] for row in cur.fetchall()]
+            if not pk_columns:
+                raise ValueError(f"No primary key defined for table '{main_table}'.")
+
+            # Construct the ON CONFLICT clause
+            conflict_target = ', '.join([f'"{col}"' for col in pk_columns])
+            on_conflict_clause = f"ON CONFLICT ({conflict_target}) DO NOTHING"
+
+            logging.info(f"Using ON CONFLICT clause on columns: {conflict_target}")
+
+            # Execute the INSERT statement with ON CONFLICT
+            cur.execute(f"""
+                INSERT INTO {main_table} ({columns_str})
+                SELECT {columns_str} FROM {temp_table}
+                {on_conflict_clause};
+            """)
+
+            inserted_count = cur.rowcount
+            conn.commit()
+            logging.info(f"Data appended from '{temp_table}' to '{main_table}' successfully. Inserted {inserted_count} records.")
+    except Exception as e:
+        logging.error(f"Failed to append data from '{temp_table}' to '{main_table}': {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def drop_temp_table(database_url, temp_table):
+    """
+    Drops the temporary table from the database.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        temp_table (str): Temporary table name.
+    """
+    logging.info(f"Dropping temporary table '{temp_table}'.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"DROP TABLE IF EXISTS {temp_table};")
+            conn.commit()
+        logging.info(f"Temporary table '{temp_table}' dropped successfully.")
+    except Exception as e:
+        logging.error(f"Failed to drop temporary table '{temp_table}': {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def remove_file(file_path):
     """
     Removes a file from the filesystem.
@@ -403,24 +535,144 @@ def remove_file(file_path):
     except OSError as e:
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
-def main(meta4_file):
+import json
+import math
+import os
+
+def merge_tilesets_into_one(output_path, input_tilesets):
+    """
+    Merges multiple region-based tilesets into a single tileset.json that references all of them as external.
     
-    # Ensure DATA_DIR exists
+    Args:
+        output_path (str): Path to the final merged tileset.json output file.
+        input_tilesets (list[str]): Paths to the input tileset.json files to merge.
+
+    Returns:
+        None. Writes the merged tileset.json to output_path.
+    """
+    
+    # Load all tilesets
+    loaded_tilesets = []
+    for ts_path in input_tilesets:
+        with open(ts_path, 'r', encoding='utf-8') as f:
+            ts = json.load(f)
+            loaded_tilesets.append((ts_path, ts))
+    
+    # Collect regions from all input tilesets
+    # We assume each input tileset has a root with a region boundingVolume
+    # region = [west, south, east, north, minHeight, maxHeight]
+    all_regions = []
+    for ts_path, ts in loaded_tilesets:
+        region = None
+        root = ts.get("root", {})
+        bv = root.get("boundingVolume", {})
+        
+        if "region" not in bv:
+            raise ValueError(f"Tileset {ts_path} does not have a region boundingVolume. Please convert it first.")
+        
+        region = bv["region"]
+        if len(region) != 6:
+            raise ValueError(f"Region in {ts_path} should have 6 values: [west, south, east, north, minH, maxH]")
+        all_regions.append(region)
+    
+    # Compute the encompassing region
+    # west, south = min of all wests, souths
+    # east, north = max of all easts, norths
+    # minH, maxH = min of all minHeights, max of all maxHeights
+    west = min(r[0] for r in all_regions)
+    south = min(r[1] for r in all_regions)
+    east = max(r[2] for r in all_regions)
+    north = max(r[3] for r in all_regions)
+    minH = min(r[4] for r in all_regions)
+    maxH = max(r[5] for r in all_regions)
+    merged_region = [west, south, east, north, minH, maxH]
+
+    # Construct children for the merged tileset
+    children = []
+    for ts_path, ts in loaded_tilesets:
+        # We reference the tileset.json of each child.
+        # This reference should be relative to the merged tileset directory.
+        # If all tilesets reside in a common directory or a known structure, adjust accordingly.
+        
+        # Compute relative path from the output directory
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        ts_abs = os.path.abspath(ts_path)
+        rel_path = os.path.relpath(ts_abs, output_dir)
+        
+        child = {
+            "boundingVolume": ts["root"]["boundingVolume"],
+            "geometricError": ts["root"]["geometricError"],
+            "refine": ts["root"].get("refine", "ADD").upper(),
+            "content": {
+                "uri": rel_path
+            }
+        }
+        children.append(child)
+
+    # Determine the maximum geometricError for the parent tileset
+    # For simplicity, take the max geometricError of all children
+    parent_geometric_error = max(ts["root"]["geometricError"] for _, ts in loaded_tilesets)
+    
+    # Create the merged tileset JSON structure
+    merged_tileset = { 
+        "asset": {
+            "version": "1.1"
+        },
+        "geometricError": parent_geometric_error,
+        "root": {
+            "boundingVolume": {
+                "region": merged_region
+            },
+            "refine": "ADD",
+            "geometricError": parent_geometric_error,
+            "children": children
+        }
+    }
+
+    # Write the merged tileset to disk
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(merged_tileset, f, indent=2)
+    print(f"Merged tileset written to {output_path}")
+
+
+# Example usage:
+# merge_tilesets_into_one(
+#     "output/merged_tileset.json",
+#     [
+#         "input/tilesetA/tileset.json",
+#         "input/tilesetB/tileset.json",
+#         "input/tilesetC/tileset.json"
+#     ]
+# )
+
+
+
+def main(meta4_file):
+    # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for ix, file_info in enumerate(files, start=1):
+    # Drop the temporary table
+    drop_temp_table(DATABASE_URL, TEMP_TABLE)
+
+    for ix, file_info in enumerate(files):
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
-        logging.info(f"▶️   FILE {ix}/{len(files)}")
+        logging.info(f"▶️   FILE {ix+1}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
+
+
+        temp_tileset_dir = os.path.join(CACHE_DIR, 'sub', str(ix // BATCH_N))  
+        main_tileset_dir = CACHE_DIR
+           
+        os.makedirs(main_tileset_dir, exist_ok=True)   
+        os.makedirs(temp_tileset_dir, exist_ok=True)
 
         # Determine download paths
         download_path = os.path.join(DATA_DIR, file_name)
@@ -446,37 +698,71 @@ def main(meta4_file):
             # Transform the GML file
             transform_gml(download_path, transformed_path)
 
-            # Ingest the transformed GML into the database
-            ingest_gml_file(transformed_path, DATABASE_URL)
+            # Ingest the transformed GML into the temporary table
+            ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE)
 
-            # Execute the SQL file after first ingestion
-            if ix == 1:  # Only after first file
+            # Update geometries in the temporary table
+            update_geometries(DATABASE_URL, TEMP_TABLE)
+
+
+
+            if ix % BATCH_N == 0 or ix == len(files) - 1:            
+                # Convert the temporary table to 3D tiles
+                convert_to_3d_tiles(temp_tileset_dir, DATABASE_URL, TEMP_TABLE)
+
+                # Apply Draco compression to the newly generated tiles
+                #apply_draco_compression(temp_tileset_dir)
+
+                # Append data from temporary table to main table
+                append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
+
+                # Drop the temporary table
+                drop_temp_table(DATABASE_URL, TEMP_TABLE)
+
+                batch_count = ix // BATCH_N + 1
+
+                # Collect all input tileset.json paths
+                input_tileset_paths = [
+                    os.path.join(CACHE_DIR, 'sub', str(b), 'tileset.json')
+                    for b in range(batch_count)
+                ]
+
+                merged_tileset_path = os.path.join(CACHE_DIR, 'tileset.json')
+
+                logging.info(f"Merging {len(input_tileset_paths)} tilesets into {merged_tileset_path}...")
+
+                try:
+                    # Call our custom merging function
+                    merge_tilesets_into_one(merged_tileset_path, input_tileset_paths)
+                    logging.info("Merged tileset into main tileset successfully.")
+                except Exception as e:
+                    logging.error(f"Failed to combine merged tilesets: {e}")
+                    raise RuntimeError(f"Failed to combine merged tilesets: {e}")
+
+            # npx 3d-tiles-tools combine -i backend/tileset\ -o backend/tileset_combined -f
+
+            if ix == 0:
+                # Execute SQL indexing file once before processing
                 execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
-
-            # Update building geometries
-            put_buildings_on_ground(DATABASE_URL)
-
-            # Convert to 3D tiles
-            if ix == len(files):
-                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
-                apply_draco_compression(CACHE_DIR)
-
+                
             # Remove the transformed GML file
             remove_file(transformed_path)
-            # Remove the transformed GFS file
-            remove_file(transformed_path.split(".")[0] + ".gfs")
+            # Remove the transformed GFS file if it exists
+            transformed_gfs_path = os.path.splitext(transformed_path)[0] + ".gfs"
+            if os.path.isfile(transformed_gfs_path):
+                remove_file(transformed_gfs_path)
 
             # Optionally, remove the original downloaded GML file
             remove_file(download_path)
 
-            logging.info(f"Completed processing for {file_name}")
+            logging.info(f"✅  Completed processing for {file_name}")
 
         except Exception as e:
             logging.error(f"An error occurred while processing {file_name}: {e}")
             # Optionally, clean up files or continue
             continue
 
-    logging.info("All files processed.")
+    logging.info("🏁 All files processed.")
 
 if __name__ == '__main__':
     meta4_file = META4_PATH
