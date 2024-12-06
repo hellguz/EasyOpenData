@@ -37,7 +37,7 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localh
 CACHE_DIR = 'backend/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 SQL_INDEX_PATH = 'backend/db/index.sql'
-TEMP_TABLE = 'ix_building'  # Temporary table name
+TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
 BATCH_N = 20 # number of gml files for which there will be created a separate tileset
 
@@ -403,10 +403,11 @@ def apply_draco_compression(cache_dir):
                 else:
                     os.replace(compressed_file, gltf_file)
                     logging.info(f"Applied Draco compression to {gltf_file}")
-
+                    
 def append_temp_to_main(database_url, temp_table, main_table):
     """
-    Appends data from the temporary table to the main table by copying only the common columns.
+    Appends data from the temporary table to the main table by copying all columns.
+    If the main table does not have certain columns, they will be created.
     Handles duplicates by ignoring records that violate primary key constraints.
 
     Args:
@@ -423,9 +424,10 @@ def append_temp_to_main(database_url, temp_table, main_table):
         host=url.hostname,
         port=url.port
     )
+
     try:
         with conn.cursor() as cur:
-            # Fetch column names from main table
+            # Fetch main table columns
             cur.execute(f"""
                 SELECT column_name
                 FROM information_schema.columns
@@ -434,27 +436,30 @@ def append_temp_to_main(database_url, temp_table, main_table):
             """)
             main_columns = [row[0] for row in cur.fetchall()]
 
-            # Fetch column names from temporary table
+            # Fetch temp table columns and their data types
             cur.execute(f"""
-                SELECT column_name
+                SELECT column_name, data_type
                 FROM information_schema.columns
                 WHERE table_name = '{temp_table}'
                 ORDER BY ordinal_position;
             """)
-            temp_columns = [row[0] for row in cur.fetchall()]
+            temp_columns_info = cur.fetchall()
+            temp_columns = [row[0] for row in temp_columns_info]
 
-            # Identify common columns
-            common_columns = list(set(main_columns) & set(temp_columns))
-            if not common_columns:
-                raise ValueError("No common columns found between temporary and main tables.")
+            # Add missing columns to main_table
+            for col_name, data_type in temp_columns_info:
+                if col_name not in main_columns:
+                    logging.info(f"Column '{col_name}' does not exist in '{main_table}'. Adding it.")
+                    # Add the column with the same data_type as in temp_table
+                    # Note: For complex types or special columns, you may need a more robust mapping.
+                    alter_sql = f'ALTER TABLE "{main_table}" ADD COLUMN "{col_name}" {data_type};'
+                    cur.execute(alter_sql)
+                    main_columns.append(col_name)
+                    logging.info(f"Column '{col_name}' added to '{main_table}'.")
 
-            # Sort common columns based on main table's order
-            common_columns.sort(key=lambda x: main_columns.index(x))
-
-            # Construct column lists for INSERT and SELECT
-            columns_str = ', '.join([f'"{col}"' for col in common_columns])
-
-            logging.info(f"Common columns for insertion: {columns_str}")
+            # Now all temp_columns should exist in main_table
+            # We will insert all columns from temp_table to main_table
+            columns_str = ', '.join([f'"{col}"' for col in temp_columns])
 
             # Fetch primary key columns from the main table
             cur.execute(f"""
@@ -476,21 +481,24 @@ def append_temp_to_main(database_url, temp_table, main_table):
             logging.info(f"Using ON CONFLICT clause on columns: {conflict_target}")
 
             # Execute the INSERT statement with ON CONFLICT
-            cur.execute(f"""
-                INSERT INTO {main_table} ({columns_str})
-                SELECT {columns_str} FROM {temp_table}
+            insert_sql = f"""
+                INSERT INTO "{main_table}" ({columns_str})
+                SELECT {columns_str} FROM "{temp_table}"
                 {on_conflict_clause};
-            """)
+            """
+            cur.execute(insert_sql)
 
             inserted_count = cur.rowcount
             conn.commit()
             logging.info(f"Data appended from '{temp_table}' to '{main_table}' successfully. Inserted {inserted_count} records.")
+
     except Exception as e:
         logging.error(f"Failed to append data from '{temp_table}' to '{main_table}': {e}")
         conn.rollback()
         raise
     finally:
         conn.close()
+
 
 
 def drop_temp_table(database_url, temp_table):
@@ -711,7 +719,7 @@ def main(meta4_file):
                 convert_to_3d_tiles(temp_tileset_dir, DATABASE_URL, TEMP_TABLE)
 
                 # Apply Draco compression to the newly generated tiles
-                #apply_draco_compression(temp_tileset_dir)
+                apply_draco_compression(temp_tileset_dir)
 
                 # Append data from temporary table to main table
                 append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
