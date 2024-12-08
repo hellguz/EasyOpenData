@@ -41,7 +41,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       </div>
       <button 
         onClick={onFetchObjFile}
-        className="btn btn-primary btn-sm mt-2"
+        className="btn btn-secondary btn-sm mt-2"
       >
         Download File
       </button>
@@ -227,7 +227,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       <button
         type="submit"
         disabled={!stripe || loading}
-        className="btn btn-primary btn-sm mt-2"
+        className="btn btn-secondary btn-sm mt-2"
       >
         {loading ? "Processing..." : `Pay €${price.toFixed(2)}`}
       </button>

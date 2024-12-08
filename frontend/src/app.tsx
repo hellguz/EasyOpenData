@@ -1,4 +1,4 @@
-// Root.tsx
+// App.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -21,6 +21,7 @@ import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
 import './App.css'
+import './colors.css'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
@@ -36,7 +37,7 @@ const INITIAL_VIEW_STATE: MapViewState = {
   zoom: 17,
 };
 
-const MAP_STYLE = "./src/basemap.json";
+const MAP_STYLE = "/basemap.json";
 
 function DeckGLOverlay(props: any) {
   const overlay = useControl(() => new DeckOverlay(props));
@@ -259,6 +260,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onMove={handleZoomChange}
         ref={mapRef}
         style={{ width: "100%", height: "100%" }}
+        hash={true}
       >
         {selected && (
           <Popup
@@ -316,3 +318,5 @@ interface DrawControlProps {
 
 const container = document.body.appendChild(document.createElement("div"));
 createRoot(container).render(<Root />);
+
+export default Root;

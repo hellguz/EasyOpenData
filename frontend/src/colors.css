@@ -1,0 +1,25 @@
+:root {
+    --bs-primary: #2a7a92; /* Your desired primary color */
+    --bs-secondary: #3e66bb;
+    --bs-success: #28a745;
+    --bs-danger: #f38093;
+    --bs-warning: #ffc107;
+    --bs-info: #17a2b8;
+    --bs-light: #f8f9fa;
+    --bs-dark: #343a40;
+  }
+  
+  .btn-primary {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+  }
+  .btn-secondary {
+    background-color: var(--bs-secondary) !important;
+    border-color: var(--bs-secondary) !important;
+  }
+  
+  .btn-danger {
+    background-color: var(--bs-danger) !important;
+    border-color: var(--bs-danger) !important;
+  }
+  
