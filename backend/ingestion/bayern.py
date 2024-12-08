@@ -665,18 +665,6 @@ def merge_tilesets_into_one(output_path, input_tilesets):
     print(f"Merged tileset written to {output_path}")
 
 
-# Example usage:
-# merge_tilesets_into_one(
-#     "output/merged_tileset.json",
-#     [
-#         "input/tilesetA/tileset.json",
-#         "input/tilesetB/tileset.json",
-#         "input/tilesetC/tileset.json"
-#     ]
-# )
-
-
-
 def main(meta4_file):
     # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
