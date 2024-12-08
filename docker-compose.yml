@@ -1,6 +1,6 @@
 services:
-  postgis:
-    container_name: easyopen_db
+  easyopen_postgis:
+    container_name: easyopen_postgis
     image: postgis/postgis:17-3.5
     restart: always
     ports:
@@ -8,13 +8,15 @@ services:
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ./data/postgres_data:/var/lib/postgresql/data
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - easyopen_network
 
   easyopen_backend:
     container_name: easyopen_backend
@@ -24,15 +26,18 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 5400 --reload
     volumes:
       - ./backend:/app
-      - ./backend/tileset:/app/tileset
-      - ./backend/tempfiles:/app/tempfiles
+      - ./data/tileset:/data/tileset
+      - ./data/tileset_combined:/data/tileset_combined
+      - ./data/tempfiles:/data/tempfiles
     ports:
       - 5400:5400
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@postgis:5432/easyopendata_database
+      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@easyopen_postgis:5432/easyopendata_database
     depends_on:
-      postgis:
+      easyopen_postgis:
         condition: service_healthy
+    networks:
+      - easyopen_network
 
   easyopen_frontend:
     container_name: easyopen_frontend
@@ -46,19 +51,34 @@ services:
       - 5173:5173
     environment:
       VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
+    networks:
+      - easyopen_network
 
-
-  backup_service:
-    build: ./backend/db_backup # path to your Dockerfile with cron and pg_dump
-    container_name: easyopen_backup
-    depends_on:
-      - postgis
+  easyopen_tileset:
+    container_name: easyopen_tileset
+    image: nginx:alpine
+    restart: always
+    ports:
+      - 5576:80
     volumes:
-      - ./postgres_backups:/backups
+      - ./data/tileset:/usr/share/nginx/html:ro
+      - ./backend/tileset.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - easyopen_network
+
+  easyopen_backup_service:
+    build: ./backend/db_backup # path to your Dockerfile with cron and pg_dump
+    container_name: easyopen_backup_service
+    depends_on:
+      - easyopen_postgis
+    volumes:
+      - ./data/postgres_backups:/backups
     environment:
       POSTGRES_PASSWORD: barcelona
+    networks:
+      - easyopen_network
 
-  pgadmin:
+  easyopen_pgadmin:
     container_name: easyopen_pgadmin
     image: dpage/pgadmin4
     restart: always
@@ -68,7 +88,23 @@ services:
       PGADMIN_DEFAULT_EMAIL: hellguz@gmail.com
       PGADMIN_DEFAULT_PASSWORD: barcelona
     depends_on:
-      - postgis
+      - easyopen_postgis
+    networks:
+      - easyopen_network
+
+  easyopen_cloudflared:
+    container_name: easyopen_cloudflared
+    image: cloudflare/cloudflared:latest
+    depends_on:
+      - easyopen_backend
+    restart: always
+    command: 'tunnel --no-autoupdate run --token eyJhIjoiMjViZjczZmU2MmZlMzQwN2Y3MTI4NGU4MjZlZGQ0MjEiLCJ0IjoiYjAwODUzY2QtYmE1MC00MzA0LTg3NzktMWQ1Y2RjMzI4YWIxIiwicyI6IlltUTNOMlpqWTJVdE1tVmpZaTAwWmpoaUxUZzRPVGt0WkRVMlpUUmhZVE5sTkdWaiJ9'
+    networks:
+      - easyopen_network
 
 volumes:
   postgres_data:
+
+networks:
+  easyopen_network:
+    driver: bridge

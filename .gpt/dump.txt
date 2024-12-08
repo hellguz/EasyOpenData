@@ -14,7 +14,7 @@ __pycache__/
 *.so
 
 # tileset
-backend/tileset/*
+backend/tileset*/
 !backend/tileset/README.md
 
 *.gml
@@ -28,13 +28,16 @@ venv/
 
 node_modules/
 
-postgres_data/
+postgres_data/*
+postgres_backups/*
+
+data/
 
 &&& FILE: ./docker-compose.yml
 &&& CONTENT:
 services:
-  postgis:
-    container_name: easyopen_db
+  easyopen_postgis:
+    container_name: easyopen_postgis
     image: postgis/postgis:17-3.5
     restart: always
     ports:
@@ -42,13 +45,15 @@ services:
     environment:
       POSTGRES_PASSWORD: barcelona
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ./data/postgres_data:/var/lib/postgresql/data
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      - easyopen_network
 
   easyopen_backend:
     container_name: easyopen_backend
@@ -58,15 +63,18 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 5400 --reload
     volumes:
       - ./backend:/app
-      - ./backend/tileset:/app/tileset
-      - ./backend/tempfiles:/app/tempfiles
+      - ./data/tileset:/data/tileset
+      - ./data/tileset_combined:/data/tileset_combined
+      - ./data/tempfiles:/data/tempfiles
     ports:
       - 5400:5400
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@postgis:5432/easyopendata_database
+      DATABASE_URL: postgresql+asyncpg://postgres:barcelona@easyopen_postgis:5432/easyopendata_database
     depends_on:
-      postgis:
+      easyopen_postgis:
         condition: service_healthy
+    networks:
+      - easyopen_network
 
   easyopen_frontend:
     container_name: easyopen_frontend
@@ -80,10 +88,64 @@ services:
       - 5173:5173
     environment:
       VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
+    networks:
+      - easyopen_network
+
+  easyopen_tileset:
+    container_name: easyopen_tileset
+    image: nginx:alpine
+    restart: always
+    ports:
+      - 5576:80
+    volumes:
+      - ./data/tileset:/usr/share/nginx/html:ro
+    depends_on:
+      - easyopen_backend
+    networks:
+      - easyopen_network
+
+  easyopen_backup_service:
+    build: ./backend/db_backup # path to your Dockerfile with cron and pg_dump
+    container_name: easyopen_backup_service
+    depends_on:
+      - easyopen_postgis
+    volumes:
+      - ./data/postgres_backups:/backups
+    environment:
+      POSTGRES_PASSWORD: barcelona
+    networks:
+      - easyopen_network
+
+  easyopen_pgadmin:
+    container_name: easyopen_pgadmin
+    image: dpage/pgadmin4
+    restart: always
+    ports:
+      - 5050:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: hellguz@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: barcelona
+    depends_on:
+      - easyopen_postgis
+    networks:
+      - easyopen_network
+
+  easyopen_cloudflared:
+    container_name: easyopen_cloudflared
+    image: cloudflare/cloudflared:latest
+    depends_on:
+      - easyopen_backend
+    restart: always
+    command: 'tunnel --no-autoupdate run --token eyJhIjoiMjViZjczZmU2MmZlMzQwN2Y3MTI4NGU4MjZlZGQ0MjEiLCJ0IjoiYjAwODUzY2QtYmE1MC00MzA0LTg3NzktMWQ1Y2RjMzI4YWIxIiwicyI6IlltUTNOMlpqWTJVdE1tVmpZaTAwWmpoaUxUZzRPVGt0WkRVMlpUUmhZVE5sTkdWaiJ9'
+    networks:
+      - easyopen_network
 
 volumes:
   postgres_data:
 
+networks:
+  easyopen_network:
+    driver: bridge
 
 &&& FILE: ./README.md
 &&& CONTENT:
@@ -93,125 +155,8 @@ volumes:
 
 ### Overview
 
-EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
-
-Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
-
-- **3D Buildings (LOD1/LOD2)**
-
-The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
-
----
-
-### Key Features
-
-- **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
-- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
-- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
-- **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
-- **Payment Integration**: Secure payment processing via Stripe.
-- **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
-
----
-
-### Technologies Used
-
-#### Backend
-
-- **PostGIS**: Spatial database for storing and querying geographic data efficiently.
-- **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
-- **GDAL**: Used for data conversion between formats.
-- **Docker**: Containerized deployment for portability and scalability.
-- **Stripe API**: For handling payment transactions.
-
-#### Frontend
-
-- **React**: JavaScript library for building user interfaces.
-- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
-- **Deck.gl**: For rendering 3D data on the map.
-- **Mapbox Draw**: Allows users to draw shapes on the map.
-
----
-
-### Getting Started
-
-#### Prerequisites
-
-- **Docker** and **Docker Compose** installed on your system.
-- **Node.js** and **npm/yarn** (for frontend development).
-- **Python 3.10+** (for backend development).
-
-#### Setup Instructions
-
-##### Clone the Repository
-
-```bash
-git clone https://github.com/your-repo/easyopendata.git
-cd easyopendata
-```
-
-##### Environment Variables
-
-Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
-
-##### Run with Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-This command will:
-
-- Start the PostGIS database.
-- Build and run the backend FastAPI server.
-- Build and run the frontend React application.
-
-##### Access the Application
-
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
-- **Backend API**: [http://localhost:5400](http://localhost:5400)
-
----
-
-### Usage
-
-1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
-2. **Select an Area**: Use the drawing tools to select an area on the map.
-3. **Choose Data Layers**: Select the data layers you wish to download.
-4. **Payment**: Proceed to payment if required.
-5. **Download Data**: After processing, download your data in the desired format.
-
----
-
-### Project Structure
-
-- **backend/**: Contains the FastAPI backend application.
-  - `app/`: FastAPI application code.
-  - `db/`: Database initialization scripts.
-  - `ingestion/`: Scripts for data ingestion and processing.
-- **frontend/**: Contains the React frontend application.
-  - `src/`: React application source code.
-  - `public/`: Static assets.
-
----
-
-### Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
-
----
-
-### License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
----
-
-### Contact
-
-For questions, feedback, or support, contact us at:
-
-- **Email**: support@easyopendata.com
+EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from Germ
+................................
 
 &&& FILE: ./backend\Dockerfile
 &&& CONTENT:
@@ -234,190 +179,8 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 
 ## Overview
 
-The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the frontend application. It interacts with a PostGIS database to store and query spatial data.
-
----
-
-## Key Components
-
-- **FastAPI Application**: Provides RESTful APIs for data retrieval and processing.
-- **PostGIS Database**: Stores spatial data and provides efficient spatial queries.
-- **Data Ingestion Scripts**: Scripts to download, transform, and ingest data into the database.
-- **Payment Processing**: Integration with Stripe API for handling payments.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-- **Python 3.10+**
-- **GDAL** and **OGR** libraries
-- **Conda** (optional, for managing environments)
-- **Node.js** and **npm** (for gltf-pipeline)
-
-### Running with Docker
-
-The easiest way to run the backend is using Docker Compose.
-
-#### Build and Run
-
-```bash
-docker-compose up --build
-```
-
-This will start the PostGIS database and the FastAPI backend.
-
-#### Accessing the Backend API
-
-- The backend API will be available at: [http://localhost:5400](http://localhost:5400)
-
-### Manual Setup
-
-If you prefer to run the backend without Docker, follow these steps.
-
-#### 1. Create a Virtual Environment
-
-Using Conda:
-
-```bash
-conda create -n easyopendata_env python=3.10
-conda activate easyopendata_env
-```
-
-#### 2. Install Dependencies
-
-Install GDAL and its libraries:
-
-```bash
-conda install -c conda-forge gdal libgdal
-```
-
-Install other dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-#### 3. Install gltf-pipeline
-
-```bash
-npm install -g gltf-pipeline
-```
-
-#### 4. Setup the Database
-
-Ensure PostgreSQL and PostGIS are installed.
-
-```bash
-sudo apt install postgresql postgis
-```
-
-Create the database and extensions:
-
-```sql
-CREATE DATABASE easyopendata_database;
-\c easyopendata_database;
-CREATE EXTENSION postgis;
-```
-
-#### 5. Run Database Initialization Scripts
-
-```bash
-psql -U postgres -d easyopendata_database -f backend/db/init.sql
-```
-
-#### 6. Run the FastAPI Application
-
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
----
-
-## Data Ingestion
-
-The `backend/ingestion` directory contains scripts to download and process data.
-
-### Ingesting Data
-
-1. **Navigate to the ingestion directory**
-
-```bash
-cd backend/ingestion
-```
-
-2. **Run the Ingestion Script**
-
-The `bayern.py` script processes Meta4 files to download and ingest data.
-
-```bash
-python bayern.py
-```
-
-**Note**: Ensure you have the necessary Meta4 files in `data_sources/` and that you have adjusted the `META4_PATH` in the script.
-
-### Requirements
-
-- **lxml**
-- **psycopg2**
-- **GDAL/OGR** command-line tools (`ogr2ogr`)
-- **pg2b3dm** executable (must be in `libs/`)
-
----
-
-## Directory Structure
-
-- **app/**: FastAPI application code.
-  - `main.py`: Main application file.
-  - `database.py`: Database connection setup.
-  - `models.py`: Database models and Pydantic schemas.
-  - `retrieve_geom.py`: Functions to retrieve and process geometries.
-
-- **db/**: Database scripts.
-  - `init.sql`: Database initialization script.
-  - `index.sql`: Indexing script for the database.
-
-- **ingestion/**: Data ingestion scripts.
-  - `bayern.py`: Script to process and ingest data.
-  - `data_sources/`: Directory containing Meta4 files.
-  - `data_local/`: Directory where downloaded data will be stored.
-  - `libs/`: Contains necessary executables like `pg2b3dm.exe`.
-
----
-
-## API Endpoints
-
-- **GET /**: Root endpoint to check if the backend is running.
-- **POST /retrieve_obj**: Accepts a GeoJSON region and returns an OBJ file with the buildings within that region.
-- **POST /create-payment-intent**: Creates a Stripe payment intent for processing payments.
-
----
-
-## Environment Variables
-
-- **DATABASE_URL**: The connection string for the PostGIS database.
-- **STRIPE_API_KEY**: Your Stripe secret API key for payment processing.
-
----
-
-## Payment Processing
-
-The backend integrates with Stripe to handle payments. Ensure you have set your Stripe API keys in the environment variables.
-
----
-
-## Contributing
-
-Contributions are welcome! Please ensure any changes to the backend code are thoroughly tested.
-
----
-
-## License
-
-This project is licensed under the MIT License.
+The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the fronte
+................................
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -498,7 +261,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-*.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -523,7 +286,7 @@ async def retrieve_obj(request: RegionRequest):
     try:
         # Generate a unique filename using UUID
         random_filename = f"{uuid.uuid4()}.obj"
-        temp_path = os.path.join("/app/tempfiles", random_filename)
+        temp_path = os.path.join("/data/tempfiles", random_filename)
         await retrieve_obj_file(request.region, temp_path)
         return FileResponse(
             temp_path,
@@ -564,7 +327,7 @@ async def create_payment_intent(data: PaymentIntentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-app.mount("/tileset", StaticFiles(directory="tileset"), name="tileset")
+app.mount("/tileset", StaticFiles(directory="../data/tileset"), name="tileset")
 
 
 &&& FILE: ./backend\app\models.py
@@ -778,6 +541,52 @@ ALTER SYSTEM SET max_parallel_workers_per_gather TO 4;
 
 
 
+&&& FILE: ./backend\db_backup\backup_script.sh
+&&& CONTENT:
+#!/bin/bash
+
+BACKUP_DIR=/backups
+mkdir -p $BACKUP_DIR
+export PGPASSWORD="barcelona"
+
+# Create a new backup
+NEW_BACKUP=$BACKUP_DIR/backup_$(date +%Y-%m-%d_%H-%M-%S).dump
+pg_dump -U postgres -h postgis -F c easyopendata_database > $NEW_BACKUP
+
+# Check if the backup was successful
+if [ $? -eq 0 ]; then
+    echo "Backup created: $NEW_BACKUP"
+else
+    echo "Backup failed!" >&2
+    exit 1
+fi
+
+# Delete old backups, keeping only the last 3
+NUM_BACKUPS_TO_KEEP=3
+BACKUP_COUNT=$(ls -1 $BACKUP_DIR | wc -l)
+
+if [ $BACKUP_COUNT -gt $NUM_BACKUPS_TO_KEEP ]; then
+    echo "Cleaning up old backups..."
+    ls -1t $BACKUP_DIR | tail -n +$(($NUM_BACKUPS_TO_KEEP + 1)) | while read OLD_BACKUP; do
+        rm -f "$BACKUP_DIR/$OLD_BACKUP"
+        echo "Deleted old backup: $BACKUP_DIR/$OLD_BACKUP"
+    done
+fi
+
+
+&&& FILE: ./backend\db_backup\Dockerfile
+&&& CONTENT:
+FROM postgres:17
+RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+COPY backup_script.sh /usr/local/bin/backup_script.sh
+RUN chmod +x /usr/local/bin/backup_script.sh
+
+# Add cron job
+RUN echo "0 0 * * * root /usr/local/bin/backup_script.sh" >> /etc/crontab
+
+CMD ["cron", "-f"]
+
+
 &&& FILE: ./backend\ingestion\bayern.py
 &&& CONTENT:
 #!/usr/bin/env python3
@@ -785,7 +594,8 @@ ALTER SYSTEM SET max_parallel_workers_per_gather TO 4;
 process_meta4.py
 
 A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
-ingest them into a PostgreSQL database, convert them to 3D tiles, and remove the original files.
+ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
+append to the main building table, and remove the original files.
 
 Usage:
     python process_meta4.py file.meta4
@@ -796,11 +606,11 @@ Requirements:
     - psycopg2
     - ogr2ogr (from GDAL)
     - pg2b3dm_new command available in PATH
+    - gltf-pipeline (for Draco compression)
 """
 
 import sys
 import os
-import glob
 import subprocess
 import hashlib
 import logging
@@ -812,12 +622,15 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/munchen.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
-CACHE_DIR = 'backend/tileset'
+CACHE_DIR = 'data/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 SQL_INDEX_PATH = 'backend/db/index.sql'
+TEMP_TABLE = 'idx_building'  # Temporary table name
+MAIN_TABLE = 'building'      # Main building table name
+BATCH_N = 20 # number of gml files for which there will be created a separate tileset
 
 # Configure logging
 logging.basicConfig(
@@ -954,30 +767,30 @@ def transform_gml(input_file, output_file):
         output_file (str): Path to the output transformed GML file.
     """
     # Parse the GML file
-    print(f"Parsing input GML file: {input_file}")
+    logging.info(f"Parsing input GML file: {input_file}")
     parser = etree.XMLParser(remove_blank_text=True)
     tree = etree.parse(input_file, parser)
     root = tree.getroot()
 
     # Extract all namespaces
     namespaces = get_all_namespaces(tree)
-    # print("Namespaces detected:")
+    # logging.debug("Namespaces detected:")
     # for prefix, uri in namespaces.items():
-    #     print(f"  Prefix: '{prefix}' => URI: '{uri}'")
+    #     logging.debug(f"  Prefix: '{prefix}' => URI: '{uri}'")
 
     # Build a dictionary of gml:id to Polygon elements for quick lookup
-    print("Indexing all <gml:Polygon> elements by gml:id...")
+    logging.info("Indexing all <gml:Polygon> elements by gml:id...")
     polygon_dict = {}
     for polygon in root.xpath('.//gml:Polygon', namespaces=namespaces):
         polygon_id = polygon.get('{http://www.opengis.net/gml}id')
         if polygon_id:
             polygon_dict[polygon_id] = polygon
-    print(f"Indexed {len(polygon_dict)} polygons.")
+    logging.info(f"Indexed {len(polygon_dict)} polygons.")
 
     # Find all <gml:surfaceMember> elements with xlink:href
-    print("Finding all <gml:surfaceMember> elements with xlink:href...")
+    logging.info("Finding all <gml:surfaceMember> elements with xlink:href...")
     surface_members = root.xpath('.//gml:surfaceMember[@xlink:href]', namespaces=namespaces)
-    print(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
+    logging.info(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
 
     for sm in surface_members:
         href = sm.get('{http://www.w3.org/1999/xlink}href')
@@ -985,10 +798,10 @@ def transform_gml(input_file, output_file):
             continue
         # Extract the referenced polygon ID (remove the '#' prefix)
         polygon_id = href.lstrip('#')
-        # print(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
+        # logging.debug(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
         polygon = polygon_dict.get(polygon_id)
         if not polygon:
-            print(f"Warning: Polygon with gml:id='{polygon_id}' not found. Skipping.")
+            logging.warning(f"Polygon with gml:id='{polygon_id}' not found. Skipping.")
             continue
         # Deep copy the polygon element
         polygon_copy = etree.fromstring(etree.tostring(polygon))
@@ -997,10 +810,10 @@ def transform_gml(input_file, output_file):
         # Replace the surfaceMember's xlink:href attribute with the actual Polygon
         sm.clear()  # Remove existing children and attributes
         sm.append(polygon_copy)
-        # print(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
+        # logging.debug(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
 
     # Optionally, remove standalone <gml:Polygon> elements that were referenced
-    # print("Removing standalone <gml:Polygon> elements that were referenced...")
+    # logging.info("Removing standalone <gml:Polygon> elements that were referenced...")
     # removed_count = 0
     # for polygon_id in polygon_dict.keys():
     #     # Find and remove the standalone polygon
@@ -1010,26 +823,28 @@ def transform_gml(input_file, output_file):
     #         if parent is not None:
     #             parent.remove(polygon)
     #             removed_count += 1
-    #             print(f"Removed standalone Polygon ID: {polygon_id}.")
-    # print(f"Removed {removed_count} standalone polygons.")
+    #             logging.debug(f"Removed standalone Polygon ID: {polygon_id}.")
+    # logging.info(f"Removed {removed_count} standalone polygons.")
 
     # Write the transformed GML to the output file
-    print(f"Writing transformed GML to: {output_file}")
+    logging.info(f"Writing transformed GML to: {output_file}")
     tree.write(output_file, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    print("Transformation complete.")
-def ingest_gml_file(gml_file, database_url):
+    logging.info("Transformation complete.")
+
+def ingest_gml_file(gml_file, database_url, table_name):
     """
-    Ingests a GML file into a PostgreSQL database using ogr2ogr.
+    Ingests a GML file into a PostgreSQL database using ogr2ogr into a specified table.
 
     Args:
         gml_file (str): Path to the GML file.
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Target table name for ingestion.
     """
-    logging.info(f"Ingesting GML file into database: {gml_file}")
+    logging.info(f"Ingesting GML file into database table '{table_name}': {gml_file}")
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
-        # '-overwrite',
+        '-nln', table_name,              # Specify the target table name
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
@@ -1044,7 +859,7 @@ def ingest_gml_file(gml_file, database_url):
     if result.returncode != 0:
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
-    logging.info(f"Ingested {gml_file} into database successfully.")
+    logging.info(f"Ingested {gml_file} into table '{table_name}' successfully.")
 
 def execute_sql_file(sql_file_path, database_url):
     """Executes a SQL file in the database."""
@@ -1070,14 +885,15 @@ def execute_sql_file(sql_file_path, database_url):
     finally:
         conn.close()
 
-def put_buildings_on_ground(database_url):
+def update_geometries(database_url, table_name):
     """
-    Updates the geometries in the 'building' table to put them on ground level.
+    Updates the geometries in the specified table to put them on ground level.
 
     Args:
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Table to update.
     """
-    logging.info("Updating building geometries to ground level.")
+    logging.info(f"Updating geometries to ground level in table '{table_name}'.")
     url = urlparse(database_url)
     conn = psycopg2.connect(
         dbname=url.path[1:],
@@ -1088,45 +904,46 @@ def put_buildings_on_ground(database_url):
     )
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE building
+            cur.execute(f"""
+                UPDATE {table_name}
                 SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
                 WHERE ST_ZMin(geom) != 0;
             """)
             conn.commit()
-            logging.info("Building geometries updated successfully.")
+        logging.info(f"Geometries in table '{table_name}' updated successfully.")
     except Exception as e:
-        logging.error(f"Failed to update building geometries: {e}")
+        logging.error(f"Failed to update geometries in table '{table_name}': {e}")
         conn.rollback()
         raise
     finally:
         conn.close()
 
-def convert_to_3d_tiles(cache_dir, database_url):
+def convert_to_3d_tiles(cache_dir, database_url, table_name):
     """
-    Converts buildings from the database to 3D tiles using pg2b3dm.
+    Converts buildings from the specified table in the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
+        table_name (str): Table to convert to 3D tiles.
     """
-    logging.info("Converting buildings to 3D tiles with pg2b3dm.")
+    logging.info(f"Converting table '{table_name}' to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
-    port=url.port
+    port = url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
         PG2B3DM_PATH,
         '-h', f"{host}:{port}",
         '-U', user,
         '-c', 'geom',
-        '-t', 'building',
+        '-t', table_name,
         '-d', dbname,
         '-o', cache_dir, 
-        # '--use_implicit_tiling', 'false'
+         '--use_implicit_tiling', 'false'  # Uncomment if needed
     ]
     # To handle password, set PGPASSWORD environment variable if available
     env = os.environ.copy()
@@ -1139,6 +956,12 @@ def convert_to_3d_tiles(cache_dir, database_url):
     logging.info("3D tiles generated successfully.")
 
 def apply_draco_compression(cache_dir):
+    """
+    Applies Draco compression to all .glb files in the specified directory.
+
+    Args:
+        cache_dir (str): Directory containing .glb files.
+    """
     logging.info("Applying Draco compression to glTF files.")
     for root, dirs, files in os.walk(cache_dir):
         for file in files:
@@ -1171,6 +994,132 @@ def apply_draco_compression(cache_dir):
                 else:
                     os.replace(compressed_file, gltf_file)
                     logging.info(f"Applied Draco compression to {gltf_file}")
+                    
+def append_temp_to_main(database_url, temp_table, main_table):
+    """
+    Appends data from the temporary table to the main table by copying all columns.
+    If the main table does not have certain columns, they will be created.
+    Handles duplicates by ignoring records that violate primary key constraints.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        temp_table (str): Temporary table name.
+        main_table (str): Main table name.
+    """
+    logging.info(f"Appending data from '{temp_table}' to '{main_table}'.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+
+    try:
+        with conn.cursor() as cur:
+            # Fetch main table columns
+            cur.execute(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{main_table}'
+                ORDER BY ordinal_position;
+            """)
+            main_columns = [row[0] for row in cur.fetchall()]
+
+            # Fetch temp table columns and their data types
+            cur.execute(f"""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = '{temp_table}'
+                ORDER BY ordinal_position;
+            """)
+            temp_columns_info = cur.fetchall()
+            temp_columns = [row[0] for row in temp_columns_info]
+
+            # Add missing columns to main_table
+            for col_name, data_type in temp_columns_info:
+                if col_name not in main_columns:
+                    logging.info(f"Column '{col_name}' does not exist in '{main_table}'. Adding it.")
+                    # Add the column with the same data_type as in temp_table
+                    # Note: For complex types or special columns, you may need a more robust mapping.
+                    alter_sql = f'ALTER TABLE "{main_table}" ADD COLUMN "{col_name}" {data_type};'
+                    cur.execute(alter_sql)
+                    main_columns.append(col_name)
+                    logging.info(f"Column '{col_name}' added to '{main_table}'.")
+
+            # Now all temp_columns should exist in main_table
+            # We will insert all columns from temp_table to main_table
+            columns_str = ', '.join([f'"{col}"' for col in temp_columns])
+
+            # Fetch primary key columns from the main table
+            cur.execute(f"""
+                SELECT a.attname
+                FROM pg_index i
+                JOIN pg_attribute a ON a.attrelid = i.indrelid
+                                     AND a.attnum = ANY(i.indkey)
+                WHERE i.indrelid = '{main_table}'::regclass
+                  AND i.indisprimary;
+            """)
+            pk_columns = [row[0] for row in cur.fetchall()]
+            if not pk_columns:
+                raise ValueError(f"No primary key defined for table '{main_table}'.")
+
+            # Construct the ON CONFLICT clause
+            conflict_target = ', '.join([f'"{col}"' for col in pk_columns])
+            on_conflict_clause = f"ON CONFLICT ({conflict_target}) DO NOTHING"
+
+            logging.info(f"Using ON CONFLICT clause on columns: {conflict_target}")
+
+            # Execute the INSERT statement with ON CONFLICT
+            insert_sql = f"""
+                INSERT INTO "{main_table}" ({columns_str})
+                SELECT {columns_str} FROM "{temp_table}"
+                {on_conflict_clause};
+            """
+            cur.execute(insert_sql)
+
+            inserted_count = cur.rowcount
+            conn.commit()
+            logging.info(f"Data appended from '{temp_table}' to '{main_table}' successfully. Inserted {inserted_count} records.")
+
+    except Exception as e:
+        logging.error(f"Failed to append data from '{temp_table}' to '{main_table}': {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+
+def drop_temp_table(database_url, temp_table):
+    """
+    Drops the temporary table from the database.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        temp_table (str): Temporary table name.
+    """
+    logging.info(f"Dropping temporary table '{temp_table}'.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"DROP TABLE IF EXISTS {temp_table};")
+            conn.commit()
+        logging.info(f"Temporary table '{temp_table}' dropped successfully.")
+    except Exception as e:
+        logging.error(f"Failed to drop temporary table '{temp_table}': {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def remove_file(file_path):
     """
@@ -1185,24 +1134,158 @@ def remove_file(file_path):
     except OSError as e:
         logging.warning(f"Failed to remove file {file_path}: {e}")
 
-def main(meta4_file):
+import os
+import json
+import math
+
+def merge_tilesets_into_one(output_path, input_tilesets):
+    """
+    Merges multiple region-based tilesets into a single tileset.json that references all of them as external.
+    If some tilesets do not exist or do not have a region boundingVolume, they are skipped.
+    If no valid tilesets remain, creates a minimal tileset with no children.
     
-    # Ensure DATA_DIR exists
+    Args:
+        output_path (str): Path to the final merged tileset.json output file.
+        input_tilesets (list[str]): Paths to the input tileset.json files to merge.
+
+    Returns:
+        None. Writes the merged tileset.json to output_path.
+    """
+    
+    # Load all valid tilesets
+    loaded_tilesets = []
+    for ts_path in input_tilesets:
+        if not os.path.isfile(ts_path):
+            # Skip if the file doesn't exist
+            continue
+        try:
+            with open(ts_path, 'r', encoding='utf-8') as f:
+                ts = json.load(f)
+                loaded_tilesets.append((ts_path, ts))
+        except (IOError, json.JSONDecodeError):
+            # Skip if the file cannot be read or is not valid JSON
+            continue
+    
+    # Filter down to only those with a region boundingVolume
+    all_regions = []
+    valid_tilesets = []
+    for ts_path, ts in loaded_tilesets:
+        root = ts.get("root", {})
+        bv = root.get("boundingVolume", {})
+        region = bv.get("region")
+        
+        if region and isinstance(region, list) and len(region) == 6:
+            all_regions.append(region)
+            valid_tilesets.append((ts_path, ts))
+        # If there's no valid region, skip this tileset
+    
+    if not valid_tilesets:
+        # No valid tilesets found, create an empty tileset
+        # with a minimal boundingVolume and no children.
+        # We'll use a generic region that covers no area.
+        # For example, we can pick a degenerate region:
+        degenerate_region = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        empty_tileset = {
+            "asset": {
+                "version": "1.1"
+            },
+            "geometricError": 0,
+            "root": {
+                "boundingVolume": {
+                    "region": degenerate_region
+                },
+                "refine": "ADD",
+                "geometricError": 0,
+                "children": []
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(empty_tileset, f, indent=2)
+        print(f"No valid tilesets found. Created an empty merged tileset at {output_path}")
+        return
+    
+    # Compute the encompassing region for all valid tilesets
+    west = min(r[0] for r in all_regions)
+    south = min(r[1] for r in all_regions)
+    east = max(r[2] for r in all_regions)
+    north = max(r[3] for r in all_regions)
+    minH = min(r[4] for r in all_regions)
+    maxH = max(r[5] for r in all_regions)
+    merged_region = [west, south, east, north, minH, maxH]
+
+    # Construct children for the merged tileset
+    children = []
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    for ts_path, ts in valid_tilesets:
+        ts_abs = os.path.abspath(ts_path)
+        rel_path = os.path.relpath(ts_abs, output_dir)
+        
+        child = {
+            "boundingVolume": ts["root"]["boundingVolume"],
+            "geometricError": ts["root"]["geometricError"],
+            "refine": ts["root"].get("refine", "ADD").upper(),
+            "content": {
+                "uri": rel_path
+            }
+        }
+        children.append(child)
+
+    # Determine the maximum geometricError for the parent tileset
+    parent_geometric_error = max(ts["root"]["geometricError"] for _, ts in valid_tilesets)
+    
+    # Create the merged tileset JSON structure
+    merged_tileset = { 
+        "asset": {
+            "version": "1.1"
+        },
+        "geometricError": parent_geometric_error,
+        "root": {
+            "boundingVolume": {
+                "region": merged_region
+            },
+            "refine": "ADD",
+            "geometricError": parent_geometric_error,
+            "children": children
+        }
+    }
+
+    # Write the merged tileset to disk
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(merged_tileset, f, indent=2)
+    print(f"Merged tileset written to {output_path}")
+
+
+def main(meta4_file):
+    # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
-    for ix, file_info in enumerate(files, start=1):
+    # Drop the temporary table
+    drop_temp_table(DATABASE_URL, TEMP_TABLE)
+
+    for ix, file_info in enumerate(files):
+        
+        # if ix < 130 * BATCH_N:
+        #     continue
+        
         file_name = file_info['name']
         size = file_info['size']
         hash_type = file_info['hash_type']
         hash_value = file_info['hash_value']
         urls = file_info['urls']
 
-        logging.info(f"▶️   FILE {ix}/{len(files)}")
+        logging.info(f"▶️   FILE {ix+1}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
+
+
+        temp_tileset_dir = os.path.join(CACHE_DIR, 'sub', str(ix // BATCH_N))  
+        main_tileset_dir = CACHE_DIR
+           
+        os.makedirs(main_tileset_dir, exist_ok=True)   
+        os.makedirs(temp_tileset_dir, exist_ok=True)
 
         # Determine download paths
         download_path = os.path.join(DATA_DIR, file_name)
@@ -1228,37 +1311,71 @@ def main(meta4_file):
             # Transform the GML file
             transform_gml(download_path, transformed_path)
 
-            # Ingest the transformed GML into the database
-            ingest_gml_file(transformed_path, DATABASE_URL)
+            # Ingest the transformed GML into the temporary table
+            ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE)
 
-            # Execute the SQL file after first ingestion
-            if ix == 1:  # Only after first file
+            # Update geometries in the temporary table
+            update_geometries(DATABASE_URL, TEMP_TABLE)
+
+
+
+            if ix % BATCH_N == 0 or ix == len(files) - 1:            
+                # Convert the temporary table to 3D tiles
+                convert_to_3d_tiles(temp_tileset_dir, DATABASE_URL, TEMP_TABLE)
+
+                # Apply Draco compression to the newly generated tiles
+                apply_draco_compression(temp_tileset_dir)
+
+                # Append data from temporary table to main table
+                append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
+
+                # Drop the temporary table
+                drop_temp_table(DATABASE_URL, TEMP_TABLE)
+
+                batch_count = ix // BATCH_N + 1
+
+                # Collect all input tileset.json paths
+                input_tileset_paths = [
+                    os.path.join(CACHE_DIR, 'sub', str(b), 'tileset.json')
+                    for b in range(batch_count)
+                ]
+
+                merged_tileset_path = os.path.join(CACHE_DIR, 'tileset.json')
+
+                logging.info(f"Merging {len(input_tileset_paths)} tilesets into {merged_tileset_path}...")
+
+                try:
+                    # Call our custom merging function
+                    merge_tilesets_into_one(merged_tileset_path, input_tileset_paths)
+                    logging.info("Merged tileset into main tileset successfully.")
+                except Exception as e:
+                    logging.error(f"Failed to combine merged tilesets: {e}")
+                    raise RuntimeError(f"Failed to combine merged tilesets: {e}")
+
+            # npx 3d-tiles-tools combine -i backend/tileset\ -o backend/tileset_combined -f
+
+            if ix == 0:
+                # Execute SQL indexing file once before processing
                 execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
-
-            # Update building geometries
-            put_buildings_on_ground(DATABASE_URL)
-
-            # Convert to 3D tiles
-            if (ix-1) % 20 == 0:
-                convert_to_3d_tiles(CACHE_DIR, DATABASE_URL)
-                apply_draco_compression(CACHE_DIR)
-
+                
             # Remove the transformed GML file
             remove_file(transformed_path)
-            # Remove the transformed GFS file
-            remove_file(transformed_path.split(".")[0] + ".gfs")
+            # Remove the transformed GFS file if it exists
+            transformed_gfs_path = os.path.splitext(transformed_path)[0] + ".gfs"
+            if os.path.isfile(transformed_gfs_path):
+                remove_file(transformed_gfs_path)
 
             # Optionally, remove the original downloaded GML file
             remove_file(download_path)
 
-            logging.info(f"Completed processing for {file_name}")
+            logging.info(f"✅  Completed processing for {file_name}")
 
         except Exception as e:
             logging.error(f"An error occurred while processing {file_name}: {e}")
             # Optionally, clean up files or continue
             continue
 
-    logging.info("All files processed.")
+    logging.info("🏁 All files processed.")
 
 if __name__ == '__main__':
     meta4_file = META4_PATH
@@ -1274,146 +1391,7 @@ if __name__ == '__main__':
 
 ## Overview
 
-The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into the PostGIS database. It also includes tools for generating 3D tilesets from the database.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Conda** (optional, for managing Python environments)
-- **GDAL** and **OGR** libraries
-- **Python 3.x**
-- **Node.js** and **npm** (for `gltf-pipeline`)
-
-### Steps
-
-#### 1. Create a Conda Environment (Optional)
-
-```bash
-conda create -n easyopendata_env python=3.10
-conda activate easyopendata_env
-```
-
-#### 2. Install GDAL and Libraries
-
-```bash
-conda install -c conda-forge gdal libgdal
-```
-
-#### 3. Install Python Dependencies
-
-```bash
-pip install -r ../../requirements.txt
-```
-
-#### 4. Install gltf-pipeline
-
-```bash
-npm install -g gltf-pipeline
-```
-
----
-
-## Data Ingestion Scripts
-
-### `bayern.py`
-
-This script sequentially downloads GML files from a Meta4 file, transforms them by embedding polygons, ingests them into a PostgreSQL database, converts them to 3D tiles, and removes the original files.
-
-#### Usage
-
-```bash
-python bayern.py
-```
-
-#### Notes
-
-- Ensure that the `META4_PATH` variable in the script points to a valid `.meta4` file in the `data_sources/` directory.
-- The script requires the `pg2b3dm.exe` executable to be present in the `libs/` directory.
-
-### Directory Structure
-
-- **data_sources/**: Contains `.meta4` files that list the URLs of GML data to download.
-- **data_local/**: Directory where downloaded GML files are stored temporarily.
-- **libs/**: Contains necessary executables like `pg2b3dm.exe`.
-
----
-
-## Additional Information
-
-- **GDAL/OGR**: Used for converting and ingesting GML files into PostGIS.
-- **pg2b3dm**: Tool for converting PostGIS data into 3D tiles compatible with CesiumJS.
-- **gltf-pipeline**: Used for optimizing and compressing glTF files.
-
----
-
-## Tips
-
-- **Error Handling**: The scripts include logging to help diagnose issues during the ingestion process.
-- **Performance**: Adjust database settings in `init.sql` and `index.sql` for better performance during bulk data ingestion.
-
----
-
-## Contributing
-
-Contributions to improve data ingestion scripts are welcome. Please ensure that any new scripts or changes are well-documented and tested.
-
----
-
-## License
-
-This project is licensed under the MIT License.
-
-&&& FILE: ./backend\ingestion\data_local\bayern\582_5530.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryEleme
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\582_5530_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\654_5310.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gfs
-&&& CONTENT:
-<GMLFeatureClassList>
-  <GMLFeatureClass>
-    <Name>Building</Name>
-    <ElementPath>Building</ElementPath>
-    <GeometryName>lod2Solid</GeometryName>
-    <GeometryElementPath>lod2Solid</GeometryEleme
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\654_5310_trs.gml
-&&& CONTENT:
-<?xml version='1.0' encoding='UTF-8'?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
-................................
-
-&&& FILE: ./backend\ingestion\data_local\bayern\680_5336.gml
-&&& CONTENT:
-<?xml version="1.0" encoding="UTF-8"?>
-<CityModel xmlns:tex="http://www.opengis.net/citygml/texturedsurface/1.0" xmlns:sch="http://www.ascc.net/xml/schematron" xmlns:veg="http://www.opengis.net/citygm
+The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into a PostGIS database. It also incl
 ................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
@@ -1446,141 +1424,10 @@ This project is licensed under the MIT License.
 &&& FILE: ./backend\ingestion\libs\pg2b3dm.exe
 &&& ERROR: Could not read file: 'utf-8' codec can't decode byte 0x90 in position 2: invalid start byte
 
-&&& FILE: ./backend\tempfiles\0ebaef62-302b-4cb5-b7db-c83d53020ba2.obj
+&&& FILE: ./frontend\.dockerignore
 &&& CONTENT:
-# OBJ file generated from buildings
-v 692466.2220121699 0 5334731.421954182
-v 692466.2220121699 11.428 5334731.421954182
-v 692465.9520113174 11.428 5334728.848945844
-v 692465.9520113174 0 5334728.8489
-................................
+node_modules
 
-&&& FILE: ./backend\tempfiles\13bbe29e-46f0-494e-afde-b7e48d2a2b2e.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 680567.9310030596 3.508 5342543.4299777085
-v 680566.789971829 3.508 5342543.155011388
-v 680566.789971829 0 5342543.155011388
-v 680567.9310030596 0 5342543.4299777
-................................
-
-&&& FILE: ./backend\tempfiles\1fc79dc8-42f6-40ed-9d9c-1da5b48f3473.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-
-
-................................
-
-&&& FILE: ./backend\tempfiles\2a394fde-a09c-42ba-8168-890445a45cd7.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 684244.8699987399 0 5343079.640031528
-v 684244.8699987399 13.263 5343079.640031528
-v 684225.6209640335 14.26 5343077.449997416
-v 684206.369987038 13.263 5343075.2
-................................
-
-&&& FILE: ./backend\tempfiles\37627956-7228-462d-98f8-fbba26605ef0.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-
-
-................................
-
-&&& FILE: ./backend\tempfiles\3772f021-baeb-4916-bbfc-e1884f54c094.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 681044.1539687354 0 5343742.204972287
-v 681044.1539687354 5.777 5343742.204972287
-v 680992.2840366996 5.767 5343747.450959618
-v 680992.2840366996 0 5343747.450959
-................................
-
-&&& FILE: ./backend\tempfiles\4e147667-b8f6-4a58-b874-087dde71f6f4.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 692346.1879965623 16.396 5334621.376947997
-v 692346.1879965623 0 5334621.376947997
-v 692346.8869687994 0 5334625.6130508045
-v 692347.093996431 0 5334626.878050981
-................................
-
-&&& FILE: ./backend\tempfiles\518a4dc0-1821-4990-b379-54b833b598fd.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 692009.9379970876 4.357 5334359.5610187
-v 692012.5230037409 4.358 5334359.49202265
-v 692015.0539863509 4.468 5334358.949020741
-v 692015.5209730046 4.488 5334358.8
-................................
-
-&&& FILE: ./backend\tempfiles\538f2ac5-4ed3-43dc-ae34-9736446f0ed8.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 684129.4400338647 0 5342679.989994051
-v 684113.7999785779 0 5342676.399946041
-v 684113.7999785779 5.154 5342676.399946041
-v 684128.9959698505 5.154 5342679.887993
-................................
-
-&&& FILE: ./backend\tempfiles\5fcd10c0-8110-479c-9425-b813eaf33866.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 687793.1499662541 3.116 5330409.703961996
-v 687791.8770091551 3.116 5330414.617998084
-v 687791.8770091551 0 5330414.617998084
-v 687793.1499662541 0 5330409.703961
-................................
-
-&&& FILE: ./backend\tempfiles\75530f8b-fe84-471c-ae5f-997e8629a7e4.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-
-
-................................
-
-&&& FILE: ./backend\tempfiles\77c12452-c4ee-46c3-b5f1-0db94727d43e.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-
-
-................................
-
-&&& FILE: ./backend\tempfiles\8e15ee79-8a7a-4fdd-a135-3a4b0e2cba44.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 687629.5080292135 12.24 5330674.962039919
-v 687633.8260145726 10.65 5330675.627970491
-v 687633.8260145726 12.76 5330675.627970491
-v 687631.4249967044 12.76 533067
-................................
-
-&&& FILE: ./backend\tempfiles\8e80c443-cfcd-467c-9feb-92bf2e18b6da.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 692818.6949864172 0 5335090.412017974
-v 692819.3910307497 0 5335094.381968065
-v 692824.4699776318 0 5335093.477968954
-v 692823.7550192552 0 5335089.497032916
-v 69
-................................
-
-&&& FILE: ./backend\tempfiles\df087d27-ace5-4504-bdd4-65f981e3f26a.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-v 692160.4799965809 0 5334348.86996756
-v 692160.4799965809 5.697 5334348.86996756
-v 692161.110030973 5.697 5334349.080054309
-v 692161.110030973 0 5334349.080054309
-
-................................
-
-&&& FILE: ./backend\tempfiles\fb2d0100-cbec-472c-b7a0-79fcf0e674ea.obj
-&&& CONTENT:
-# OBJ file generated from buildings
-
-
-................................
 
 &&& FILE: ./frontend\.env
 &&& CONTENT:
@@ -1601,6 +1448,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.vite/*
 
 # Editor directories and files
 .vscode/*
@@ -1684,22 +1532,20 @@ export default [
 <head>
   <meta charset="utf-8">
   <title>EasyOpenData</title>
-
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css"
-    type="text/css">
-
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css" type="text/css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 
 <body>
+  <div id="root"></div>
+  <script type="module" src="./src/index.tsx"></script>
 </body>
-<script type="module" src="./src/App.tsx"></script>
 
 </html>
+
 
 &&& FILE: ./frontend\package.json
 &&& CONTENT:
@@ -1722,133 +1568,8 @@ export default [
 
 ## Overview
 
-The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and download spatial data. It integrates with the backend API and handles payment processing via Stripe.
-
----
-
-## Key Features
-
-- **Interactive Map Interface**: Built with React and MapLibre GL JS for map rendering.
-- **Drawing Tools**: Allows users to draw polygons to select regions.
-- **3D Visualization**: Uses Deck.gl to render 3D buildings.
-- **Search Functionality**: Integrated with Nominatim for location search.
-- **Payment Processing**: Secure payments via Stripe.
-- **Responsive Design**: Adapts to mobile and desktop screens.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Node.js** and **npm** or **yarn**
-
-### Installation
-
-1. **Install Dependencies**
-
-```bash
-cd frontend
-yarn install
-# or
-npm install
-```
-
-### Running the Development Server
-
-```bash
-yarn dev
-# or
-npm run dev
-```
-
-The application will be available at [http://localhost:5173](http://localhost:5173)
-
-### Build for Production
-
-```bash
-yarn build
-# or
-npm run build
-```
-
-The production build will be in the `dist/` directory.
-
----
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the `frontend` directory to set environment variables.
-
-- **VITE_BACKEND_URL**: The URL of the backend API.
-
-Example `.env` file:
-
-```
-VITE_BACKEND_URL=http://localhost:5400
-```
-
-### Map Style
-
-The map uses a custom style defined in `src/basemap.json`. You can customize the map style by modifying this file or replacing it with another style.
-
----
-
-## Project Structure
-
-- **src/**: Contains the source code of the React application.
-  - `App.tsx`: Main application component.
-  - `CheckoutForm.tsx`: Handles payment form and Stripe integration.
-  - `FloatingPanel.tsx`: UI component for user interactions.
-  - `Legals.tsx`: Displays legal documents.
-  - `draw-control.ts`: Custom control for drawing polygons.
-  - `basemap.json`: Custom map style.
-
-- **public/**: Contains static assets.
-
----
-
-## Key Components
-
-- **Map Integration**: Uses MapLibre GL JS for map rendering and Mapbox Draw for drawing tools.
-- **3D Rendering**: Deck.gl is used to render 3D buildings.
-- **Payment Integration**: Stripe is integrated using `@stripe/react-stripe-js` and `@stripe/stripe-js`.
-- **Legal Documents**: Legal documents are displayed using `ReactMarkdown`.
-
----
-
-## Customization
-
-- **Map Style**: Modify `src/basemap.json` to change the map appearance.
-- **API Endpoints**: Ensure `VITE_BACKEND_URL` points to the correct backend API.
-- **Stripe Keys**: Update the publishable key in `FloatingPanel.tsx` and ensure the backend has the correct secret key.
-
----
-
-## Legal Documents
-
-The `docs/` directory contains Markdown files for legal documents such as:
-
-- `agb.md`: Terms and Conditions
-- `datenschutz.md`: Privacy Policy
-- `impressum.md`: Imprint
-- `widerruf.md`: Cancellation Policy
-
-These documents are displayed in the application using the `Legals.tsx` component.
-
----
-
-## Contributing
-
-Contributions are welcome! Please ensure any changes to the frontend code are thoroughly tested.
-
----
-
-## License
-
-This project is licensed under the MIT License.
+The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and down
+................................
 
 &&& FILE: ./frontend\tsconfig.json
 &&& CONTENT:
@@ -1889,113 +1610,26 @@ export default defineConfig({
   resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
 
+&&& FILE: ./frontend\public\basemap.json
+&&& CONTENT:
+{
+  "version": 8,
+  "name": "Positron",
+  "metadata": {
+    "mapbox:autocomposite": false,
+    "mapbox:groups": {
+      "101da9f13b64a08fa4b6ac1168e89e5f": {
+        "collapsed": false,
+        "name"
+................................
+
 &&& FILE: ./frontend\public\vite.svg
 &&& CONTENT:
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="31.88" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 257"><defs><linearGradient id="IconifyId1813088fe1fbc01fb466" x1="-.828%" x2="57.636%" y1="7.652%" y2="78.411%"><stop offset="0%" stop-color="#41D1FF"></stop><stop offset="100%" stop-color="#BD34FE"></stop></linearGradient><linearGradient id="IconifyId1813088fe1fbc01fb467" x1="43.376%" x2="50.316%" y1="2.242%" y2="89.03%"><stop offset="0%" stop-color="#FFEA83"></stop><stop offset="8.333%" stop-color="#FFDD35"></stop><stop offset="100%" stop-color="#FFA800"></stop></linearGradient></defs><path fill="url(#IconifyId1813088fe1fbc01fb466)" d="M255.153 37.938L134.897 252.976c-2.483 4.44-8.862 4.466-11.382.048L.875 37.958c-2.746-4.814 1.371-10.646 6.827-9.67l120.385 21.517a6.537 6.537 0 0 0 2.322-.004l117.867-21.483c5.438-.991 9.574 4.796 6.877 9.62Z"></path><path fill="url(#IconifyId1813088fe1fbc01fb467)" d="M185.432.063L96.44 17.501a3.268 3.268 0 0 0-2.634 3.014l-5.474 92.456a3.268 3.268 0 0 0 3.997 3.378l24.777-5.718c2.318-.535 4.413 1.507 3.936 3.838l-7.361 36.047c-.495 2.426 1.782 4.5 4.151 3.78l15.304-4.649c2.372-.72 4.652 1.36 4.15 3.788l-11.698 56.621c-.732 3.542 3.979 5.473 5.943 2.437l1.313-2.028l72.516-144.72c1.215-2.423-.88-5.186-3.54-4.672l-25.505 4.922c-2.396.462-4.435-1.77-3.759-4.114l16.646-57.705c.677-2.35-1.37-4.583-3.769-4.113Z"></path></svg>
 
-&&& FILE: ./frontend\src\App.css
-&&& CONTENT:
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
-body,
-#root {
-    margin: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-}
-
-/* Override all fonts */
-* {
-    font-family: 'IBM Plex Sans', sans-serif;
-}
-.ibm-plex-sans-thin {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 100;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-extralight {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 200;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-light {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 300;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-regular {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 400;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-medium {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 500;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-semibold {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 600;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-bold {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 700;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-thin-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 100;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-extralight-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 200;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-light-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 300;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-regular-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 400;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-medium-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 500;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-semibold-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 600;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-bold-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 700;
-    font-style: italic;
-  }
-  
-
 &&& FILE: ./frontend\src\App.tsx
 &&& CONTENT:
-// Root.tsx
+// App.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -2011,29 +1645,31 @@ import type { Tileset3D } from "@loaders.gl/tiles";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import FloatingPanel from "./FloatingPanel";
+import Logo from "./Logo";
 import * as turf from "@turf/turf";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
-import './App.css'
+import './styles.css'
+import './colors.css'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
+const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
 
 const INITIAL_VIEW_STATE: MapViewState = { 
-  latitude: 48.1351,
-  longitude: 11.5820,
+  latitude: 49.8917,
+  longitude: 10.8863,  
   pitch: 45, 
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
-  zoom: 15,
+  zoom: 17,
 };
 
-const MAP_STYLE = "./src/basemap.json";
+const MAP_STYLE = "/basemap.json";
 
 function DeckGLOverlay(props: any) {
   const overlay = useControl(() => new DeckOverlay(props));
@@ -2067,24 +1703,16 @@ function Root() {
       map.addControl(drawRef.current);
     }
   }, []);
-  const onTilesetLoad = (tileset: Tileset3D) => {
-    const { cartographicCenter, zoom } = tileset;
-    setViewState((prev) => ({
-      ...prev,
-      longitude: cartographicCenter[0],
-      latitude: cartographicCenter[1],
-      zoom,
-    }));
-  };
+  // const onTilesetLoad = (tileset: Tileset3D) => {
+  //   const { cartographicCenter, zoom } = tileset;
+  //   setViewState((prev) => ({
+  //     ...prev,
+  //     longitude: cartographicCenter[0],
+  //     latitude: cartographicCenter[1],
+  //     zoom,
+  //   }));
+  // };
 
-  onTileLoad: (tile) => {
-    tile.content.traverse((object) => {
-      if (object.isMesh) {
-        // Adjust colors if needed
-        object.material.color.setHex(0xffffff);
-      }
-    });
-  }
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -2174,7 +1802,7 @@ function Root() {
     setViewState(event.viewState);
 
     // Toggle visibility based on zoom level
-    if (newZoom < 15) {
+    if (newZoom < 1) {
       setIsLod2Visible(false);
     } else {
       setIsLod2Visible(true);
@@ -2209,20 +1837,29 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     new Tile3DLayer({
       id: "tile-3d-layer",
       data: TILESET_URL,
-      pickable: true,
-      autoHighlight: false,
-      onClick: (info, event) => console.log("Clicked:", info, event),
-      getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
-      onTilesetLoad,
-      visible: true,
+      // pickable: true,
+      // autoHighlight: false,
+      // onClick: (info, event) => console.log("Clicked:", info, event),
+      // getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
+      // onTilesetLoad,
+      visible: isLod2Visible,
       // For ScenegraphLayer (b3dm or i3dm format)
-      _lighting: 'pbr',
-      effects: [lightingEffect],
+      //_lighting: 'pbr',
+      //effects: [lightingEffect],
+      loadOptions: {
+        tileset: {
+          maxRequests: 16,
+          updateTransforms: false,
+          maximumMemoryUsage: 512
+          //maximumScreenSpaceError: 16, // Adjust this value as needed
+          //viewDistanceScale: 1.5 // Adjust this value as needed
+        }
+      },
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
           getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
-      effects: [lightingEffect]
+      //effects: [lightingEffect]
         }
       }
     }),
@@ -2255,6 +1892,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onMove={handleZoomChange}
         ref={mapRef}
         style={{ width: "100%", height: "100%" }}
+        hash={true}
       >
         {selected && (
           <Popup
@@ -2267,7 +1905,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers}   effects={[lightingEffect]} // Apply the custom lighting effect globally
+        <DeckGLOverlay layers={layers}   //effects={[lightingEffect]} // Apply the custom lighting effect globally
  />
         {/* <DrawControl
           ref={drawRef}
@@ -2298,6 +1936,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
   onSearch={handleSearch}
   onSelectResult={handleSelectResult}
       />
+      <Logo/>
       
       <LegalDocuments />
     </div>
@@ -2313,19 +1952,8 @@ interface DrawControlProps {
 const container = document.body.appendChild(document.createElement("div"));
 createRoot(container).render(<Root />);
 
+export default Root;
 
-&&& FILE: ./frontend\src\basemap.json
-&&& CONTENT:
-{
-  "version": 8,
-  "name": "Positron",
-  "metadata": {
-    "mapbox:autocomposite": false,
-    "mapbox:groups": {
-      "101da9f13b64a08fa4b6ac1168e89e5f": {
-        "collapsed": false,
-        "name"
-................................
 
 &&& FILE: ./frontend\src\CheckoutForm.tsx
 &&& CONTENT:
@@ -2366,12 +1994,17 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
   // If price is 0, render only the download button
   if (price === 0) {
     return (
+      <>
+      <div className="text-center mb-3">
+      Grundstücke unter 0.05 km² können kostenfrei heruntergeladen werden
+      </div>
       <button 
         onClick={onFetchObjFile}
-        className="btn btn-primary btn-sm mt-2"
+        className="btn btn-secondary btn-sm mt-2"
       >
         Download File
       </button>
+      </>
     );
   }
 
@@ -2553,7 +2186,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       <button
         type="submit"
         disabled={!stripe || loading}
-        className="btn btn-primary btn-sm mt-2"
+        className="btn btn-secondary btn-sm mt-2"
       >
         {loading ? "Processing..." : `Pay €${price.toFixed(2)}`}
       </button>
@@ -2562,6 +2195,35 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
   
 };
 export default CheckoutForm;
+
+&&& FILE: ./frontend\src\colors.css
+&&& CONTENT:
+:root {
+    --bs-primary: #2a7a92; /* Your desired primary color */
+    --bs-secondary: #3e66bb;
+    --bs-success: #28a745;
+    --bs-danger: #f38093;
+    --bs-warning: #ffc107;
+    --bs-info: #17a2b8;
+    --bs-light: #f8f9fa;
+    --bs-dark: #343a40;
+  }
+  
+  .btn-primary {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+  }
+  .btn-secondary {
+    background-color: var(--bs-secondary) !important;
+    border-color: var(--bs-secondary) !important;
+  }
+  
+  .btn-danger {
+    background-color: var(--bs-danger) !important;
+    border-color: var(--bs-danger) !important;
+  }
+  
+
 
 &&& FILE: ./frontend\src\draw-control.ts
 &&& CONTENT:
@@ -2653,10 +2315,10 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
   useEffect(() => {
     if (polygonArea !== null) {
-      if (polygonArea < 0.2) {
+      if (polygonArea < 0.05) {
         setPrice(0);
       } else {
-        setPrice(5 * polygonArea);
+        setPrice(20 * polygonArea);
       }
     }
   }, [polygonArea]);
@@ -2750,17 +2412,17 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div className="btn-group w-100" role="group">
         <button
           type="button"
-          className="btn btn-outline-primary"
+          className="btn btn-primary btn-sm mt-2"
           onClick={onDrawPolygon}
         >
-          Draw Polygon
+          Polygon einzeichnen
         </button>
         <button
           type="button"
-          className="btn btn-outline-danger"
+          className="btn btn-danger btn-sm mt-2"
           onClick={onRemovePolygon}
         >
-          Delete Polygon
+          Entfernen
         </button>
       </div>
     </>
@@ -2920,10 +2582,20 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 export default FloatingPanel;
 
 
+&&& FILE: ./frontend\src\index.tsx
+&&& CONTENT:
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+
+
 &&& FILE: ./frontend\src\Legals.tsx
 &&& CONTENT:
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const LegalDocumentPanel: React.FC<{
   documentType: string;
@@ -2986,7 +2658,7 @@ const LegalDocumentPanel: React.FC<{
           <h5 className="mb-3">
             {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
           </h5>
-          <ReactMarkdown>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       )}
     </>
@@ -3007,11 +2679,16 @@ const LegalDocuments: React.FC = () => {
         zIndex: 1060,
       }}
     >
-      <LegalDocumentPanel
-        documentType="impressum"
-        isOpen={openDocument === 'impressum'}
-        setOpenDocument={setOpenDocument}
-      />
+    <LegalDocumentPanel
+      documentType="quellen"
+      isOpen={openDocument === 'quellen'}
+      setOpenDocument={setOpenDocument}
+    />
+    <LegalDocumentPanel
+      documentType="impressum"
+      isOpen={openDocument === 'impressum'}
+      setOpenDocument={setOpenDocument}
+    />
       <LegalDocumentPanel
         documentType="datenschutz"
         isOpen={openDocument === 'datenschutz'}
@@ -3033,4 +2710,176 @@ const LegalDocuments: React.FC = () => {
 
 export default LegalDocuments;
 
+
+&&& FILE: ./frontend\src\Logo.tsx
+&&& CONTENT:
+import React from "react";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "./styles.css"; // Assuming the CSS class `.space-grotesk-extrabold` is defined here
+
+const Logo: React.FC = () => {
+  return (
+    <div
+      className="position-fixed text-center"
+      style={{
+        top: "60px",
+        left: "0",
+        right: "0",
+        zIndex: 1050,
+        pointerEvents: "none", // Makes it non-interactive
+      }}
+    >
+      <div
+        className="d-inline-block px-5 py-2 rounded shadow bg-light"
+        style={{
+          color: "black",
+          maxWidth: "90%", // Ensure it fits smaller screens
+          pointerEvents: "auto", // Enables interactions if needed
+          fontWeight: 500, // Ensures the font is clearly visible
+        }}
+      >
+        <span
+          className="space-grotesk-regular"
+          style={{
+            fontSize: "1.5rem",
+          }}
+        >
+          EasyOpenData
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default Logo;
+
+
+&&& FILE: ./frontend\src\styles.css
+&&& CONTENT:
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Space+Grotesk:wght@300..700&display=swap');
+
+html, body {
+   
+  height: 100svh; /* Ensure the root elements cover the entire viewport */
+  overflow: hidden; /* Prevent scrolling */
+  margin: 0; /* Remove any default margins */
+}
+
+
+/* Override all fonts */
+* {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+}
+.ibm-plex-sans-thin {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-extralight {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-light {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-regular {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-medium {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-semibold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-bold {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: normal;
+  }
+  
+  .ibm-plex-sans-thin-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 100;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-extralight-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 200;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-light-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 300;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-regular-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-medium-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 500;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-semibold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-style: italic;
+  }
+  
+  .ibm-plex-sans-bold-italic {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-style: italic;
+  }
+  
+.space-grotesk-light {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+}
+.space-grotesk-regular {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+.space-grotesk-bold {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+}
+.space-grotesk-extrabold {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+}
 

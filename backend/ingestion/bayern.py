@@ -34,7 +34,7 @@ import psycopg2
 META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
-CACHE_DIR = 'backend/tileset'
+CACHE_DIR = 'data/tileset'
 PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name

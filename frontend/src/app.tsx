@@ -14,17 +14,18 @@ import type { Tileset3D } from "@loaders.gl/tiles";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import FloatingPanel from "./FloatingPanel";
+import Logo from "./Logo";
 import * as turf from "@turf/turf";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import DrawControl from './draw-control';
 import LegalDocuments from "./Legals";
 
-import './App.css'
+import './styles.css'
 import './colors.css'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-const TILESET_URL = BACKEND_URL + '/tileset/tileset.json';
+const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
 
 const INITIAL_VIEW_STATE: MapViewState = { 
   latitude: 49.8917,
@@ -304,6 +305,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
   onSearch={handleSearch}
   onSelectResult={handleSelectResult}
       />
+      <Logo/>
       
       <LegalDocuments />
     </div>
@@ -315,8 +317,5 @@ interface DrawControlProps {
   onUpdate: (e: any) => void;
   onDelete: (e: any) => void;
 }
-
-const container = document.body.appendChild(document.createElement("div"));
-createRoot(container).render(<Root />);
 
 export default Root;

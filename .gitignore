@@ -12,7 +12,7 @@ __pycache__/
 *.so
 
 # tileset
-backend/tileset/*
+backend/tileset*/
 !backend/tileset/README.md
 
 *.gml
@@ -28,3 +28,5 @@ node_modules/
 
 postgres_data/*
 postgres_backups/*
+
+data/
