@@ -211,19 +211,22 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
       // onTilesetLoad,
       visible: isLod2Visible,
       // For ScenegraphLayer (b3dm or i3dm format)
-      _lighting: 'pbr',
-      effects: [lightingEffect],
+      //_lighting: 'pbr',
+      //effects: [lightingEffect],
       loadOptions: {
         tileset: {
-          maximumScreenSpaceError: 16, // Adjust this value as needed
-          viewDistanceScale: 1.5 // Adjust this value as needed
+          maxRequests: 16,
+          updateTransforms: false,
+          maximumMemoryUsage: 512
+          //maximumScreenSpaceError: 16, // Adjust this value as needed
+          //viewDistanceScale: 1.5 // Adjust this value as needed
         }
       },
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
           getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
-      effects: [lightingEffect]
+      //effects: [lightingEffect]
         }
       }
     }),
@@ -268,7 +271,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers}   effects={[lightingEffect]} // Apply the custom lighting effect globally
+        <DeckGLOverlay layers={layers}   //effects={[lightingEffect]} // Apply the custom lighting effect globally
  />
         {/* <DrawControl
           ref={drawRef}
