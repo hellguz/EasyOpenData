@@ -47,5 +47,16 @@ services:
     environment:
       VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
 
+
+  backup_service:
+    build: ./backend/db_backup # path to your Dockerfile with cron and pg_dump
+    container_name: easyopen_backup
+    depends_on:
+      - postgis
+    volumes:
+      - ./postgres_backups:/backups
+    environment:
+      POSTGRES_PASSWORD: barcelona
+
 volumes:
   postgres_data:
