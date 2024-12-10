@@ -39,17 +39,40 @@ async def retrieve_obj_file(region_geojson, output_path):
     # Create a Transformer object for coordinate transformation
     transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
 
-    # Start an asynchronous database session
+    # Clean and validate the user polygon once
+    polygon = func.ST_SetSRID(func.ST_GeomFromGeoJSON(polygon_geojson_str), 4326)
+    polygon = func.ST_MakeValid(polygon)
+    polygon = func.ST_Force3D(polygon)
+    polygon = func.ST_Buffer(polygon, 0)
+
+
+    # Runned this command on DB to make this request work but geometry is corrupted:
+    # SET client_min_messages = WARNING;
+
+    # -- Ensure all building geometries are MULTIPOLYGONZ and valid
+    # UPDATE building
+    # SET geom = ST_Force3D(ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3)))
+    # WHERE NOT ST_IsValid(geom) 
+    #    OR GeometryType(geom) NOT IN ('MULTIPOLYGON', 'MULTIPOLYGONZ');
+
+    # -- For extra safety, apply a small zero-buffer to fix micro-topologies:
+    # UPDATE building
+    # SET geom = ST_Buffer(geom, 0)
+    # WHERE NOT ST_IsValid(geom);
+
+    # -- Verify everything is now valid:
+    # SELECT COUNT(*) FROM building WHERE NOT ST_IsValid(geom);
+    # -- Should return 0.
+    # 
+    # RESET client_min_messages;
+
     async with async_session() as session:
-        # Query the database for buildings within the polygon
+        # Query using bounding box and intersection, no ST_MakeValid on buildings
         stmt = select(
-            Building.gml_id,
-            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
-        ).where(
-            func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
-            )
+            Building.gml_id, func.ST_AsGeoJSON(Building.geom).label("geom_geojson")
+        ).where(  # fetch raw geom
+            Building.geom.op("&&")(polygon),  # bounding box filter
+            func.ST_Intersects(Building.geom, polygon),
         )
         
         result = await session.execute(stmt)
