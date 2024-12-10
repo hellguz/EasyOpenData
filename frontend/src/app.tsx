@@ -27,10 +27,10 @@ import './colors.css'
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
 
-const INITIAL_VIEW_STATE: MapViewState = { 
+const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.8917,
-  longitude: 10.8863,  
-  pitch: 45, 
+  longitude: 10.8863,
+  pitch: 45,
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
@@ -178,28 +178,28 @@ function Root() {
     }
   };
 
-// Create ambient light
-const ambientLight = new AmbientLight({
-  color: [240, 255, 255],
-  intensity: 1.0
-});
+  // Create ambient light
+  const ambientLight = new AmbientLight({
+    color: [240, 255, 255],
+    intensity: 1.0
+  });
 
-// Create directional light
-const directionalLight1 = new DirectionalLight({
-  color: [220, 255, 255],
-  intensity: 0.6,
-  direction: [-1, -3, -1]
-});
+  // Create directional light
+  const directionalLight1 = new DirectionalLight({
+    color: [220, 255, 255],
+    intensity: 0.6,
+    direction: [-1, -3, -1]
+  });
 
-// Create directional light
-const directionalLight2 = new DirectionalLight({
-  color:  [255, 220, 255],
-  intensity: 1,
-  direction: [1, -3, 1]
-});
+  // Create directional light
+  const directionalLight2 = new DirectionalLight({
+    color: [255, 220, 255],
+    intensity: 1,
+    direction: [1, -3, 1]
+  });
 
-// Create lighting effect
-const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,directionalLight2});
+  // Create lighting effect
+  const lightingEffect = new LightingEffect({ ambientLight, directionalLight1, directionalLight2 });
 
 
   const layers = [
@@ -228,7 +228,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
       _subLayerProps: {
         scenegraph: {
           getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
-      //effects: [lightingEffect]
+          //effects: [lightingEffect]
         }
       }
     }),
@@ -241,7 +241,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     const data = await response.json();
     return data;
   };
-  
+
   const handleSelectResult = (result: any) => {
     // Fly to the selected location
     const map = mapRef.current.getMap();
@@ -275,15 +275,26 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
           </Popup>
         )}
         <DeckGLOverlay layers={layers}   //effects={[lightingEffect]} // Apply the custom lighting effect globally
- />
+        />
         {/* <DrawControl
           ref={drawRef}
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
         /> */}
-        <NavigationControl position="top-left" />
-
+        {/* <div
+          style={{
+            position: 'absolute',
+            bottom: '240px', // Adjust as needed to ensure a 20px gap above Auswahl panel
+            left: '20px',
+            zIndex: 2000,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ pointerEvents: 'auto' }}>
+            <NavigationControl />
+          </div>
+        </div> */}
         <DrawControl
           position="top-right"
           displayControlsDefault={false}
@@ -302,12 +313,19 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onRemovePolygon={handleRemovePolygon}
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
-  onSearch={handleSearch}
-  onSelectResult={handleSelectResult}
+        onSearch={handleSearch}
+        onSelectResult={handleSelectResult}
       />
-      <Logo/>
-      
-      <LegalDocuments />
+
+      <div className="top-bar-container">
+        <div className="top-bar-section legals">
+          <LegalDocuments />
+        </div>
+        <div className="top-bar-section logo">
+          <Logo />
+        </div>
+      </div>
+
     </div>
   );
 }

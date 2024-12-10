@@ -4,11 +4,11 @@ import os
 objects_list = []
 
 # Define folders to exclude
-exclude_folders = ['node_modules', 'venv','.venv', '.github', 'tests', 'bin', 'docs', 'obj', '__pycache__', '.gpt', 'tileset', 'postgres_data', 'docs', 'data']
+exclude_folders = ['node_modules', 'venv','.venv', '.github', 'bin', 'obj', '__pycache__', '.gpt', 'tileset', 'postgres_data', 'data']
 
 # Allowed file extensions
 #allowed_extensions = ('.py', '.js', '.jsx', '.ts', '.tsx', '.env', '.ini', '.txt', '.yml')
-not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson', '.obj', '.meta4', '.json', '.lock', '.exe', '.md')
+not_allowed_extensions = ('.gml', '.gfs', '.xml', '.geojson', '.obj', '.meta4', '.json', '.lock', '.exe')
 
 def generate_tree(directory, prefix=''):
     """

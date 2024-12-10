@@ -25,6 +25,18 @@ BEGIN
     END IF;
 END $$;
 
+-- Make all geometry entries valid or empty
+-- If they aren't all MultiPolygonZ, convert them now
+-- Turn off NOTICE output first and restore it after this operation
+SET client_min_messages = WARNING;
+
+UPDATE building
+SET geom = ST_Force3D(ST_CollectionExtract(ST_MakeValid(geom), 3))
+WHERE NOT ST_IsValid(geom) OR GeometryType(geom) != 'MULTIPOLYGONZ';
+
+RESET client_min_messages;
+
+
 -- Cluster the table using the index
 CLUSTER building USING buildings_geom_idx;
 

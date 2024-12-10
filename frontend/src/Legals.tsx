@@ -29,7 +29,7 @@ const LegalDocumentPanel: React.FC<{
     setOpenDocument(isOpen ? null : documentType);
   };
 
-  return (
+  return ( 
     <>
       <button
         onClick={handleClick}
@@ -76,41 +76,34 @@ const LegalDocuments: React.FC = () => {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: '10px',
-        right: '10px',
         display: 'flex',
-        gap: '20px',
-        zIndex: 1060,
+        gap: '10px',
+        pointerEvents: "auto"
       }}
     >
-    <LegalDocumentPanel
-      documentType="quellen"
-      isOpen={openDocument === 'quellen'}
-      setOpenDocument={setOpenDocument}
-    />
-    <LegalDocumentPanel
-      documentType="impressum"
-      isOpen={openDocument === 'impressum'}
-      setOpenDocument={setOpenDocument}
-    />
+      <LegalDocumentPanel
+        documentType="quellen"
+        isOpen={openDocument === 'quellen'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="impressum"
+        isOpen={openDocument === 'impressum'}
+        setOpenDocument={setOpenDocument}
+      />
       <LegalDocumentPanel
         documentType="datenschutz"
         isOpen={openDocument === 'datenschutz'}
         setOpenDocument={setOpenDocument}
       />
       <LegalDocumentPanel
-        documentType="agb"
-        isOpen={openDocument === 'agb'}
-        setOpenDocument={setOpenDocument}
-      />
-      <LegalDocumentPanel
-        documentType="widerruf"
-        isOpen={openDocument === 'widerruf'}
+        documentType="AGB & Widerruf"
+        isOpen={openDocument === 'AGB & Widerruf'}
         setOpenDocument={setOpenDocument}
       />
     </div>
   );
 };
+
 
 export default LegalDocuments;

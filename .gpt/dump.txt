@@ -99,8 +99,7 @@ services:
       - 5576:80
     volumes:
       - ./data/tileset:/usr/share/nginx/html:ro
-    depends_on:
-      - easyopen_backend
+      - ./backend/tileset.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - easyopen_network
 
@@ -155,8 +154,125 @@ networks:
 
 ### Overview
 
-EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from Germ
-................................
+EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
+
+Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
+
+- **3D Buildings (LOD1/LOD2)**
+
+The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
+
+---
+
+### Key Features
+
+- **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
+- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
+- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
+- **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
+- **Payment Integration**: Secure payment processing via Stripe.
+- **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
+
+---
+
+### Technologies Used
+
+#### Backend
+
+- **PostGIS**: Spatial database for storing and querying geographic data efficiently.
+- **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
+- **GDAL**: Used for data conversion between formats.
+- **Docker**: Containerized deployment for portability and scalability.
+- **Stripe API**: For handling payment transactions.
+
+#### Frontend
+
+- **React**: JavaScript library for building user interfaces.
+- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
+- **Deck.gl**: For rendering 3D data on the map.
+- **Mapbox Draw**: Allows users to draw shapes on the map.
+
+---
+
+### Getting Started
+
+#### Prerequisites
+
+- **Docker** and **Docker Compose** installed on your system.
+- **Node.js** and **npm/yarn** (for frontend development).
+- **Python 3.10+** (for backend development).
+
+#### Setup Instructions
+
+##### Clone the Repository
+
+```bash
+git clone https://github.com/your-repo/easyopendata.git
+cd easyopendata
+```
+
+##### Environment Variables
+
+Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
+
+##### Run with Docker Compose
+
+```bash
+docker-compose up --build
+```
+
+This command will:
+
+- Start the PostGIS database.
+- Build and run the backend FastAPI server.
+- Build and run the frontend React application.
+
+##### Access the Application
+
+- **Frontend**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:5400](http://localhost:5400)
+
+---
+
+### Usage
+
+1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
+2. **Select an Area**: Use the drawing tools to select an area on the map.
+3. **Choose Data Layers**: Select the data layers you wish to download.
+4. **Payment**: Proceed to payment if required.
+5. **Download Data**: After processing, download your data in the desired format.
+
+---
+
+### Project Structure
+
+- **backend/**: Contains the FastAPI backend application.
+  - `app/`: FastAPI application code.
+  - `db/`: Database initialization scripts.
+  - `ingestion/`: Scripts for data ingestion and processing.
+- **frontend/**: Contains the React frontend application.
+  - `src/`: React application source code.
+  - `public/`: Static assets.
+
+---
+
+### Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
+
+---
+
+### License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+---
+
+### Contact
+
+For questions, feedback, or support, contact us at:
+
+- **Email**: support@easyopendata.com
 
 &&& FILE: ./backend\Dockerfile
 &&& CONTENT:
@@ -179,8 +295,190 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 
 ## Overview
 
-The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the fronte
-................................
+The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the frontend application. It interacts with a PostGIS database to store and query spatial data.
+
+---
+
+## Key Components
+
+- **FastAPI Application**: Provides RESTful APIs for data retrieval and processing.
+- **PostGIS Database**: Stores spatial data and provides efficient spatial queries.
+- **Data Ingestion Scripts**: Scripts to download, transform, and ingest data into the database.
+- **Payment Processing**: Integration with Stripe API for handling payments.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Docker** and **Docker Compose**
+- **Python 3.10+**
+- **GDAL** and **OGR** libraries
+- **Conda** (optional, for managing environments)
+- **Node.js** and **npm** (for gltf-pipeline)
+
+### Running with Docker
+
+The easiest way to run the backend is using Docker Compose.
+
+#### Build and Run
+
+```bash
+docker-compose up --build
+```
+
+This will start the PostGIS database and the FastAPI backend.
+
+#### Accessing the Backend API
+
+- The backend API will be available at: [http://localhost:5400](http://localhost:5400)
+
+### Manual Setup
+
+If you prefer to run the backend without Docker, follow these steps.
+
+#### 1. Create a Virtual Environment
+
+Using Conda:
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install Dependencies
+
+Install GDAL and its libraries:
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+Install other dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+#### 3. Install gltf-pipeline
+
+```bash
+npm install -g gltf-pipeline
+```
+
+#### 4. Setup the Database
+
+Ensure PostgreSQL and PostGIS are installed.
+
+```bash
+sudo apt install postgresql postgis
+```
+
+Create the database and extensions:
+
+```sql
+CREATE DATABASE easyopendata_database;
+\c easyopendata_database;
+CREATE EXTENSION postgis;
+```
+
+#### 5. Run Database Initialization Scripts
+
+```bash
+psql -U postgres -d easyopendata_database -f backend/db/init.sql
+```
+
+#### 6. Run the FastAPI Application
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+---
+
+## Data Ingestion
+
+The `backend/ingestion` directory contains scripts to download and process data.
+
+### Ingesting Data
+
+1. **Navigate to the ingestion directory**
+
+```bash
+cd backend/ingestion
+```
+
+2. **Run the Ingestion Script**
+
+The `bayern.py` script processes Meta4 files to download and ingest data.
+
+```bash
+python bayern.py
+```
+
+**Note**: Ensure you have the necessary Meta4 files in `data_sources/` and that you have adjusted the `META4_PATH` in the script.
+
+### Requirements
+
+- **lxml**
+- **psycopg2**
+- **GDAL/OGR** command-line tools (`ogr2ogr`)
+- **pg2b3dm** executable (must be in `libs/`)
+
+---
+
+## Directory Structure
+
+- **app/**: FastAPI application code.
+  - `main.py`: Main application file.
+  - `database.py`: Database connection setup.
+  - `models.py`: Database models and Pydantic schemas.
+  - `retrieve_geom.py`: Functions to retrieve and process geometries.
+
+- **db/**: Database scripts.
+  - `init.sql`: Database initialization script.
+  - `index.sql`: Indexing script for the database.
+
+- **ingestion/**: Data ingestion scripts.
+  - `bayern.py`: Script to process and ingest data.
+  - `data_sources/`: Directory containing Meta4 files.
+  - `data_local/`: Directory where downloaded data will be stored.
+  - `libs/`: Contains necessary executables like `pg2b3dm.exe`.
+
+---
+
+## API Endpoints
+
+- **GET /**: Root endpoint to check if the backend is running.
+- **POST /retrieve_obj**: Accepts a GeoJSON region and returns an OBJ file with the buildings within that region.
+- **POST /create-payment-intent**: Creates a Stripe payment intent for processing payments.
+
+---
+
+## Environment Variables
+
+- **DATABASE_URL**: The connection string for the PostGIS database.
+- **STRIPE_API_KEY**: Your Stripe secret API key for payment processing.
+
+---
+
+## Payment Processing
+
+The backend integrates with Stripe to handle payments. Ensure you have set your Stripe API keys in the environment variables.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the backend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -200,6 +498,27 @@ redis
 stripe
 pyproj
 lxml
+
+&&& FILE: ./backend\tileset.conf
+&&& CONTENT:
+server {
+    listen 80;
+    server_name localhost;
+
+    root /usr/share/nginx/html;
+
+    # Add the CORS header
+    add_header 'Access-Control-Allow-Origin' '*' always;
+
+    # If you want to allow specific headers or methods, add them too
+    # add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    # add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
 
 &&& FILE: ./backend\app\database.py
 &&& CONTENT:
@@ -393,17 +712,22 @@ async def retrieve_obj_file(region_geojson, output_path):
 
     # Create a Transformer object for coordinate transformation
     transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
+    
+    polygon = func.ST_SetSRID(func.ST_GeomFromGeoJSON(polygon_geojson_str), 4326)
 
     # Start an asynchronous database session
     async with async_session() as session:
         # Query the database for buildings within the polygon
-        stmt = select(
-            Building.gml_id,
-            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
-        ).where(
-            func.ST_Intersects(
-                func.ST_MakeValid(Building.geom),
-                func.ST_MakeValid(func.ST_GeomFromGeoJSON(polygon_geojson_str))
+        stmt = (
+            select(
+                Building.gml_id,
+                func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+            )
+            .where(
+                # First, a bounding box check using the '&&' operator (leverages GIST index)
+                Building.geom.op('&&')(polygon),
+                # Then the exact intersection
+                func.ST_Intersects(Building.geom, polygon)
             )
         )
         
@@ -514,6 +838,10 @@ BEGIN
         ALTER TABLE public.building ADD CONSTRAINT gml_id_unique UNIQUE (gml_id);
     END IF;
 END $$;
+
+UPDATE building
+SET geom = ST_MakeValid(geom)
+WHERE NOT ST_IsValid(geom);
 
 -- Cluster the table using the index
 CLUSTER building USING buildings_geom_idx;
@@ -1391,8 +1719,129 @@ if __name__ == '__main__':
 
 ## Overview
 
-The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into a PostGIS database. It also incl
-................................
+The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into a PostGIS database. It also includes tools for generating and optimizing 3D tilesets from the database.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Conda** (optional, for managing Python environments)
+- **GDAL** and **OGR** libraries
+- **Python 3.x**
+- **Node.js** and **npm** (for `gltf-pipeline` and other utilities)
+- **PostgreSQL with PostGIS extension**
+
+---
+
+### Steps
+
+#### 1. Create a Conda Environment (Optional)
+
+```bash
+conda create -n easyopendata_env python=3.10
+conda activate easyopendata_env
+```
+
+#### 2. Install GDAL and Libraries
+
+```bash
+conda install -c conda-forge gdal libgdal
+```
+
+#### 3. Install Python Dependencies
+
+```bash
+pip install -r ../../requirements.txt
+```
+
+#### 4. Install gltf-pipeline
+
+```bash
+npm install -g gltf-pipeline
+```
+
+#### 5. Set Up PostgreSQL Database
+
+Ensure you have a PostgreSQL instance running with the PostGIS extension installed. Update the `DATABASE_URL` in the script to point to your database.
+
+#### 6. Prepare Required Executables
+
+- Place the `pg2b3dm` executable in the `libs/` directory.
+- Ensure `ogr2ogr` is available in your system's `PATH`.
+
+---
+
+## Data Ingestion Script
+
+### `process_meta4.py`
+
+This script sequentially downloads GML files from a `.meta4` file, transforms them by embedding polygons into `surfaceMember` elements, ingests them into a PostgreSQL database using a temporary table, converts the data into 3D tiles, and merges them into a single tileset.
+
+#### Workflow
+
+1. **Parse Meta4**: Extract file metadata (URLs, hashes, etc.).
+2. **Download**: Fetch files and verify size and hash integrity.
+3. **Transform GML**: Embed referenced polygons into the GML structure.
+4. **Ingest**: Load transformed data into a temporary PostgreSQL table.
+5. **Update Geometries**: Align geometries to the ground level.
+6. **Generate 3D Tiles**: Use `pg2b3dm` to create tilesets.
+7. **Optimize with Draco Compression**: Compress `.glb` files to reduce size.
+8. **Merge Tilesets**: Combine batch tilesets into a single `tileset.json`.
+9. **Append Data**: Append data from the temporary table to the main table.
+10. **Clean Up**: Remove processed files and drop temporary tables.
+
+---
+
+### Usage
+
+```bash
+python process_meta4.py file.meta4
+```
+
+#### Configuration Variables
+
+- **`META4_PATH`**: Path to the `.meta4` file.
+- **`DATABASE_URL`**: PostgreSQL connection string.
+- **`CACHE_DIR`**: Directory for storing tileset outputs.
+- **`DATA_DIR`**: Directory for storing temporary data files.
+- **`TEMP_TABLE`**: Temporary table name.
+- **`MAIN_TABLE`**: Main table name.
+
+---
+
+## Directory Structure
+
+- **`data_sources/`**: Contains `.meta4` files listing URLs for GML data.
+- **`data_local/`**: Directory for downloaded GML files.
+- **`libs/`**: Contains utilities like `pg2b3dm`.
+- **`tileset/`**: Directory for generated tilesets.
+
+---
+
+## Tools and Dependencies
+
+- **GDAL/OGR**: Used for transforming and ingesting GML files.
+- **PostGIS**: PostgreSQL extension for spatial data management.
+- **pg2b3dm**: Converts PostGIS data to 3D tiles compatible with CesiumJS.
+- **gltf-pipeline**: Optimizes and compresses 3D tiles with Draco compression.
+
+---
+
+## Performance Tips
+
+- **Batch Size**: The `BATCH_N` parameter controls the number of GML files processed per batch. Adjust it based on available memory and performance needs.
+- **Indexes**: Ensure database indexes are optimized for spatial operations by executing the provided `index.sql`.
+
+---
+
+## Troubleshooting
+ 
+- **Failed Downloads**: Ensure URLs in the `.meta4` file are valid and reachable.
+- **Database Errors**: Check that the database URL and permissions are correctly configured.
+- **Script Errors**: Refer to the detailed logs for troubleshooting.
+
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
 &&& CONTENT:
@@ -1568,8 +2017,133 @@ export default [
 
 ## Overview
 
-The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and down
-................................
+The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and download spatial data. It integrates with the backend API and handles payment processing via Stripe.
+
+---
+
+## Key Features
+
+- **Interactive Map Interface**: Built with React and MapLibre GL JS for map rendering.
+- **Drawing Tools**: Allows users to draw polygons to select regions.
+- **3D Visualization**: Uses Deck.gl to render 3D buildings.
+- **Search Functionality**: Integrated with Nominatim for location search.
+- **Payment Processing**: Secure payments via Stripe.
+- **Responsive Design**: Adapts to mobile and desktop screens.
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- **Node.js** and **npm** or **yarn**
+
+### Installation
+
+1. **Install Dependencies**
+
+```bash
+cd frontend
+yarn install
+# or
+npm install
+```
+
+### Running the Development Server
+
+```bash
+yarn dev
+# or
+npm run dev
+```
+
+The application will be available at [http://localhost:5173](http://localhost:5173)
+
+### Build for Production
+
+```bash
+yarn build
+# or
+npm run build
+```
+
+The production build will be in the `dist/` directory.
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the `frontend` directory to set environment variables.
+
+- **VITE_BACKEND_URL**: The URL of the backend API.
+
+Example `.env` file:
+
+```
+VITE_BACKEND_URL=http://localhost:5400
+```
+
+### Map Style
+
+The map uses a custom style defined in `src/basemap.json`. You can customize the map style by modifying this file or replacing it with another style.
+
+---
+
+## Project Structure
+
+- **src/**: Contains the source code of the React application.
+  - `App.tsx`: Main application component.
+  - `CheckoutForm.tsx`: Handles payment form and Stripe integration.
+  - `FloatingPanel.tsx`: UI component for user interactions.
+  - `Legals.tsx`: Displays legal documents.
+  - `draw-control.ts`: Custom control for drawing polygons.
+  - `basemap.json`: Custom map style.
+
+- **public/**: Contains static assets.
+
+---
+
+## Key Components
+
+- **Map Integration**: Uses MapLibre GL JS for map rendering and Mapbox Draw for drawing tools.
+- **3D Rendering**: Deck.gl is used to render 3D buildings.
+- **Payment Integration**: Stripe is integrated using `@stripe/react-stripe-js` and `@stripe/stripe-js`.
+- **Legal Documents**: Legal documents are displayed using `ReactMarkdown`.
+
+---
+
+## Customization
+
+- **Map Style**: Modify `src/basemap.json` to change the map appearance.
+- **API Endpoints**: Ensure `VITE_BACKEND_URL` points to the correct backend API.
+- **Stripe Keys**: Update the publishable key in `FloatingPanel.tsx` and ensure the backend has the correct secret key.
+
+---
+
+## Legal Documents
+
+The `docs/` directory contains Markdown files for legal documents such as:
+
+- `agb.md`: Terms and Conditions
+- `datenschutz.md`: Privacy Policy
+- `impressum.md`: Imprint
+- `widerruf.md`: Cancellation Policy
+
+These documents are displayed in the application using the `Legals.tsx` component.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure any changes to the frontend code are thoroughly tested.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 &&& FILE: ./frontend\tsconfig.json
 &&& CONTENT:
@@ -1609,6 +2183,205 @@ export default defineConfig({
   version "2.3.0"
   resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
+
+&&& FILE: ./frontend\docs\agb.md
+&&& CONTENT:
+# Allgemeine Geschäftsbedingungen
+
+## 1. Geltungsbereich
+
+Diese Allgemeinen Geschäftsbedingungen gelten für alle Bestellungen, die Kunden über unsere Website [Ihre Website-URL] tätigen.
+
+## 2. Vertragsschluss
+
+Der Vertrag kommt zustande, wenn wir Ihre Bestellung durch eine Auftragsbestätigung per E-Mail unmittelbar nach dem Erhalt Ihrer Bestellung annehmen.
+
+## 3. Preise und Zahlungsbedingungen
+
+Alle Preise sind Endpreise und enthalten die gesetzliche Mehrwertsteuer. Die Zahlung erfolgt per [Ihre Zahlungsmethoden, z.B. Kreditkarte, PayPal].
+
+## 4. Lieferung und Downloadbereitstellung
+
+Die bestellten Daten werden nach Zahlungseingang zum Download bereitgestellt oder per E-Mail zugesandt.
+
+## 5. Widerrufsrecht
+
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+## 6. Haftungsausschluss
+
+Wir übernehmen keine Haftung für die Richtigkeit, Vollständigkeit und Aktualität der bereitgestellten Daten.
+
+## 7. Urheberrecht
+
+Die heruntergeladenen Daten dürfen nur für den persönlichen Gebrauch verwendet werden. Eine Weitergabe an Dritte ist nicht gestattet.
+
+## 8. Datenschutz
+
+Wir verarbeiten Ihre personenbezogenen Daten gemäß unserer Datenschutzerklärung.
+
+## 9. Schlussbestimmungen
+
+Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist [Ihr Gerichtsstand].
+
+&&& FILE: ./frontend\docs\datenschutz.md
+&&& CONTENT:
+# Datenschutzerklärung
+
+Stand: [Aktuelles Datum]
+
+## 1. Datenschutz auf einen Blick
+
+### Allgemeine Hinweise
+Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
+
+### Datenerfassung auf dieser Website
+
+#### Wer ist verantwortlich für die Datenerfassung auf dieser Website?
+Die Datenverarbeitung auf dieser Website erfolgt durch den Websitebetreiber. Dessen Kontaktdaten können Sie dem Impressum dieser Website entnehmen.
+
+#### Wie erfassen wir Ihre Daten?
+Ihre Daten werden zum einen dadurch erhoben, dass Sie uns diese mitteilen. Hierbei kann es sich z.B. um Daten handeln, die Sie in ein Kontaktformular eingeben.
+
+Andere Daten werden automatisch beim Besuch der Website durch unsere IT-Systeme erfasst. Das sind vor allem technische Daten (z.B. Internetbrowser, Betriebssystem oder Uhrzeit des Seitenaufrufs).
+
+#### Wofür nutzen wir Ihre Daten?
+Ein Teil der Daten wird erhoben, um eine fehlerfreie Bereitstellung der Website zu gewährleisten. Andere Daten können zur Analyse Ihres Nutzerverhaltens verwendet werden.
+
+#### Welche Rechte haben Sie bezüglich Ihrer Daten?
+Sie haben jederzeit das Recht unentgeltlich Auskunft über Herkunft, Empfänger und Zweck Ihrer gespeicherten personenbezogenen Daten zu erhalten. Sie haben außerdem ein Recht, die Berichtigung, Sperrung oder Löschung dieser Daten zu verlangen. Hierzu sowie zu weiteren Fragen zum Thema Datenschutz können Sie sich jederzeit unter der im Impressum angegebenen Adresse an uns wenden.
+
+## 2. Allgemeine Hinweise und Pflichtinformationen
+
+### Datenschutz
+Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerklärung.
+
+### Hinweis zur verantwortlichen Stelle
+Die verantwortliche Stelle für die Datenverarbeitung auf dieser Website ist:
+
+[Ihr Name]
+[Ihre Straße und Hausnummer]
+[Ihre Postleitzahl und Stadt]
+
+Telefon: [Ihre Telefonnummer]
+E-Mail: [Ihre E-Mail-Adresse]
+
+Verantwortliche Stelle ist die natürliche oder juristische Person, die allein oder gemeinsam mit anderen über die Zwecke und Mittel der Verarbeitung von personenbezogenen Daten (z.B. Namen, E-Mail-Adressen o. Ä.) entscheidet.
+
+## 3. Datenerfassung auf unserer Website
+
+### Cookies
+Die Internetseiten verwenden teilweise so genannte Cookies. Cookies richten auf Ihrem Rechner keinen Schaden an und enthalten keine Viren. Cookies dienen dazu, unser Angebot nutzerfreundlicher, effektiver und sicherer zu machen.
+
+### Server-Log-Dateien
+Der Provider der Seiten erhebt und speichert automatisch Informationen in so genannten Server-Log-Dateien, die Ihr Browser automatisch an uns übermittelt. Dies sind:
+
+- Browsertyp und Browserversion
+- verwendetes Betriebssystem
+- Referrer URL
+- Hostname des zugreifenden Rechners
+- Uhrzeit der Serveranfrage
+- IP-Adresse
+
+Eine Zusammenführung dieser Daten mit anderen Datenquellen wird nicht vorgenommen.
+
+### Kontaktformular
+Wenn Sie uns per Kontaktformular Anfragen zukommen lassen, werden Ihre Angaben aus dem Anfrageformular inklusive der von Ihnen dort angegebenen Kontaktdaten zwecks Bearbeitung der Anfrage und für den Fall von Anschlussfragen bei uns gespeichert. Diese Daten geben wir nicht ohne Ihre Einwilligung weiter.
+
+### Zahlungsdaten
+Bei der Bezahlung über unsere Website werden Ihre Zahlungsdaten zur Abwicklung der Transaktion an unseren Zahlungsdienstleister übermittelt. Diese Daten werden verschlüsselt übertragen und nur für den Zweck der Zahlungsabwicklung verwendet.
+
+## 4. Analyse Tools und Werbung
+
+[Falls Sie Analyse-Tools wie Google Analytics verwenden, fügen Sie hier die entsprechenden Informationen ein]
+
+## 5. Plugins und Tools
+
+[Falls Sie Plugins oder Tools von Drittanbietern verwenden, fügen Sie hier die entsprechenden Informationen ein]
+
+## 6. Ihre Rechte als betroffene Person
+
+Sie haben das Recht:
+
+- gemäß Art. 15 DSGVO Auskunft über Ihre von uns verarbeiteten personenbezogenen Daten zu verlangen;
+- gemäß Art. 16 DSGVO unverzüglich die Berichtigung unrichtiger oder Vervollständigung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
+- gemäß Art. 17 DSGVO die Löschung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
+- gemäß Art. 18 DSGVO die Einschränkung der Verarbeitung Ihrer personenbezogenen Daten zu verlangen;
+- gemäß Art. 20 DSGVO Ihre personenbezogenen Daten, die Sie uns bereitgestellt haben, in einem strukturierten, gängigen und maschinenlesbaren Format zu erhalten oder die Übermittlung an einen anderen Verantwortlichen zu verlangen;
+- gemäß Art. 21 DSGVO Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten einzulegen;
+- gemäß Art. 77 DSGVO sich bei einer Aufsichtsbehörde zu beschweren.
+
+
+&&& FILE: ./frontend\docs\impressum.md
+&&& CONTENT:
+# Impressum
+
+Angaben gemäß § 5 TMG:
+
+[Ihr Name]
+[Ihre Straße und Hausnummer]
+[Ihre Postleitzahl und Stadt]
+
+## Kontakt
+Telefon: [Ihre Telefonnummer]
+E-Mail: [Ihre E-Mail-Adresse]
+
+## Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV:
+[Ihr Name]
+[Ihre Adresse]
+
+## Haftungsausschluss
+
+### Haftung für Inhalte
+Die Inhalte unserer Seiten wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.
+
+### Haftung für Links
+Unser Angebot enthält Links zu externen Webseiten Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen.
+
+### Urheberrecht
+Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.
+
+&&& FILE: ./frontend\docs\quellen.md
+&&& CONTENT:
+| Bundesland               | Lizenz    | Quelle                                                                                                                                      |
+|--------------------------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Baden-Württemberg        | BY 2.0    | [OpenGeoData Baden-Württemberg](https://opengeodata.lgl-bw.de/#/(sidenav:product/13))                                                       |
+| Bayern                   | CC BY 4.0 | [OpenGeoData Bayern](https://geodaten.bayern.de/opengeodata/OpenDataDetail.html?pn=lod2&active=MASSENDOWNLOAD)                              |
+| Berlin                   | BY 2.0    | [GDI Berlin](https://gdi.berlin.de/geonetwork/srv/eng/catalog.search#/metadata/3c7c49af-00a4-3bcd-bc00-20e7f0f1b7bf)                        |
+| Brandenburg              |           |                                                                                                                                             |
+| Bremen                   |           |                                                                                                                                             |
+| Hamburg                  |           |                                                                                                                                             |
+| Hessen                   | ?         | [Hessen Geodaten](https://gds.hessen.de/INTERSHOP/web/WFS/HLBG-Geodaten-Site/de_DE/-/EUR/ViewDownloadcenter-Start?path=3D-Daten/3D-Geb%C3%A4udemodelle/3D-Geb%C3%A4udemodelle%20LoD2/Hochtaunuskreis) |
+| Mecklenburg-Vorpommern   |           |                                                                                                                                             |
+| Niedersachsen            |           |                                                                                                                                             |
+| Nordrhein-Westfalen      |           |                                                                                                                                             |
+| Rheinland-Pfalz          |           |                                                                                                                                             |
+| Saarland                 |           |                                                                                                                                             |
+| Sachsen                  |           |                                                                                                                                             |
+| Sachsen-Anhalt           |           |                                                                                                                                             |
+| Schleswig-Holstein       |           |                                                                                                                                             |
+| Thüringen                |           |                                                                                                                                             |
+
+
+&&& FILE: ./frontend\docs\widerruf.md
+&&& CONTENT:
+# Widerrufsbelehrung
+
+## Widerrufsrecht
+
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
+
+Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
+
+Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
+
+## Folgen des Widerrufs
+
+Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
+
+Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
 
 &&& FILE: ./frontend\public\basemap.json
 &&& CONTENT:
@@ -1948,9 +2721,6 @@ interface DrawControlProps {
   onUpdate: (e: any) => void;
   onDelete: (e: any) => void;
 }
-
-const container = document.body.appendChild(document.createElement("div"));
-createRoot(container).render(<Root />);
 
 export default Root;
 
