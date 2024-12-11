@@ -14,3 +14,4 @@ redis
 stripe
 pyproj
 lxml
+shapely

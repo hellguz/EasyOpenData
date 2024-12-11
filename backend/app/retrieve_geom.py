@@ -44,35 +44,18 @@ async def retrieve_obj_file(region_geojson, output_path):
     polygon = func.ST_MakeValid(polygon)
     polygon = func.ST_Force3D(polygon)
     polygon = func.ST_Buffer(polygon, 0)
-
-
-    # Runned this command on DB to make this request work but geometry is corrupted:
-    # SET client_min_messages = WARNING;
-
-    # -- Ensure all building geometries are MULTIPOLYGONZ and valid
-    # UPDATE building
-    # SET geom = ST_Force3D(ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3)))
-    # WHERE NOT ST_IsValid(geom) 
-    #    OR GeometryType(geom) NOT IN ('MULTIPOLYGON', 'MULTIPOLYGONZ');
-
-    # -- For extra safety, apply a small zero-buffer to fix micro-topologies:
-    # UPDATE building
-    # SET geom = ST_Buffer(geom, 0)
-    # WHERE NOT ST_IsValid(geom);
-
-    # -- Verify everything is now valid:
-    # SELECT COUNT(*) FROM building WHERE NOT ST_IsValid(geom);
-    # -- Should return 0.
-    # 
-    # RESET client_min_messages;
-
+    
+    # Start an asynchronous database session
     async with async_session() as session:
-        # Query using bounding box and intersection, no ST_MakeValid on buildings
+        # Query the database for buildings within the polygon
         stmt = select(
-            Building.gml_id, func.ST_AsGeoJSON(Building.geom).label("geom_geojson")
-        ).where(  # fetch raw geom
-            Building.geom.op("&&")(polygon),  # bounding box filter
-            func.ST_Intersects(Building.geom, polygon),
+            Building.gml_id,
+            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+        ).where(
+            func.ST_Intersects(
+                func.ST_MakeValid(Building.geom),
+                polygon
+            )
         )
         
         result = await session.execute(stmt)

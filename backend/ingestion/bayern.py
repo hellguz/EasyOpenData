@@ -664,11 +664,65 @@ def merge_tilesets_into_one(output_path, input_tilesets):
         json.dump(merged_tileset, f, indent=2)
     print(f"Merged tileset written to {output_path}")
 
+def ensure_main_table_exists(database_url, table_name):
+    """
+    Ensures that the main table exists in the database. Creates it if it does not exist.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        table_name (str): Name of the main table.
+    """
+    logging.info(f"Ensuring main table '{table_name}' exists.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            # Check if the table exists
+            cur.execute(f"""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = '{table_name}'
+                );
+            """)
+            exists = cur.fetchone()[0]
+
+            if not exists:
+                logging.info(f"Table '{table_name}' does not exist. Creating it.")
+                cur.execute(f"""
+                    CREATE TABLE {table_name} (
+                        gml_id VARCHAR PRIMARY KEY,
+                        geom GEOMETRY(GEOMETRYZ, 4326),
+                        attributes JSONB
+                    );
+                """)
+                conn.commit()
+                logging.info(f"Table '{table_name}' created successfully.")
+            else:
+                logging.info(f"Table '{table_name}' already exists.")
+    except Exception as e:
+        logging.error(f"Failed to ensure table '{table_name}' exists: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def main(meta4_file):
     # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
+    
+    # Ensure the main table exists
+    ensure_main_table_exists(DATABASE_URL, MAIN_TABLE)
+    # execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
+    
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
