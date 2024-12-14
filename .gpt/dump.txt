@@ -1,3 +1,8 @@
+&&& FILE: ./.env
+&&& CONTENT:
+VITE_BASE_URL = https://easyopen-server.i-am-hellguz.uk
+VITE_TILESET_URL= https://easyopen-tiles.i-am-hellguz.uk/tileset.json
+
 &&& FILE: ./.gitignore
 &&& CONTENT:
 # Ignore local data files
@@ -90,6 +95,7 @@ services:
       VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk
     networks:
       - easyopen_network
+      
 
   easyopen_tileset:
     container_name: easyopen_tileset
@@ -154,125 +160,8 @@ networks:
 
 ### Overview
 
-EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
-
-Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
-
-- **3D Buildings (LOD1/LOD2)**
-
-The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
-
----
-
-### Key Features
-
-- **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
-- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
-- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
-- **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
-- **Payment Integration**: Secure payment processing via Stripe.
-- **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
-
----
-
-### Technologies Used
-
-#### Backend
-
-- **PostGIS**: Spatial database for storing and querying geographic data efficiently.
-- **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
-- **GDAL**: Used for data conversion between formats.
-- **Docker**: Containerized deployment for portability and scalability.
-- **Stripe API**: For handling payment transactions.
-
-#### Frontend
-
-- **React**: JavaScript library for building user interfaces.
-- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
-- **Deck.gl**: For rendering 3D data on the map.
-- **Mapbox Draw**: Allows users to draw shapes on the map.
-
----
-
-### Getting Started
-
-#### Prerequisites
-
-- **Docker** and **Docker Compose** installed on your system.
-- **Node.js** and **npm/yarn** (for frontend development).
-- **Python 3.10+** (for backend development).
-
-#### Setup Instructions
-
-##### Clone the Repository
-
-```bash
-git clone https://github.com/your-repo/easyopendata.git
-cd easyopendata
-```
-
-##### Environment Variables
-
-Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
-
-##### Run with Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-This command will:
-
-- Start the PostGIS database.
-- Build and run the backend FastAPI server.
-- Build and run the frontend React application.
-
-##### Access the Application
-
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
-- **Backend API**: [http://localhost:5400](http://localhost:5400)
-
----
-
-### Usage
-
-1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
-2. **Select an Area**: Use the drawing tools to select an area on the map.
-3. **Choose Data Layers**: Select the data layers you wish to download.
-4. **Payment**: Proceed to payment if required.
-5. **Download Data**: After processing, download your data in the desired format.
-
----
-
-### Project Structure
-
-- **backend/**: Contains the FastAPI backend application.
-  - `app/`: FastAPI application code.
-  - `db/`: Database initialization scripts.
-  - `ingestion/`: Scripts for data ingestion and processing.
-- **frontend/**: Contains the React frontend application.
-  - `src/`: React application source code.
-  - `public/`: Static assets.
-
----
-
-### Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
-
----
-
-### License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
----
-
-### Contact
-
-For questions, feedback, or support, contact us at:
-
-- **Email**: support@easyopendata.com
+EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from Germ
+................................
 
 &&& FILE: ./backend\Dockerfile
 &&& CONTENT:
@@ -295,190 +184,8 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 
 ## Overview
 
-The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the frontend application. It interacts with a PostGIS database to store and query spatial data.
-
----
-
-## Key Components
-
-- **FastAPI Application**: Provides RESTful APIs for data retrieval and processing.
-- **PostGIS Database**: Stores spatial data and provides efficient spatial queries.
-- **Data Ingestion Scripts**: Scripts to download, transform, and ingest data into the database.
-- **Payment Processing**: Integration with Stripe API for handling payments.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-- **Python 3.10+**
-- **GDAL** and **OGR** libraries
-- **Conda** (optional, for managing environments)
-- **Node.js** and **npm** (for gltf-pipeline)
-
-### Running with Docker
-
-The easiest way to run the backend is using Docker Compose.
-
-#### Build and Run
-
-```bash
-docker-compose up --build
-```
-
-This will start the PostGIS database and the FastAPI backend.
-
-#### Accessing the Backend API
-
-- The backend API will be available at: [http://localhost:5400](http://localhost:5400)
-
-### Manual Setup
-
-If you prefer to run the backend without Docker, follow these steps.
-
-#### 1. Create a Virtual Environment
-
-Using Conda:
-
-```bash
-conda create -n easyopendata_env python=3.10
-conda activate easyopendata_env
-```
-
-#### 2. Install Dependencies
-
-Install GDAL and its libraries:
-
-```bash
-conda install -c conda-forge gdal libgdal
-```
-
-Install other dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-#### 3. Install gltf-pipeline
-
-```bash
-npm install -g gltf-pipeline
-```
-
-#### 4. Setup the Database
-
-Ensure PostgreSQL and PostGIS are installed.
-
-```bash
-sudo apt install postgresql postgis
-```
-
-Create the database and extensions:
-
-```sql
-CREATE DATABASE easyopendata_database;
-\c easyopendata_database;
-CREATE EXTENSION postgis;
-```
-
-#### 5. Run Database Initialization Scripts
-
-```bash
-psql -U postgres -d easyopendata_database -f backend/db/init.sql
-```
-
-#### 6. Run the FastAPI Application
-
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
----
-
-## Data Ingestion
-
-The `backend/ingestion` directory contains scripts to download and process data.
-
-### Ingesting Data
-
-1. **Navigate to the ingestion directory**
-
-```bash
-cd backend/ingestion
-```
-
-2. **Run the Ingestion Script**
-
-The `bayern.py` script processes Meta4 files to download and ingest data.
-
-```bash
-python bayern.py
-```
-
-**Note**: Ensure you have the necessary Meta4 files in `data_sources/` and that you have adjusted the `META4_PATH` in the script.
-
-### Requirements
-
-- **lxml**
-- **psycopg2**
-- **GDAL/OGR** command-line tools (`ogr2ogr`)
-- **pg2b3dm** executable (must be in `libs/`)
-
----
-
-## Directory Structure
-
-- **app/**: FastAPI application code.
-  - `main.py`: Main application file.
-  - `database.py`: Database connection setup.
-  - `models.py`: Database models and Pydantic schemas.
-  - `retrieve_geom.py`: Functions to retrieve and process geometries.
-
-- **db/**: Database scripts.
-  - `init.sql`: Database initialization script.
-  - `index.sql`: Indexing script for the database.
-
-- **ingestion/**: Data ingestion scripts.
-  - `bayern.py`: Script to process and ingest data.
-  - `data_sources/`: Directory containing Meta4 files.
-  - `data_local/`: Directory where downloaded data will be stored.
-  - `libs/`: Contains necessary executables like `pg2b3dm.exe`.
-
----
-
-## API Endpoints
-
-- **GET /**: Root endpoint to check if the backend is running.
-- **POST /retrieve_obj**: Accepts a GeoJSON region and returns an OBJ file with the buildings within that region.
-- **POST /create-payment-intent**: Creates a Stripe payment intent for processing payments.
-
----
-
-## Environment Variables
-
-- **DATABASE_URL**: The connection string for the PostGIS database.
-- **STRIPE_API_KEY**: Your Stripe secret API key for payment processing.
-
----
-
-## Payment Processing
-
-The backend integrates with Stripe to handle payments. Ensure you have set your Stripe API keys in the environment variables.
-
----
-
-## Contributing
-
-Contributions are welcome! Please ensure any changes to the backend code are thoroughly tested.
-
----
-
-## License
-
-This project is licensed under the MIT License.
+The backend of EasyOpenData is a FastAPI application that serves as the core of the platform, handling data retrieval, processing, and API endpoints for the fronte
+................................
 
 &&& FILE: ./backend\requirements.txt
 &&& CONTENT:
@@ -581,7 +288,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", os.getenv("VITE_BASE_URL")], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1790,129 +1497,8 @@ if __name__ == '__main__':
 
 ## Overview
 
-The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into a PostGIS database. It also includes tools for generating and optimizing 3D tilesets from the database.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Conda** (optional, for managing Python environments)
-- **GDAL** and **OGR** libraries
-- **Python 3.x**
-- **Node.js** and **npm** (for `gltf-pipeline` and other utilities)
-- **PostgreSQL with PostGIS extension**
-
----
-
-### Steps
-
-#### 1. Create a Conda Environment (Optional)
-
-```bash
-conda create -n easyopendata_env python=3.10
-conda activate easyopendata_env
-```
-
-#### 2. Install GDAL and Libraries
-
-```bash
-conda install -c conda-forge gdal libgdal
-```
-
-#### 3. Install Python Dependencies
-
-```bash
-pip install -r ../../requirements.txt
-```
-
-#### 4. Install gltf-pipeline
-
-```bash
-npm install -g gltf-pipeline
-```
-
-#### 5. Set Up PostgreSQL Database
-
-Ensure you have a PostgreSQL instance running with the PostGIS extension installed. Update the `DATABASE_URL` in the script to point to your database.
-
-#### 6. Prepare Required Executables
-
-- Place the `pg2b3dm` executable in the `libs/` directory.
-- Ensure `ogr2ogr` is available in your system's `PATH`.
-
----
-
-## Data Ingestion Script
-
-### `process_meta4.py`
-
-This script sequentially downloads GML files from a `.meta4` file, transforms them by embedding polygons into `surfaceMember` elements, ingests them into a PostgreSQL database using a temporary table, converts the data into 3D tiles, and merges them into a single tileset.
-
-#### Workflow
-
-1. **Parse Meta4**: Extract file metadata (URLs, hashes, etc.).
-2. **Download**: Fetch files and verify size and hash integrity.
-3. **Transform GML**: Embed referenced polygons into the GML structure.
-4. **Ingest**: Load transformed data into a temporary PostgreSQL table.
-5. **Update Geometries**: Align geometries to the ground level.
-6. **Generate 3D Tiles**: Use `pg2b3dm` to create tilesets.
-7. **Optimize with Draco Compression**: Compress `.glb` files to reduce size.
-8. **Merge Tilesets**: Combine batch tilesets into a single `tileset.json`.
-9. **Append Data**: Append data from the temporary table to the main table.
-10. **Clean Up**: Remove processed files and drop temporary tables.
-
----
-
-### Usage
-
-```bash
-python process_meta4.py file.meta4
-```
-
-#### Configuration Variables
-
-- **`META4_PATH`**: Path to the `.meta4` file.
-- **`DATABASE_URL`**: PostgreSQL connection string.
-- **`CACHE_DIR`**: Directory for storing tileset outputs.
-- **`DATA_DIR`**: Directory for storing temporary data files.
-- **`TEMP_TABLE`**: Temporary table name.
-- **`MAIN_TABLE`**: Main table name.
-
----
-
-## Directory Structure
-
-- **`data_sources/`**: Contains `.meta4` files listing URLs for GML data.
-- **`data_local/`**: Directory for downloaded GML files.
-- **`libs/`**: Contains utilities like `pg2b3dm`.
-- **`tileset/`**: Directory for generated tilesets.
-
----
-
-## Tools and Dependencies
-
-- **GDAL/OGR**: Used for transforming and ingesting GML files.
-- **PostGIS**: PostgreSQL extension for spatial data management.
-- **pg2b3dm**: Converts PostGIS data to 3D tiles compatible with CesiumJS.
-- **gltf-pipeline**: Optimizes and compresses 3D tiles with Draco compression.
-
----
-
-## Performance Tips
-
-- **Batch Size**: The `BATCH_N` parameter controls the number of GML files processed per batch. Adjust it based on available memory and performance needs.
-- **Indexes**: Ensure database indexes are optimized for spatial operations by executing the provided `index.sql`.
-
----
-
-## Troubleshooting
- 
-- **Failed Downloads**: Ensure URLs in the `.meta4` file are valid and reachable.
-- **Database Errors**: Check that the database URL and permissions are correctly configured.
-- **Script Errors**: Refer to the detailed logs for troubleshooting.
-
+The `ingestion` directory contains scripts and resources for downloading, transforming, and ingesting 3D building data into a PostGIS database. It also incl
+................................
 
 &&& FILE: ./backend\ingestion\data_sources\bamberg.meta4
 &&& CONTENT:
@@ -1948,10 +1534,6 @@ python process_meta4.py file.meta4
 &&& CONTENT:
 node_modules
 
-
-&&& FILE: ./frontend\.env
-&&& CONTENT:
-HTTPS=true
 
 &&& FILE: ./frontend\.gitignore
 &&& CONTENT:
@@ -2002,6 +1584,41 @@ EXPOSE 5173
 
 CMD ["yarn", "dev", "--host", "0.0.0.0"]
 
+&&& FILE: ./frontend\Dockerfile.production
+&&& CONTENT:
+# Use a lightweight Node.js base image
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package.json and yarn.lock first for dependency installation
+COPY package.json yarn.lock ./
+
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy the rest of the frontend code
+COPY . .
+
+# Build the production-ready static files
+RUN yarn build
+
+# Use a lightweight web server for serving the static files
+FROM nginx:stable-alpine
+
+# Copy the production build from the builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy a custom nginx configuration to configure port 5173
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose the custom port
+EXPOSE 5173
+
+# Command to run nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+
 &&& FILE: ./frontend\eslint.config.js
 &&& CONTENT:
 import js from '@eslint/js'
@@ -2051,8 +1668,12 @@ export default [
 
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
   <title>EasyOpenData</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eeeeee" />
+
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.3.0/mapbox-gl-draw.css" type="text/css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2065,6 +1686,25 @@ export default [
 </body>
 
 </html>
+
+
+&&& FILE: ./frontend\nginx.conf
+&&& CONTENT:
+server {
+    listen 5173; # Custom port
+
+    server_name 0.0.0.0; # Ensure it listens on all network interfaces
+
+    root /usr/share/nginx/html; # Serve the static files
+
+    index index.html;
+
+    location / {
+        try_files $uri /index.html; # Enable SPA routing (if needed)
+    }
+
+    error_page 404 /index.html; # Handle 404 errors by serving the main app
+}
 
 
 &&& FILE: ./frontend\package.json
@@ -2088,133 +1728,8 @@ export default [
 
 ## Overview
 
-The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and download spatial data. It integrates with the backend API and handles payment processing via Stripe.
-
----
-
-## Key Features
-
-- **Interactive Map Interface**: Built with React and MapLibre GL JS for map rendering.
-- **Drawing Tools**: Allows users to draw polygons to select regions.
-- **3D Visualization**: Uses Deck.gl to render 3D buildings.
-- **Search Functionality**: Integrated with Nominatim for location search.
-- **Payment Processing**: Secure payments via Stripe.
-- **Responsive Design**: Adapts to mobile and desktop screens.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- **Node.js** and **npm** or **yarn**
-
-### Installation
-
-1. **Install Dependencies**
-
-```bash
-cd frontend
-yarn install
-# or
-npm install
-```
-
-### Running the Development Server
-
-```bash
-yarn dev
-# or
-npm run dev
-```
-
-The application will be available at [http://localhost:5173](http://localhost:5173)
-
-### Build for Production
-
-```bash
-yarn build
-# or
-npm run build
-```
-
-The production build will be in the `dist/` directory.
-
----
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the `frontend` directory to set environment variables.
-
-- **VITE_BACKEND_URL**: The URL of the backend API.
-
-Example `.env` file:
-
-```
-VITE_BACKEND_URL=http://localhost:5400
-```
-
-### Map Style
-
-The map uses a custom style defined in `src/basemap.json`. You can customize the map style by modifying this file or replacing it with another style.
-
----
-
-## Project Structure
-
-- **src/**: Contains the source code of the React application.
-  - `App.tsx`: Main application component.
-  - `CheckoutForm.tsx`: Handles payment form and Stripe integration.
-  - `FloatingPanel.tsx`: UI component for user interactions.
-  - `Legals.tsx`: Displays legal documents.
-  - `draw-control.ts`: Custom control for drawing polygons.
-  - `basemap.json`: Custom map style.
-
-- **public/**: Contains static assets.
-
----
-
-## Key Components
-
-- **Map Integration**: Uses MapLibre GL JS for map rendering and Mapbox Draw for drawing tools.
-- **3D Rendering**: Deck.gl is used to render 3D buildings.
-- **Payment Integration**: Stripe is integrated using `@stripe/react-stripe-js` and `@stripe/stripe-js`.
-- **Legal Documents**: Legal documents are displayed using `ReactMarkdown`.
-
----
-
-## Customization
-
-- **Map Style**: Modify `src/basemap.json` to change the map appearance.
-- **API Endpoints**: Ensure `VITE_BACKEND_URL` points to the correct backend API.
-- **Stripe Keys**: Update the publishable key in `FloatingPanel.tsx` and ensure the backend has the correct secret key.
-
----
-
-## Legal Documents
-
-The `docs/` directory contains Markdown files for legal documents such as:
-
-- `agb.md`: Terms and Conditions
-- `datenschutz.md`: Privacy Policy
-- `impressum.md`: Imprint
-- `widerruf.md`: Cancellation Policy
-
-These documents are displayed in the application using the `Legals.tsx` component.
-
----
-
-## Contributing
-
-Contributions are welcome! Please ensure any changes to the frontend code are thoroughly tested.
-
----
-
-## License
-
-This project is licensed under the MIT License.
+The frontend of EasyOpenData is a React application that provides an interactive map interface for users to select areas of interest, choose data layers, and down
+................................
 
 &&& FILE: ./frontend\tsconfig.json
 &&& CONTENT:
@@ -2254,203 +1769,6 @@ export default defineConfig({
   version "2.3.0"
   resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
-
-&&& FILE: ./frontend\docs\AGB & Widerruf.md
-&&& CONTENT:
-# Allgemeine Geschäftsbedingungen
-
-## 1. Geltungsbereich
-
-Diese Allgemeinen Geschäftsbedingungen gelten für alle Bestellungen, die Kunden über unsere Website [Ihre Website-URL] tätigen.
-
-## 2. Vertragsschluss
-
-Der Vertrag kommt zustande, wenn wir Ihre Bestellung durch eine Auftragsbestätigung per E-Mail unmittelbar nach dem Erhalt Ihrer Bestellung annehmen.
-
-## 3. Preise und Zahlungsbedingungen
-
-Alle Preise sind Endpreise und enthalten die gesetzliche Mehrwertsteuer. Die Zahlung erfolgt per [Ihre Zahlungsmethoden, z.B. Kreditkarte, PayPal].
-
-## 4. Lieferung und Downloadbereitstellung
-
-Die bestellten Daten werden nach Zahlungseingang zum Download bereitgestellt oder per E-Mail zugesandt.
-
-## 5. Widerrufsrecht
-
-Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
-
-## 6. Haftungsausschluss
-
-Wir übernehmen keine Haftung für die Richtigkeit, Vollständigkeit und Aktualität der bereitgestellten Daten.
-
-## 7. Urheberrecht
-
-Die heruntergeladenen Daten dürfen nur für den persönlichen Gebrauch verwendet werden. Eine Weitergabe an Dritte ist nicht gestattet.
-
-## 8. Datenschutz
-
-Wir verarbeiten Ihre personenbezogenen Daten gemäß unserer Datenschutzerklärung.
-
-## 9. Schlussbestimmungen
-
-Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist [Ihr Gerichtsstand].
-
-# Widerrufsbelehrung
-
-## Widerrufsrecht
-
-Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
-
-Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
-
-Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
-
-Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
-
-## Folgen des Widerrufs
-
-Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
-
-Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
-
-&&& FILE: ./frontend\docs\datenschutz.md
-&&& CONTENT:
-# Datenschutzerklärung
-
-Stand: [Aktuelles Datum]
-
-## 1. Datenschutz auf einen Blick
-
-### Allgemeine Hinweise
-Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
-
-### Datenerfassung auf dieser Website
-
-#### Wer ist verantwortlich für die Datenerfassung auf dieser Website?
-Die Datenverarbeitung auf dieser Website erfolgt durch den Websitebetreiber. Dessen Kontaktdaten können Sie dem Impressum dieser Website entnehmen.
-
-#### Wie erfassen wir Ihre Daten?
-Ihre Daten werden zum einen dadurch erhoben, dass Sie uns diese mitteilen. Hierbei kann es sich z.B. um Daten handeln, die Sie in ein Kontaktformular eingeben.
-
-Andere Daten werden automatisch beim Besuch der Website durch unsere IT-Systeme erfasst. Das sind vor allem technische Daten (z.B. Internetbrowser, Betriebssystem oder Uhrzeit des Seitenaufrufs).
-
-#### Wofür nutzen wir Ihre Daten?
-Ein Teil der Daten wird erhoben, um eine fehlerfreie Bereitstellung der Website zu gewährleisten. Andere Daten können zur Analyse Ihres Nutzerverhaltens verwendet werden.
-
-#### Welche Rechte haben Sie bezüglich Ihrer Daten?
-Sie haben jederzeit das Recht unentgeltlich Auskunft über Herkunft, Empfänger und Zweck Ihrer gespeicherten personenbezogenen Daten zu erhalten. Sie haben außerdem ein Recht, die Berichtigung, Sperrung oder Löschung dieser Daten zu verlangen. Hierzu sowie zu weiteren Fragen zum Thema Datenschutz können Sie sich jederzeit unter der im Impressum angegebenen Adresse an uns wenden.
-
-## 2. Allgemeine Hinweise und Pflichtinformationen
-
-### Datenschutz
-Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerklärung.
-
-### Hinweis zur verantwortlichen Stelle
-Die verantwortliche Stelle für die Datenverarbeitung auf dieser Website ist:
-
-[Ihr Name]
-[Ihre Straße und Hausnummer]
-[Ihre Postleitzahl und Stadt]
-
-Telefon: [Ihre Telefonnummer]
-E-Mail: [Ihre E-Mail-Adresse]
-
-Verantwortliche Stelle ist die natürliche oder juristische Person, die allein oder gemeinsam mit anderen über die Zwecke und Mittel der Verarbeitung von personenbezogenen Daten (z.B. Namen, E-Mail-Adressen o. Ä.) entscheidet.
-
-## 3. Datenerfassung auf unserer Website
-
-### Cookies
-Die Internetseiten verwenden teilweise so genannte Cookies. Cookies richten auf Ihrem Rechner keinen Schaden an und enthalten keine Viren. Cookies dienen dazu, unser Angebot nutzerfreundlicher, effektiver und sicherer zu machen.
-
-### Server-Log-Dateien
-Der Provider der Seiten erhebt und speichert automatisch Informationen in so genannten Server-Log-Dateien, die Ihr Browser automatisch an uns übermittelt. Dies sind:
-
-- Browsertyp und Browserversion
-- verwendetes Betriebssystem
-- Referrer URL
-- Hostname des zugreifenden Rechners
-- Uhrzeit der Serveranfrage
-- IP-Adresse
-
-Eine Zusammenführung dieser Daten mit anderen Datenquellen wird nicht vorgenommen.
-
-### Kontaktformular
-Wenn Sie uns per Kontaktformular Anfragen zukommen lassen, werden Ihre Angaben aus dem Anfrageformular inklusive der von Ihnen dort angegebenen Kontaktdaten zwecks Bearbeitung der Anfrage und für den Fall von Anschlussfragen bei uns gespeichert. Diese Daten geben wir nicht ohne Ihre Einwilligung weiter.
-
-### Zahlungsdaten
-Bei der Bezahlung über unsere Website werden Ihre Zahlungsdaten zur Abwicklung der Transaktion an unseren Zahlungsdienstleister übermittelt. Diese Daten werden verschlüsselt übertragen und nur für den Zweck der Zahlungsabwicklung verwendet.
-
-## 4. Analyse Tools und Werbung
-
-[Falls Sie Analyse-Tools wie Google Analytics verwenden, fügen Sie hier die entsprechenden Informationen ein]
-
-## 5. Plugins und Tools
-
-[Falls Sie Plugins oder Tools von Drittanbietern verwenden, fügen Sie hier die entsprechenden Informationen ein]
-
-## 6. Ihre Rechte als betroffene Person
-
-Sie haben das Recht:
-
-- gemäß Art. 15 DSGVO Auskunft über Ihre von uns verarbeiteten personenbezogenen Daten zu verlangen;
-- gemäß Art. 16 DSGVO unverzüglich die Berichtigung unrichtiger oder Vervollständigung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
-- gemäß Art. 17 DSGVO die Löschung Ihrer bei uns gespeicherten personenbezogenen Daten zu verlangen;
-- gemäß Art. 18 DSGVO die Einschränkung der Verarbeitung Ihrer personenbezogenen Daten zu verlangen;
-- gemäß Art. 20 DSGVO Ihre personenbezogenen Daten, die Sie uns bereitgestellt haben, in einem strukturierten, gängigen und maschinenlesbaren Format zu erhalten oder die Übermittlung an einen anderen Verantwortlichen zu verlangen;
-- gemäß Art. 21 DSGVO Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten einzulegen;
-- gemäß Art. 77 DSGVO sich bei einer Aufsichtsbehörde zu beschweren.
-
-
-&&& FILE: ./frontend\docs\impressum.md
-&&& CONTENT:
-# Impressum
-
-Angaben gemäß § 5 TMG:
-
-[Ihr Name]
-[Ihre Straße und Hausnummer]
-[Ihre Postleitzahl und Stadt]
-
-## Kontakt
-Telefon: [Ihre Telefonnummer]
-E-Mail: [Ihre E-Mail-Adresse]
-
-## Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV:
-[Ihr Name]
-[Ihre Adresse]
-
-## Haftungsausschluss
-
-### Haftung für Inhalte
-Die Inhalte unserer Seiten wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.
-
-### Haftung für Links
-Unser Angebot enthält Links zu externen Webseiten Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen.
-
-### Urheberrecht
-Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.
-
-&&& FILE: ./frontend\docs\quellen.md
-&&& CONTENT:
-| Bundesland               | Lizenz    | Quelle                                                                                                                                      |
-|--------------------------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| Baden-Württemberg        | BY 2.0    | [OpenGeoData Baden-Württemberg](https://opengeodata.lgl-bw.de/#/(sidenav:product/13))                                                       |
-| Bayern                   | CC BY 4.0 | [OpenGeoData Bayern](https://geodaten.bayern.de/opengeodata/OpenDataDetail.html?pn=lod2&active=MASSENDOWNLOAD)                              |
-| Berlin                   | BY 2.0    | [GDI Berlin](https://gdi.berlin.de/geonetwork/srv/eng/catalog.search#/metadata/3c7c49af-00a4-3bcd-bc00-20e7f0f1b7bf)                        |
-| Brandenburg              |           |                                                                                                                                             |
-| Bremen                   |           |                                                                                                                                             |
-| Hamburg                  |           |                                                                                                                                             |
-| Hessen                   | ?         | [Hessen Geodaten](https://gds.hessen.de/INTERSHOP/web/WFS/HLBG-Geodaten-Site/de_DE/-/EUR/ViewDownloadcenter-Start?path=3D-Daten/3D-Geb%C3%A4udemodelle/3D-Geb%C3%A4udemodelle%20LoD2/Hochtaunuskreis) |
-| Mecklenburg-Vorpommern   |           |                                                                                                                                             |
-| Niedersachsen            |           |                                                                                                                                             |
-| Nordrhein-Westfalen      |           |                                                                                                                                             |
-| Rheinland-Pfalz          |           |                                                                                                                                             |
-| Saarland                 |           |                                                                                                                                             |
-| Sachsen                  |           |                                                                                                                                             |
-| Sachsen-Anhalt           |           |                                                                                                                                             |
-| Schleswig-Holstein       |           |                                                                                                                                             |
-| Thüringen                |           |                                                                                                                                             |
-
 
 &&& FILE: ./frontend\public\basemap.json
 &&& CONTENT:
@@ -2497,8 +1815,9 @@ import LegalDocuments from "./Legals";
 import './styles.css'
 import './colors.css'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
+const BACKEND_URL = import.meta.env.VITE_BASE_URL;
+const TILESET_URL = import.meta.env.VITE_TILESET_URL;
+
 
 const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.8917,
@@ -2529,6 +1848,10 @@ function Root() {
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
 
+  const rootStyles = getComputedStyle(document.documentElement);
+  const POLYGON_COLOR = rootStyles.getPropertyValue('--bs-secondary').trim();
+  const POLYGON_SELECTED_COLOR = rootStyles.getPropertyValue('--bs-secondary-selected').trim();
+
   // Initialize MapboxDraw and add it to the map
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current.getMap();
@@ -2541,10 +1864,83 @@ function Root() {
           polygon: false,
           trash: false,
         },
+        styles: [
+          {
+            id: 'gl-draw-polygon-fill',
+            type: 'fill',
+            paint: {
+              'fill-color': POLYGON_COLOR,
+              'fill-opacity': 0.5, // Adjust transparency if needed
+            },
+          },
+          // Selected Polygon Fill
+          {
+            id: 'gl-draw-polygon-fill-active',
+            type: 'fill',
+            filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+            paint: {
+              'fill-color': POLYGON_SELECTED_COLOR,
+              'fill-opacity': 0.5,
+            },
+          },
+          // Default Polygon Stroke
+          {
+            id: 'gl-draw-polygon-stroke',
+            type: 'line',
+            paint: {
+              'line-color': POLYGON_SELECTED_COLOR,
+              'line-width': 4,
+            },
+          },
+          // Selected Polygon Stroke
+          {
+            id: 'gl-draw-polygon-stroke-active',
+            type: 'line',
+            filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+            paint: {
+              'line-color': POLYGON_SELECTED_COLOR,
+              'line-width': 6,
+            },
+          },
+          {
+            id: 'gl-draw-point',
+            type: 'circle',
+            filter: ['all', ['!=', 'meta', 'midpoint']],
+            paint: {
+              'circle-radius': 12,
+              'circle-color': POLYGON_SELECTED_COLOR,
+            },
+          },
+          {
+            id: 'gl-draw-point-active',
+            type: 'circle',
+            filter: ['all', ['!=', 'meta', 'midpoint'], ['==', 'active', 'true']],
+            paint: {
+              'circle-radius': 8,
+              'circle-color': POLYGON_COLOR,
+            },
+          },
+          // Midpoints
+          {
+            id: 'gl-draw-midpoint',
+            type: 'circle',
+            filter: ['all', ['==', 'meta', 'midpoint']],
+            paint: {
+              'circle-radius': 8,
+              'circle-color': POLYGON_SELECTED_COLOR,
+            },
+          },
+        ]
       });
       map.addControl(drawRef.current);
     }
-  }, []);
+
+  // Bind event listeners for onUpdate and onDelete
+  map.on('draw.create', onUpdate); // Bind onUpdate callback
+  map.on('draw.update', onUpdate); // Bind onUpdate callback
+  map.on('draw.delete', onDelete); // Bind onDelete callback
+
+}, []);
   // const onTilesetLoad = (tileset: Tileset3D) => {
   //   const { cartographicCenter, zoom } = tileset;
   //   setViewState((prev) => ({
@@ -2700,7 +2096,7 @@ function Root() {
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
+          getColor: (d) => [255, 255, 255, 150], // Blue color for scenegraph models (alternative method)
           //effects: [lightingEffect]
         }
       }
@@ -2726,7 +2122,7 @@ function Root() {
   };
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100vh" }}>
+    <div style={{ position: "fixed", width: "100%", height: "100%" }}>
       <Map
         initialViewState={viewState}
         mapStyle={MAP_STYLE}
@@ -2768,7 +2164,7 @@ function Root() {
             <NavigationControl />
           </div>
         </div> */}
-        <DrawControl
+        {/* <DrawControl
           position="top-right"
           displayControlsDefault={false}
           controls={{
@@ -2779,7 +2175,7 @@ function Root() {
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
-        />
+        /> */}
       </Map>
       <FloatingPanel
         onDrawPolygon={handleDrawPolygon}
@@ -2853,13 +2249,13 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
     return (
       <>
       <div className="text-center mb-3">
-      Grundstücke unter 0.05 km² können kostenfrei heruntergeladen werden
+      Grundstücke unter 0.01 km² können kostenfrei heruntergeladen werden
       </div>
       <button 
         onClick={onFetchObjFile}
-        className="btn btn-secondary btn-sm mt-2"
+        className="btn btn-secondary btn mt-2"
       >
-        Download File
+        .obj Herunterladen
       </button>
       </>
     );
@@ -3058,6 +2454,7 @@ export default CheckoutForm;
 :root {
     --bs-primary: #2a7a92; /* Your desired primary color */
     --bs-secondary: #3e66bb;
+    --bs-secondary-selected: #244ca3;
     --bs-success: #28a745;
     --bs-danger: #f38093;
     --bs-warning: #ffc107;
@@ -3066,6 +2463,7 @@ export default CheckoutForm;
     --bs-dark: #343a40;
   }
   
+/*   
   .btn-primary {
     background-color: var(--bs-primary) !important;
     border-color: var(--bs-primary) !important;
@@ -3079,7 +2477,438 @@ export default CheckoutForm;
     background-color: var(--bs-danger) !important;
     border-color: var(--bs-danger) !important;
   }
-  
+   */
+
+   
+/*------------------------------------
+- COLOR primary
+------------------------------------*/
+.alert-primary {
+  color: #0e2a32;
+  background-color: #a3d5e4;
+  border-color: #93cee0;
+}
+
+.alert-primary hr {
+  border-top-color: #7fc5da;
+}
+
+.alert-primary .alert-link {
+  color: #03090b;
+}
+
+.badge-primary {
+  color: #fff;
+  background-color: #2a7a92;
+}
+
+.badge-primary[href]:hover, .badge-primary[href]:focus {
+  color: #fff;
+  background-color: #1e586a;
+}
+
+.bg-primary {
+  background-color: #2a7a92 !important;
+}
+
+a.bg-primary:hover, a.bg-primary:focus,
+button.bg-primary:hover,
+button.bg-primary:focus {
+  background-color: #1e586a !important;
+}
+
+.border-primary {
+  border-color: #2a7a92 !important;
+}
+
+.btn-primary {
+  color: #fff;
+  background-color: #2a7a92;
+  border-color: #2a7a92;
+}
+
+.btn-primary:hover {
+  color: #fff;
+  background-color: #226276;
+  border-color: #1e586a;
+}
+
+.btn-primary:focus, .btn-primary.focus {
+  box-shadow: 0 0 0 0.2rem rgba(42, 122, 146, 0.5);
+}
+
+.btn-primary.disabled, .btn-primary:disabled {
+  color: #fff;
+  background-color: #2a7a92;
+  border-color: #2a7a92;
+}
+
+.btn-primary:not(:disabled):not(.disabled):active, .btn-primary:not(:disabled):not(.disabled).active, .show > .btn-primary.dropdown-toggle {
+  color: #fff;
+  background-color: #1e586a;
+  border-color: #1b4e5e;
+}
+
+.btn-primary:not(:disabled):not(.disabled):active:focus, .btn-primary:not(:disabled):not(.disabled).active:focus, .show > .btn-primary.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(42, 122, 146, 0.5);
+}
+
+.btn-outline-primary {
+  color: #2a7a92;
+  background-color: transparent;
+  border-color: #2a7a92;
+}
+
+.btn-outline-primary:hover {
+  color: #fff;
+  background-color: #2a7a92;
+  border-color: #2a7a92;
+}
+
+.btn-outline-primary:focus, .btn-outline-primary.focus {
+  box-shadow: 0 0 0 0.2rem rgba(42, 122, 146, 0.5);
+}
+
+.btn-outline-primary.disabled, .btn-outline-primary:disabled {
+  color: #2a7a92;
+  background-color: transparent;
+}
+
+.btn-outline-primary:not(:disabled):not(.disabled):active, .btn-outline-primary:not(:disabled):not(.disabled).active, .show > .btn-outline-primary.dropdown-toggle {
+  color: #fff;
+  background-color: #2a7a92;
+  border-color: #2a7a92;
+}
+
+.btn-outline-primary:not(:disabled):not(.disabled):active:focus, .btn-outline-primary:not(:disabled):not(.disabled).active:focus, .show > .btn-outline-primary.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(42, 122, 146, 0.5);
+}
+
+.list-group-item-primary {
+  color: #0e2a32;
+  background-color: #93cee0;
+}
+
+.list-group-item-primary.list-group-item-action:hover, .list-group-item-primary.list-group-item-action:focus {
+  color: #0e2a32;
+  background-color: #7fc5da;
+}
+
+.list-group-item-primary.list-group-item-action.active {
+  color: #fff;
+  background-color: #0e2a32;
+  border-color: #0e2a32;
+}
+
+.table-primary,
+.table-primary > th,
+.table-primary > td {
+  background-color: #93cee0;
+}
+
+.table-hover .table-primary:hover {
+  background-color: #7fc5da;
+}
+
+.table-hover .table-primary:hover > td,
+.table-hover .table-primary:hover > th {
+  background-color: #7fc5da;
+}
+
+.text-primary {
+  color: #2a7a92 !important;
+}
+
+a.text-primary:hover, a.text-primary:focus {
+  color: #1e586a !important;
+}
+
+   
+/*------------------------------------
+- COLOR secondary
+------------------------------------*/
+.alert-secondary {
+  color: #1f335f;
+  background-color: #d4ddf0;
+  border-color: #c4d1eb;
+}
+
+.alert-secondary hr {
+  border-top-color: #b1c2e5;
+}
+
+.alert-secondary .alert-link {
+  color: #121e38;
+}
+
+.badge-secondary {
+  color: #fff;
+  background-color: #3e66bb;
+}
+
+.badge-secondary[href]:hover, .badge-secondary[href]:focus {
+  color: #fff;
+  background-color: #315194;
+}
+
+.bg-secondary {
+  background-color: #3e66bb !important;
+}
+
+a.bg-secondary:hover, a.bg-secondary:focus,
+button.bg-secondary:hover,
+button.bg-secondary:focus {
+  background-color: #315194 !important;
+}
+
+.border-secondary {
+  border-color: #3e66bb !important;
+}
+
+.btn-secondary {
+  color: #fff;
+  background-color: #3e66bb;
+  border-color: #3e66bb;
+}
+
+.btn-secondary:hover {
+  color: #fff;
+  background-color: #3557a0;
+  border-color: #315194;
+}
+
+.btn-secondary:focus, .btn-secondary.focus {
+  box-shadow: 0 0 0 0.2rem rgba(62, 102, 187, 0.5);
+}
+
+.btn-secondary.disabled, .btn-secondary:disabled {
+  color: #fff;
+  background-color: #3e66bb;
+  border-color: #3e66bb;
+}
+
+.btn-secondary:not(:disabled):not(.disabled):active, .btn-secondary:not(:disabled):not(.disabled).active, .show > .btn-secondary.dropdown-toggle {
+  color: #fff;
+  background-color: #315194;
+  border-color: #2d4a89;
+}
+
+.btn-secondary:not(:disabled):not(.disabled):active:focus, .btn-secondary:not(:disabled):not(.disabled).active:focus, .show > .btn-secondary.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(62, 102, 187, 0.5);
+}
+
+.btn-outline-secondary {
+  color: #3e66bb;
+  background-color: transparent;
+  border-color: #3e66bb;
+}
+
+.btn-outline-secondary:hover {
+  color: #fff;
+  background-color: #3e66bb;
+  border-color: #3e66bb;
+}
+
+.btn-outline-secondary:focus, .btn-outline-secondary.focus {
+  box-shadow: 0 0 0 0.2rem rgba(62, 102, 187, 0.5);
+}
+
+.btn-outline-secondary.disabled, .btn-outline-secondary:disabled {
+  color: #3e66bb;
+  background-color: transparent;
+}
+
+.btn-outline-secondary:not(:disabled):not(.disabled):active, .btn-outline-secondary:not(:disabled):not(.disabled).active, .show > .btn-outline-secondary.dropdown-toggle {
+  color: #fff;
+  background-color: #3e66bb;
+  border-color: #3e66bb;
+}
+
+.btn-outline-secondary:not(:disabled):not(.disabled):active:focus, .btn-outline-secondary:not(:disabled):not(.disabled).active:focus, .show > .btn-outline-secondary.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(62, 102, 187, 0.5);
+}
+
+.list-group-item-secondary {
+  color: #1f335f;
+  background-color: #c4d1eb;
+}
+
+.list-group-item-secondary.list-group-item-action:hover, .list-group-item-secondary.list-group-item-action:focus {
+  color: #1f335f;
+  background-color: #b1c2e5;
+}
+
+.list-group-item-secondary.list-group-item-action.active {
+  color: #fff;
+  background-color: #1f335f;
+  border-color: #1f335f;
+}
+
+.table-secondary,
+.table-secondary > th,
+.table-secondary > td {
+  background-color: #c4d1eb;
+}
+
+.table-hover .table-secondary:hover {
+  background-color: #b1c2e5;
+}
+
+.table-hover .table-secondary:hover > td,
+.table-hover .table-secondary:hover > th {
+  background-color: #b1c2e5;
+}
+
+.text-secondary {
+  color: #3e66bb !important;
+}
+
+a.text-secondary:hover, a.text-secondary:focus {
+  color: #315194 !important;
+}
+
+/*------------------------------------
+- COLOR danger
+------------------------------------*/
+.alert-danger {
+  color: #d31b39;
+  background-color: #10512f128;
+  border-color: #10211d119;
+}
+
+.alert-danger hr {
+  border-top-color: #100107105;
+}
+
+.alert-danger .alert-link {
+  color: #a6152d;
+}
+
+.badge-danger {
+  color: #212529;
+  background-color: #ee7b8e;
+}
+
+.badge-danger[href]:hover, .badge-danger[href]:focus {
+  color: #212529;
+  background-color: #e84d67;
+}
+
+.bg-danger {
+  background-color: #ee7b8e !important;
+}
+
+a.bg-danger:hover, a.bg-danger:focus,
+button.bg-danger:hover,
+button.bg-danger:focus {
+  background-color: #e84d67 !important;
+}
+
+.border-danger {
+  border-color: #ee7b8e !important;
+}
+
+.btn-danger {
+  color: #212529;
+  background-color: #ee7b8e;
+  border-color: #ee7b8e;
+}
+
+.btn-danger:hover {
+  color: #212529;
+  background-color: #e95b72;
+  border-color: #e84d67;
+}
+
+.btn-danger:focus, .btn-danger.focus {
+  box-shadow: 0 0 0 0.2rem rgba(238, 123, 142, 0.5);
+}
+
+.btn-danger.disabled, .btn-danger:disabled {
+  color: #212529;
+  background-color: #ee7b8e;
+  border-color: #ee7b8e;
+}
+
+.btn-danger:not(:disabled):not(.disabled):active, .btn-danger:not(:disabled):not(.disabled).active, .show > .btn-danger.dropdown-toggle {
+  color: #212529;
+  background-color: #e84d67;
+  border-color: #e6405b;
+}
+
+.btn-danger:not(:disabled):not(.disabled):active:focus, .btn-danger:not(:disabled):not(.disabled).active:focus, .show > .btn-danger.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(238, 123, 142, 0.5);
+}
+
+.btn-outline-danger {
+  color: #ee7b8e;
+  background-color: transparent;
+  border-color: #ee7b8e;
+}
+
+.btn-outline-danger:hover {
+  color: #212529;
+  background-color: #ee7b8e;
+  border-color: #ee7b8e;
+}
+
+.btn-outline-danger:focus, .btn-outline-danger.focus {
+  box-shadow: 0 0 0 0.2rem rgba(238, 123, 142, 0.5);
+}
+
+.btn-outline-danger.disabled, .btn-outline-danger:disabled {
+  color: #ee7b8e;
+  background-color: transparent;
+}
+
+.btn-outline-danger:not(:disabled):not(.disabled):active, .btn-outline-danger:not(:disabled):not(.disabled).active, .show > .btn-outline-danger.dropdown-toggle {
+  color: #212529;
+  background-color: #ee7b8e;
+  border-color: #ee7b8e;
+}
+
+.btn-outline-danger:not(:disabled):not(.disabled):active:focus, .btn-outline-danger:not(:disabled):not(.disabled).active:focus, .show > .btn-outline-danger.dropdown-toggle:focus {
+  box-shadow: 0 0 0 0.2rem rgba(238, 123, 142, 0.5);
+}
+
+.list-group-item-danger {
+  color: #d31b39;
+  background-color: #10211d119;
+}
+
+.list-group-item-danger.list-group-item-action:hover, .list-group-item-danger.list-group-item-action:focus {
+  color: #d31b39;
+  background-color: #100107105;
+}
+
+.list-group-item-danger.list-group-item-action.active {
+  color: #212529;
+  background-color: #d31b39;
+  border-color: #d31b39;
+}
+
+.table-danger,
+.table-danger > th,
+.table-danger > td {
+  background-color: #10211d119;
+}
+
+.table-hover .table-danger:hover {
+  background-color: #100107105;
+}
+
+.table-hover .table-danger:hover > td,
+.table-hover .table-danger:hover > th {
+  background-color: #100107105;
+}
+
+.text-danger {
+  color: #ee7b8e !important;
+}
+
+a.text-danger:hover, a.text-danger:focus {
+  color: #e84d67 !important;
+}
 
 
 &&& FILE: ./frontend\src\draw-control.ts
@@ -3104,11 +2933,6 @@ export default function DrawControl(props: DrawControlProps) {
       map.on('draw.create', props.onCreate);
       map.on('draw.update', props.onUpdate);
       map.on('draw.delete', props.onDelete);
-    },
-    ({map}: {map: MapRef}) => {
-      map.off('draw.create', props.onCreate);
-      map.off('draw.update', props.onUpdate);
-      map.off('draw.delete', props.onDelete);
     },
     {
       position: props.position
@@ -3172,10 +2996,10 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
   useEffect(() => {
     if (polygonArea !== null) {
-      if (polygonArea < 0.05) {
+      if (polygonArea < 0.01) {
         setPrice(0);
       } else {
-        setPrice(20 * polygonArea);
+        setPrice(50 * polygonArea);
       }
     }
   }, [polygonArea]);
@@ -3218,7 +3042,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="Search location..."
+          placeholder="Standort finden..."
           value={searchQuery}
           onChange={handleSearch}
         />
@@ -3259,7 +3083,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       {/* Polygon Area and Price Display */}
       {polygonArea !== null ? (
         <div className="text-center mb-3">
-          <strong>Gebietfläche:</strong> {polygonArea.toFixed(2)} km²
+          <strong>Gebietfläche:</strong> {polygonArea.toFixed(3)} km²
         </div>
       ) : (
         <p className="text-center mb-3">Zeichnen Sie das Gebiet ein</p>
@@ -3269,14 +3093,14 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div className="btn-group w-100" role="group">
         <button
           type="button"
-          className="btn btn-primary btn-sm mt-2"
+          className="btn btn-secondary btn mt-2"
           onClick={onDrawPolygon}
         >
-          Polygon einzeichnen
+          Polygon zeichnen
         </button>
         <button
           type="button"
-          className="btn btn-danger btn-sm mt-2"
+          className="btn btn-danger btn mt-2"
           onClick={onRemovePolygon}
         >
           Entfernen
@@ -3299,7 +3123,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div
         className="position-fixed"
         style={{
-          bottom: "40px",
+          bottom: "30px",
           left: "0",
           right: "0",
           zIndex: 1050,
@@ -3488,7 +3312,9 @@ const LegalDocumentPanel: React.FC<{
         className="btn btn-sm btn-light"
         style={{
           display: 'inline-block',
-          padding: '0.25rem 0.5rem',
+          padding: '0.25rem 0.5rem',           
+           fontSize: "0.8rem",
+
         }}
       >
         {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
@@ -3563,28 +3389,104 @@ export default LegalDocuments;
 
 &&& FILE: ./frontend\src\Logo.tsx
 &&& CONTENT:
-import React from "react";
+import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles.css";
 
 const Logo: React.FC = () => {
+  const [isExpanded, setIsExpanded] = useState(true); // Control visibility
+  const [timeoutId, setTimeoutId] = useState<number | null>(null);
+
+  const toggleDescription = () => {
+    setIsExpanded((prev) => !prev);
+
+    // Clear the timeout if the user manually toggles the button
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      setTimeoutId(null);
+    }
+
+    // Reset auto-hide timer if expanded
+    if (!isExpanded) {
+      const id = window.setTimeout(() => setIsExpanded(false), 30000);
+      setTimeoutId(id);
+    }
+  };
+
+  useEffect(() => {
+    // Auto-hide description after 30 seconds
+    const id = window.setTimeout(() => setIsExpanded(false), 30000);
+    setTimeoutId(id);
+
+    return () => {
+      if (id) clearTimeout(id);
+    };
+  }, []);
+
   return (
     <div
-      className="d-inline-block px-5 py-2 rounded shadow bg-light"
+      className="d-inline-block px-4 py-2 rounded shadow bg-light"
       style={{
         color: "black",
         pointerEvents: "auto",
         fontWeight: 500,
+        width: "450px",
+        maxWidth: "80%",
+        position: "relative",
       }}
     >
-      <span
-        className="space-grotesk-regular"
+      <div
+        className="space-grotesk-regular text-center"
         style={{
           fontSize: "2rem",
         }}
       >
         EasyOpenData
-      </span>
+      </div>
+
+      {isExpanded && (
+        <div
+          className="text-left mb-3 ibm-plex-sans-light"
+          style={{
+            position: "absolute", // Make it float independently
+            top: "3rem",          // Adjust the vertical positioning
+            left: 0,
+            width: "100%",        // Ensure it spans the logo's width
+            fontSize: "1rem",
+            fontFamily: "IBM Plex Sans, sans-serif",
+            fontWeight: 300, // Matches ibm-plex-sans-light
+            marginTop: "0.5rem",
+            lineHeight: "1.5",
+            backgroundColor: "#f8f9fa",
+            padding: "0.5rem",
+            borderRadius: "5px",
+            boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
+          }}
+
+        >
+          <strong>
+            Zeichnen Sie ein Polygon auf der Karte ein und laden präzise Gebäudegeometrie als .obj-Dateien herunter.
+            Nach Zahlung erhalten Sie direkt Ihren Download-Link.<br />
+            Kosten: Polygonfläche × 50 €/km²<br />
+          </strong>
+        </div>
+      )}
+
+      <button
+        onClick={toggleDescription}
+        style={{
+          position: "absolute",
+          top: "0.2rem",
+          right: "0.2rem",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "1rem",
+          fontWeight: "bold",
+        }}
+      >
+        {isExpanded ? "–" : "+"}
+      </button>
     </div>
   );
 };
@@ -3594,128 +3496,129 @@ export default Logo;
 
 &&& FILE: ./frontend\src\styles.css
 &&& CONTENT:
-
-
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+/* @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap'); */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Space+Grotesk:wght@300..700&display=swap');
 
-html, body {
-   
-  height: 100svh; /* Ensure the root elements cover the entire viewport */
-  overflow: hidden; /* Prevent scrolling */
-  margin: 0; /* Remove any default margins */
-}
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;  /* Prevent scrolling */
+}
 
 /* Override all fonts */
 * {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "IBM Plex Sans", sans-serif;
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
 }
+
 .ibm-plex-sans-thin {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 100;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-extralight {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 200;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-light {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 300;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-regular {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 400;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-medium {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 500;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-semibold {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 600;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-bold {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 700;
-    font-style: normal;
-  }
-  
-  .ibm-plex-sans-thin-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 100;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-extralight-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 200;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-light-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 300;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-regular-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 400;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-medium-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 500;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-semibold-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 600;
-    font-style: italic;
-  }
-  
-  .ibm-plex-sans-bold-italic {
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 700;
-    font-style: italic;
-  }
-  
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 100;
+  font-style: normal;
+}
+
+.ibm-plex-sans-extralight {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 200;
+  font-style: normal;
+}
+
+.ibm-plex-sans-light {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 300;
+  font-style: normal;
+}
+
+.ibm-plex-sans-regular {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.ibm-plex-sans-medium {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+}
+
+.ibm-plex-sans-semibold {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.ibm-plex-sans-bold {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.ibm-plex-sans-thin-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 100;
+  font-style: italic;
+}
+
+.ibm-plex-sans-extralight-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 200;
+  font-style: italic;
+}
+
+.ibm-plex-sans-light-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 300;
+  font-style: italic;
+}
+
+.ibm-plex-sans-regular-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.ibm-plex-sans-medium-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.ibm-plex-sans-semibold-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.ibm-plex-sans-bold-italic {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-weight: 700;
+  font-style: italic;
+}
+
 .space-grotesk-light {
   font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
 }
+
 .space-grotesk-regular {
   font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
   font-weight: 400;
   font-style: normal;
 }
+
 .space-grotesk-bold {
   font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
   font-weight: 500;
   font-style: normal;
 }
+
 .space-grotesk-extrabold {
   font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
@@ -3730,7 +3633,8 @@ html, body {
   right: 10px;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center; /* Default mobile layout: everything centered */
+  justify-content: center;
+  /* Default mobile layout: everything centered */
   align-items: center;
   gap: 10px;
   z-index: 1060;
@@ -3742,13 +3646,15 @@ html, body {
   display: flex;
   justify-content: center;
   pointer-events: auto;
+  align-self: flex-start; /* Ensure alignment to the top of the container */
 }
+
 
 /* On wider screens, switch to a spaced layout:
    - Legals on the left
    - Logo on the right
 */
-@media (min-width: 768px) {
+@media (min-width: 1000px) {
   .top-bar-container {
     justify-content: space-between;
   }
@@ -3761,5 +3667,4 @@ html, body {
     justify-content: flex-end;
   }
 }
-
 

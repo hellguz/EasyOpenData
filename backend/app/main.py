@@ -33,9 +33,12 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", os.getenv("VITE_BASE_URL"), os.getenv("FRONTEND_URL")], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,9 +80,6 @@ async def remove_temp_file(file_path: str):
         os.unlink(file_path)
 
         
-stripe.api_key = 'REMOVED_STRIPE_KEY'
-
-
 def calculate_order_amount(amount: float):
     # Replace this constant with a calculation of the order's amount
     # Calculate the order total on the server to prevent

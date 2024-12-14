@@ -8,9 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronUp, faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe(
-  "hidden_api"
-);
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 interface FloatingPanelProps {
   onDrawPolygon: () => void;

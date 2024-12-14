@@ -15,6 +15,10 @@ __pycache__/
 backend/tileset*/
 !backend/tileset/README.md
 
+# Environment variables
+.env
+
+
 *.gml
 *.gfs
 *.obj

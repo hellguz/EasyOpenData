@@ -24,8 +24,9 @@ import LegalDocuments from "./Legals";
 import './styles.css'
 import './colors.css'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
+const BASE_URL = import.meta.env.VITE_BASE_URL;
+const TILESET_URL = import.meta.env.VITE_TILESET_URL;
+
 
 const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.8917,
@@ -207,7 +208,7 @@ function Root() {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
         try {
-          const response = await fetch(BACKEND_URL + "/retrieve_obj", {
+          const response = await fetch(BASE_URL + "/retrieve_obj", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
