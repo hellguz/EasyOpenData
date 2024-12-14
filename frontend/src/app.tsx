@@ -56,6 +56,8 @@ function Root() {
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
 
+  const POLYGON_COLOR = '#2a7a92'; // Your predefined blue color
+
   // Initialize MapboxDraw and add it to the map
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current.getMap();
@@ -68,6 +70,32 @@ function Root() {
           polygon: false,
           trash: false,
         },
+        styles: [
+          {
+            id: 'gl-draw-polygon-fill',
+            type: 'fill',
+            paint: {
+              'fill-color': POLYGON_COLOR,
+              'fill-opacity': 0.5, // Adjust transparency if needed
+            },
+          },
+          {
+            id: 'gl-draw-polygon-stroke',
+            type: 'line',
+            paint: {
+              'line-color': POLYGON_COLOR,
+              'line-width': 4,
+            },
+          },
+          {
+            id: 'gl-draw-point',
+            type: 'circle',
+            paint: {
+              'circle-radius': 10,
+              'circle-color': POLYGON_COLOR,
+            },
+          },
+        ]
       });
       map.addControl(drawRef.current);
     }
@@ -227,7 +255,7 @@ function Root() {
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
+          getColor: (d) => [255, 255, 255, 150], // Blue color for scenegraph models (alternative method)
           //effects: [lightingEffect]
         }
       }

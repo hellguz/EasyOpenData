@@ -731,8 +731,8 @@ def main(meta4_file):
 
     for ix, file_info in enumerate(files):
         
-        # if ix < 130 * BATCH_N:
-        #     continue
+        if ix < 1700:
+           continue
         
         file_name = file_info['name']
         size = file_info['size']

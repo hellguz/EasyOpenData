@@ -498,6 +498,7 @@ redis
 stripe
 pyproj
 lxml
+shapely
 
 &&& FILE: ./backend\tileset.conf
 &&& CONTENT:
@@ -580,7 +581,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-*.i-am-hellguz.uk"], 
+    allow_origins=["http://localhost:5173", "https://easyopen.i-am-hellguz.uk", "https://easyopen-server.i-am-hellguz.uk"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -712,22 +713,23 @@ async def retrieve_obj_file(region_geojson, output_path):
 
     # Create a Transformer object for coordinate transformation
     transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
-    
-    polygon = func.ST_SetSRID(func.ST_GeomFromGeoJSON(polygon_geojson_str), 4326)
 
+    # Clean and validate the user polygon once
+    polygon = func.ST_SetSRID(func.ST_GeomFromGeoJSON(polygon_geojson_str), 4326)
+    polygon = func.ST_MakeValid(polygon)
+    polygon = func.ST_Force3D(polygon)
+    polygon = func.ST_Buffer(polygon, 0)
+    
     # Start an asynchronous database session
     async with async_session() as session:
         # Query the database for buildings within the polygon
-        stmt = (
-            select(
-                Building.gml_id,
-                func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
-            )
-            .where(
-                # First, a bounding box check using the '&&' operator (leverages GIST index)
-                Building.geom.op('&&')(polygon),
-                # Then the exact intersection
-                func.ST_Intersects(Building.geom, polygon)
+        stmt = select(
+            Building.gml_id,
+            func.ST_AsGeoJSON(Building.geom).label('geom_geojson')
+        ).where(
+            func.ST_Intersects(
+                func.ST_MakeValid(Building.geom),
+                polygon
             )
         )
         
@@ -820,9 +822,9 @@ BEGIN
         FROM pg_indexes 
         WHERE schemaname = 'public' 
         AND tablename = 'building' 
-        AND indexname = 'buildings_geom_idx'
+        AND indexname = 'idx_makevalid_geom'
     ) THEN
-        CREATE INDEX buildings_geom_idx ON building USING GIST(geom);
+        CREATE INDEX buildings_geom_idx ON building USING GIST (ST_MakeValid(geom));
     END IF;
 END $$;
 
@@ -839,12 +841,25 @@ BEGIN
     END IF;
 END $$;
 
-UPDATE building
-SET geom = ST_MakeValid(geom)
-WHERE NOT ST_IsValid(geom);
+-- ALTER TABLE building
+-- ADD CONSTRAINT enforce_geotype_geom CHECK (GeometryType(geom) = 'GEOMETRYCOLLECTION' OR geom IS NULL);
+
+
+-- Make all geometry entries valid or empty
+-- If they aren't all MultiPolygonZ, convert them now
+-- Turn off NOTICE output first and restore it after this operation
+
+-- SET client_min_messages = WARNING;
+
+-- UPDATE building
+-- SET geom = ST_Force3D(ST_CollectionExtract(ST_MakeValid(geom), 3))
+-- WHERE NOT ST_IsValid(geom) OR GeometryType(geom) != 'MULTIPOLYGONZ';
+
+-- RESET client_min_messages;
+
 
 -- Cluster the table using the index
-CLUSTER building USING buildings_geom_idx;
+-- CLUSTER building USING buildings_geom_idx;
 
 -- Analyze to update statistics
 ANALYZE building;
@@ -879,7 +894,7 @@ export PGPASSWORD="barcelona"
 
 # Create a new backup
 NEW_BACKUP=$BACKUP_DIR/backup_$(date +%Y-%m-%d_%H-%M-%S).dump
-pg_dump -U postgres -h postgis -F c easyopendata_database > $NEW_BACKUP
+pg_dump -U postgres -h easyopen_postgis -F c easyopendata_database > $NEW_BACKUP
 
 # Check if the backup was successful
 if [ $? -eq 0 ]; then
@@ -890,7 +905,7 @@ else
 fi
 
 # Delete old backups, keeping only the last 3
-NUM_BACKUPS_TO_KEEP=3
+NUM_BACKUPS_TO_KEEP=5
 BACKUP_COUNT=$(ls -1 $BACKUP_DIR | wc -l)
 
 if [ $BACKUP_COUNT -gt $NUM_BACKUPS_TO_KEEP ]; then
@@ -901,6 +916,8 @@ if [ $BACKUP_COUNT -gt $NUM_BACKUPS_TO_KEEP ]; then
     done
 fi
 
+ # To restore, connect shell to easyopen_backup_service container and run
+ # pg_restore -U postgres -h easyopen_postgis -d easyopendata_database --clean --if-exists -j 4 /backups/backup_2024-12-08_12-46-08.dump         
 
 &&& FILE: ./backend\db_backup\Dockerfile
 &&& CONTENT:
@@ -1583,11 +1600,65 @@ def merge_tilesets_into_one(output_path, input_tilesets):
         json.dump(merged_tileset, f, indent=2)
     print(f"Merged tileset written to {output_path}")
 
+def ensure_main_table_exists(database_url, table_name):
+    """
+    Ensures that the main table exists in the database. Creates it if it does not exist.
+
+    Args:
+        database_url (str): PostgreSQL connection URL.
+        table_name (str): Name of the main table.
+    """
+    logging.info(f"Ensuring main table '{table_name}' exists.")
+    url = urlparse(database_url)
+    conn = psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+    try:
+        with conn.cursor() as cur:
+            # Check if the table exists
+            cur.execute(f"""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = '{table_name}'
+                );
+            """)
+            exists = cur.fetchone()[0]
+
+            if not exists:
+                logging.info(f"Table '{table_name}' does not exist. Creating it.")
+                cur.execute(f"""
+                    CREATE TABLE {table_name} (
+                        gml_id VARCHAR PRIMARY KEY,
+                        geom GEOMETRY(GEOMETRYZ, 4326),
+                        attributes JSONB
+                    );
+                """)
+                conn.commit()
+                logging.info(f"Table '{table_name}' created successfully.")
+            else:
+                logging.info(f"Table '{table_name}' already exists.")
+    except Exception as e:
+        logging.error(f"Failed to ensure table '{table_name}' exists: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def main(meta4_file):
     # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
+    
+    # Ensure the main table exists
+    ensure_main_table_exists(DATABASE_URL, MAIN_TABLE)
+    # execute_sql_file(SQL_INDEX_PATH, DATABASE_URL)
+
+    
     # Parse the Meta4 file
     files = parse_meta4(meta4_file)
 
@@ -1596,8 +1667,8 @@ def main(meta4_file):
 
     for ix, file_info in enumerate(files):
         
-        # if ix < 130 * BATCH_N:
-        #     continue
+        if ix < 1700:
+           continue
         
         file_name = file_info['name']
         size = file_info['size']
@@ -2184,7 +2255,7 @@ export default defineConfig({
   resolved "https://registry.npmjs.org/@ampproject/remapping/-/r
 ................................
 
-&&& FILE: ./frontend\docs\agb.md
+&&& FILE: ./frontend\docs\AGB & Widerruf.md
 &&& CONTENT:
 # Allgemeine Geschäftsbedingungen
 
@@ -2223,6 +2294,24 @@ Wir verarbeiten Ihre personenbezogenen Daten gemäß unserer Datenschutzerkläru
 ## 9. Schlussbestimmungen
 
 Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist [Ihr Gerichtsstand].
+
+# Widerrufsbelehrung
+
+## Widerrufsrecht
+
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
+
+Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
+
+Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
+
+## Folgen des Widerrufs
+
+Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
+
+Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
 
 &&& FILE: ./frontend\docs\datenschutz.md
 &&& CONTENT:
@@ -2363,26 +2452,6 @@ Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unt
 | Thüringen                |           |                                                                                                                                             |
 
 
-&&& FILE: ./frontend\docs\widerruf.md
-&&& CONTENT:
-# Widerrufsbelehrung
-
-## Widerrufsrecht
-
-Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen.
-
-Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
-
-Um Ihr Widerrufsrecht auszuüben, müssen Sie uns ([Ihr Name, Ihre Anschrift, Ihre Telefonnummer und E-Mail-Adresse]) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren.
-
-Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
-
-## Folgen des Widerrufs
-
-Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, einschließlich der Lieferkosten (mit Ausnahme der zusätzlichen Kosten, die sich daraus ergeben, dass Sie eine andere Art der Lieferung als die von uns angebotene, günstigste Standardlieferung gewählt haben), unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
-
-Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
-
 &&& FILE: ./frontend\public\basemap.json
 &&& CONTENT:
 {
@@ -2431,10 +2500,10 @@ import './colors.css'
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 const TILESET_URL = 'https://easyopen-tiles.i-am-hellguz.uk/tileset.json';
 
-const INITIAL_VIEW_STATE: MapViewState = { 
+const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.8917,
-  longitude: 10.8863,  
-  pitch: 45, 
+  longitude: 10.8863,
+  pitch: 45,
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
@@ -2582,28 +2651,28 @@ function Root() {
     }
   };
 
-// Create ambient light
-const ambientLight = new AmbientLight({
-  color: [240, 255, 255],
-  intensity: 1.0
-});
+  // Create ambient light
+  const ambientLight = new AmbientLight({
+    color: [240, 255, 255],
+    intensity: 1.0
+  });
 
-// Create directional light
-const directionalLight1 = new DirectionalLight({
-  color: [220, 255, 255],
-  intensity: 0.6,
-  direction: [-1, -3, -1]
-});
+  // Create directional light
+  const directionalLight1 = new DirectionalLight({
+    color: [220, 255, 255],
+    intensity: 0.6,
+    direction: [-1, -3, -1]
+  });
 
-// Create directional light
-const directionalLight2 = new DirectionalLight({
-  color:  [255, 220, 255],
-  intensity: 1,
-  direction: [1, -3, 1]
-});
+  // Create directional light
+  const directionalLight2 = new DirectionalLight({
+    color: [255, 220, 255],
+    intensity: 1,
+    direction: [1, -3, 1]
+  });
 
-// Create lighting effect
-const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,directionalLight2});
+  // Create lighting effect
+  const lightingEffect = new LightingEffect({ ambientLight, directionalLight1, directionalLight2 });
 
 
   const layers = [
@@ -2632,7 +2701,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
       _subLayerProps: {
         scenegraph: {
           getColor: (d) => [254, 254, 254, 255], // Blue color for scenegraph models (alternative method)
-      //effects: [lightingEffect]
+          //effects: [lightingEffect]
         }
       }
     }),
@@ -2645,7 +2714,7 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
     const data = await response.json();
     return data;
   };
-  
+
   const handleSelectResult = (result: any) => {
     // Fly to the selected location
     const map = mapRef.current.getMap();
@@ -2679,15 +2748,26 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
           </Popup>
         )}
         <DeckGLOverlay layers={layers}   //effects={[lightingEffect]} // Apply the custom lighting effect globally
- />
+        />
         {/* <DrawControl
           ref={drawRef}
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
         /> */}
-        <NavigationControl position="top-left" />
-
+        {/* <div
+          style={{
+            position: 'absolute',
+            bottom: '240px', // Adjust as needed to ensure a 20px gap above Auswahl panel
+            left: '20px',
+            zIndex: 2000,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ pointerEvents: 'auto' }}>
+            <NavigationControl />
+          </div>
+        </div> */}
         <DrawControl
           position="top-right"
           displayControlsDefault={false}
@@ -2706,12 +2786,19 @@ const lightingEffect = new LightingEffect({ambientLight, directionalLight1 ,dire
         onRemovePolygon={handleRemovePolygon}
         onFetchObjFile={handleFetchObjFile}
         polygonArea={polygonArea}
-  onSearch={handleSearch}
-  onSelectResult={handleSelectResult}
+        onSearch={handleSearch}
+        onSelectResult={handleSelectResult}
       />
-      <Logo/>
-      
-      <LegalDocuments />
+
+      <div className="top-bar-container">
+        <div className="top-bar-section legals">
+          <LegalDocuments />
+        </div>
+        <div className="top-bar-section logo">
+          <Logo />
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -3394,7 +3481,7 @@ const LegalDocumentPanel: React.FC<{
     setOpenDocument(isOpen ? null : documentType);
   };
 
-  return (
+  return ( 
     <>
       <button
         onClick={handleClick}
@@ -3441,42 +3528,35 @@ const LegalDocuments: React.FC = () => {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: '10px',
-        right: '10px',
         display: 'flex',
-        gap: '20px',
-        zIndex: 1060,
+        gap: '10px',
+        pointerEvents: "auto"
       }}
     >
-    <LegalDocumentPanel
-      documentType="quellen"
-      isOpen={openDocument === 'quellen'}
-      setOpenDocument={setOpenDocument}
-    />
-    <LegalDocumentPanel
-      documentType="impressum"
-      isOpen={openDocument === 'impressum'}
-      setOpenDocument={setOpenDocument}
-    />
+      <LegalDocumentPanel
+        documentType="quellen"
+        isOpen={openDocument === 'quellen'}
+        setOpenDocument={setOpenDocument}
+      />
+      <LegalDocumentPanel
+        documentType="impressum"
+        isOpen={openDocument === 'impressum'}
+        setOpenDocument={setOpenDocument}
+      />
       <LegalDocumentPanel
         documentType="datenschutz"
         isOpen={openDocument === 'datenschutz'}
         setOpenDocument={setOpenDocument}
       />
       <LegalDocumentPanel
-        documentType="agb"
-        isOpen={openDocument === 'agb'}
-        setOpenDocument={setOpenDocument}
-      />
-      <LegalDocumentPanel
-        documentType="widerruf"
-        isOpen={openDocument === 'widerruf'}
+        documentType="AGB & Widerruf"
+        isOpen={openDocument === 'AGB & Widerruf'}
         setOpenDocument={setOpenDocument}
       />
     </div>
   );
 };
+
 
 export default LegalDocuments;
 
@@ -3485,38 +3565,26 @@ export default LegalDocuments;
 &&& CONTENT:
 import React from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
-import "./styles.css"; // Assuming the CSS class `.space-grotesk-extrabold` is defined here
+import "./styles.css";
 
 const Logo: React.FC = () => {
   return (
     <div
-      className="position-fixed text-center"
+      className="d-inline-block px-5 py-2 rounded shadow bg-light"
       style={{
-        top: "60px",
-        left: "0",
-        right: "0",
-        zIndex: 1050,
-        pointerEvents: "none", // Makes it non-interactive
+        color: "black",
+        pointerEvents: "auto",
+        fontWeight: 500,
       }}
     >
-      <div
-        className="d-inline-block px-5 py-2 rounded shadow bg-light"
+      <span
+        className="space-grotesk-regular"
         style={{
-          color: "black",
-          maxWidth: "90%", // Ensure it fits smaller screens
-          pointerEvents: "auto", // Enables interactions if needed
-          fontWeight: 500, // Ensures the font is clearly visible
+          fontSize: "2rem",
         }}
       >
-        <span
-          className="space-grotesk-regular"
-          style={{
-            fontSize: "1.5rem",
-          }}
-        >
-          EasyOpenData
-        </span>
-      </div>
+        EasyOpenData
+      </span>
     </div>
   );
 };
@@ -3526,6 +3594,8 @@ export default Logo;
 
 &&& FILE: ./frontend\src\styles.css
 &&& CONTENT:
+
+
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Space+Grotesk:wght@300..700&display=swap');
 
@@ -3652,4 +3722,44 @@ html, body {
   font-weight: 700;
   font-style: normal;
 }
+
+.top-bar-container {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center; /* Default mobile layout: everything centered */
+  align-items: center;
+  gap: 10px;
+  z-index: 1060;
+  pointer-events: none;
+}
+
+.top-bar-section {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+/* On wider screens, switch to a spaced layout:
+   - Legals on the left
+   - Logo on the right
+*/
+@media (min-width: 768px) {
+  .top-bar-container {
+    justify-content: space-between;
+  }
+
+  .legals {
+    justify-content: flex-start;
+  }
+
+  .logo {
+    justify-content: flex-end;
+  }
+}
+
 
