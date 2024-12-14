@@ -40,6 +40,7 @@ const Logo: React.FC = () => {
         pointerEvents: "auto",
         fontWeight: 500,
         width: "450px",
+        maxWidth: "80%",
         position: "relative",
       }}
     >

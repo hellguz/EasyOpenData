@@ -330,7 +330,7 @@ function Root() {
   };
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100vh" }}>
+    <div style={{ position: "fixed", width: "100%", height: "100%" }}>
       <Map
         initialViewState={viewState}
         mapStyle={MAP_STYLE}
