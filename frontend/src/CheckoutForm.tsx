@@ -37,7 +37,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
     return (
       <>
       <div className="text-center mb-3">
-      Grundstücke unter 0.05 km² können kostenfrei heruntergeladen werden
+      Grundstücke unter 0.01 km² können kostenfrei heruntergeladen werden
       </div>
       <button 
         onClick={onFetchObjFile}

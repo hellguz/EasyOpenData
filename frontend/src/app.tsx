@@ -143,23 +143,11 @@ function Root() {
       map.addControl(drawRef.current);
     }
 
-      // Ensure the draw layers are rendered on top
-  const drawLayers = [
-    'gl-draw-polygon-fill',
-    'gl-draw-polygon-stroke',
-    'gl-draw-line',
-    'gl-draw-point',
-    'gl-draw-midpoint',
-  ];
+  // Bind event listeners for onUpdate and onDelete
+  map.on('draw.create', onUpdate); // Bind onUpdate callback
+  map.on('draw.update', onUpdate); // Bind onUpdate callback
+  map.on('draw.delete', onDelete); // Bind onDelete callback
 
-  map.on('styledata', () => {
-    // Move each draw layer to the top
-    drawLayers.forEach((layer) => {
-      if (map.getLayer(layer)) {
-        map.moveLayer(layer);
-      }
-    });
-  });
 }, []);
   // const onTilesetLoad = (tileset: Tileset3D) => {
   //   const { cartographicCenter, zoom } = tileset;

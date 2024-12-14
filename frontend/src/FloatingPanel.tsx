@@ -44,10 +44,10 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
   useEffect(() => {
     if (polygonArea !== null) {
-      if (polygonArea < 0.05) {
+      if (polygonArea < 0.01) {
         setPrice(0);
       } else {
-        setPrice(20 * polygonArea);
+        setPrice(50 * polygonArea);
       }
     }
   }, [polygonArea]);
