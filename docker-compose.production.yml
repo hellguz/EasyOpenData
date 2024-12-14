@@ -1,0 +1,7 @@
+services:
+  easyopen_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production # Specify production Dockerfile
+    environment:
+      VITE_BACKEND_URL: https://easyopen-server.i-am-hellguz.uk

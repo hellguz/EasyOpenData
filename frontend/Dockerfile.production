@@ -1,0 +1,25 @@
+# Use a lightweight Node.js base image
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package.json and yarn.lock first for dependency installation
+COPY package.json yarn.lock ./
+
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy the rest of the frontend code
+COPY . .
+
+# Build the production-ready static files
+RUN yarn build
+
+# Install a lightweight static file server globally
+RUN yarn global add serve
+
+# Expose port 5173
+EXPOSE 5173
+
+# Command to serve the production build
+CMD ["serve", "-s", "dist", "-l", "5173"]
