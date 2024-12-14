@@ -131,7 +131,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       {/* Polygon Area and Price Display */}
       {polygonArea !== null ? (
         <div className="text-center mb-3">
-          <strong>Gebietfläche:</strong> {polygonArea.toFixed(2)} km²
+          <strong>Gebietfläche:</strong> {polygonArea.toFixed(3)} km²
         </div>
       ) : (
         <p className="text-center mb-3">Zeichnen Sie das Gebiet ein</p>

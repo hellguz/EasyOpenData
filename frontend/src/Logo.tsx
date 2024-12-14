@@ -39,32 +39,41 @@ const Logo: React.FC = () => {
         color: "black",
         pointerEvents: "auto",
         fontWeight: 500,
-        maxWidth: "500px",
+        width: "450px",
         position: "relative",
       }}
     >
       <div
-        className="space-grotesk-regular text-end"
+        className="space-grotesk-regular text-center"
         style={{
           fontSize: "2rem",
         }}
       >
-        EasyOpenData  
+        EasyOpenData
       </div>
 
       {isExpanded && (
         <div
           className="text-left mb-3"
           style={{
-            fontSize: "0.9rem",
+            position: "absolute", // Make it float independently
+            top: "3rem",          // Adjust the vertical positioning
+            left: 0,
+            width: "100%",        // Ensure it spans the logo's width
+            fontSize: "1rem",
             marginTop: "0.5rem",
             lineHeight: "1.5",
+            backgroundColor: "#f8f9fa",
+            padding: "0.5rem",
+            borderRadius: "5px",
+            boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
           }}
+
         >
           <strong>
-            Laden Sie präzise Gebäudegeometrie als .obj-Dateien herunter.<br />
+            Zeichnen Sie ein Polygon auf der Karte ein und laden präzise Gebäudegeometrie als .obj-Dateien herunter.
+            Nach Zahlung erhalten Sie direkt Ihren Download-Link.<br />
             Kosten: Polygonfläche × 50 €/km²<br />
-            Nach Zahlung erhalten Sie direkt Ihren Download-Link.
           </strong>
         </div>
       )}
