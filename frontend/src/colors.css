@@ -1,6 +1,7 @@
 :root {
     --bs-primary: #2a7a92; /* Your desired primary color */
     --bs-secondary: #3e66bb;
+    --bs-secondary-selected: #244ca3;
     --bs-success: #28a745;
     --bs-danger: #f38093;
     --bs-warning: #ffc107;
@@ -8,6 +9,7 @@
     --bs-light: #f8f9fa;
     --bs-dark: #343a40;
   }
+  
 /*   
   .btn-primary {
     background-color: var(--bs-primary) !important;

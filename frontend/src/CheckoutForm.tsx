@@ -41,9 +41,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       </div>
       <button 
         onClick={onFetchObjFile}
-        className="btn btn-secondary btn-sm mt-2"
+        className="btn btn-secondary btn mt-2"
       >
-        Download File
+        .obj Herunterladen
       </button>
       </>
     );

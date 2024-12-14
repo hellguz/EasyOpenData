@@ -56,7 +56,9 @@ function Root() {
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
 
-  const POLYGON_COLOR = '#2a7a92'; // Your predefined blue color
+  const rootStyles = getComputedStyle(document.documentElement);
+  const POLYGON_COLOR = rootStyles.getPropertyValue('--bs-secondary').trim();
+  const POLYGON_SELECTED_COLOR = rootStyles.getPropertyValue('--bs-secondary-selected').trim();
 
   // Initialize MapboxDraw and add it to the map
   const handleMapLoad = useCallback(() => {
@@ -79,27 +81,86 @@ function Root() {
               'fill-opacity': 0.5, // Adjust transparency if needed
             },
           },
+          // Selected Polygon Fill
+          {
+            id: 'gl-draw-polygon-fill-active',
+            type: 'fill',
+            filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+            paint: {
+              'fill-color': POLYGON_SELECTED_COLOR,
+              'fill-opacity': 0.5,
+            },
+          },
+          // Default Polygon Stroke
           {
             id: 'gl-draw-polygon-stroke',
             type: 'line',
             paint: {
-              'line-color': POLYGON_COLOR,
+              'line-color': POLYGON_SELECTED_COLOR,
               'line-width': 4,
+            },
+          },
+          // Selected Polygon Stroke
+          {
+            id: 'gl-draw-polygon-stroke-active',
+            type: 'line',
+            filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+            paint: {
+              'line-color': POLYGON_SELECTED_COLOR,
+              'line-width': 6,
             },
           },
           {
             id: 'gl-draw-point',
             type: 'circle',
+            filter: ['all', ['!=', 'meta', 'midpoint']],
             paint: {
-              'circle-radius': 10,
+              'circle-radius': 12,
+              'circle-color': POLYGON_SELECTED_COLOR,
+            },
+          },
+          {
+            id: 'gl-draw-point-active',
+            type: 'circle',
+            filter: ['all', ['!=', 'meta', 'midpoint'], ['==', 'active', 'true']],
+            paint: {
+              'circle-radius': 8,
               'circle-color': POLYGON_COLOR,
+            },
+          },
+          // Midpoints
+          {
+            id: 'gl-draw-midpoint',
+            type: 'circle',
+            filter: ['all', ['==', 'meta', 'midpoint']],
+            paint: {
+              'circle-radius': 8,
+              'circle-color': POLYGON_SELECTED_COLOR,
             },
           },
         ]
       });
       map.addControl(drawRef.current);
     }
-  }, []);
+
+      // Ensure the draw layers are rendered on top
+  const drawLayers = [
+    'gl-draw-polygon-fill',
+    'gl-draw-polygon-stroke',
+    'gl-draw-line',
+    'gl-draw-point',
+    'gl-draw-midpoint',
+  ];
+
+  map.on('styledata', () => {
+    // Move each draw layer to the top
+    drawLayers.forEach((layer) => {
+      if (map.getLayer(layer)) {
+        map.moveLayer(layer);
+      }
+    });
+  });
+}, []);
   // const onTilesetLoad = (tileset: Tileset3D) => {
   //   const { cartographicCenter, zoom } = tileset;
   //   setViewState((prev) => ({
@@ -323,7 +384,7 @@ function Root() {
             <NavigationControl />
           </div>
         </div> */}
-        <DrawControl
+        {/* <DrawControl
           position="top-right"
           displayControlsDefault={false}
           controls={{
@@ -334,7 +395,7 @@ function Root() {
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
-        />
+        /> */}
       </Map>
       <FloatingPanel
         onDrawPolygon={handleDrawPolygon}

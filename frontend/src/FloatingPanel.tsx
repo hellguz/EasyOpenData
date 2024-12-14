@@ -90,7 +90,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="Search location..."
+          placeholder="Standort finden..."
           value={searchQuery}
           onChange={handleSearch}
         />
@@ -141,14 +141,14 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div className="btn-group w-100" role="group">
         <button
           type="button"
-          className="btn btn-primary btn-sm mt-2"
+          className="btn btn-secondary btn mt-2"
           onClick={onDrawPolygon}
         >
-          Polygon einzeichnen
+          Polygon zeichnen
         </button>
         <button
           type="button"
-          className="btn btn-danger btn-sm mt-2"
+          className="btn btn-danger btn mt-2"
           onClick={onRemovePolygon}
         >
           Entfernen
