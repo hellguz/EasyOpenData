@@ -171,7 +171,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
       <div
         className="position-fixed"
         style={{
-          bottom: "40px",
+          bottom: "30px",
           left: "0",
           right: "0",
           zIndex: 1050,

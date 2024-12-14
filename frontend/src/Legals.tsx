@@ -36,7 +36,9 @@ const LegalDocumentPanel: React.FC<{
         className="btn btn-sm btn-light"
         style={{
           display: 'inline-block',
-          padding: '0.25rem 0.5rem',
+          padding: '0.25rem 0.5rem',           
+           fontSize: "0.8rem",
+
         }}
       >
         {documentType.charAt(0).toUpperCase() + documentType.slice(1)}

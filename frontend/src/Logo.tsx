@@ -55,13 +55,15 @@ const Logo: React.FC = () => {
 
       {isExpanded && (
         <div
-          className="text-left mb-3"
+          className="text-left mb-3 ibm-plex-sans-light"
           style={{
             position: "absolute", // Make it float independently
             top: "3rem",          // Adjust the vertical positioning
             left: 0,
             width: "100%",        // Ensure it spans the logo's width
             fontSize: "1rem",
+            fontFamily: "IBM Plex Sans, sans-serif",
+            fontWeight: 300, // Matches ibm-plex-sans-light
             marginTop: "0.5rem",
             lineHeight: "1.5",
             backgroundColor: "#f8f9fa",

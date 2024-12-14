@@ -10,7 +10,7 @@ body {
 
 /* Override all fonts */
 * {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "IBM Plex Sans", sans-serif;
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
@@ -148,6 +148,7 @@ body {
   display: flex;
   justify-content: center;
   pointer-events: auto;
+  align-self: flex-start; /* Ensure alignment to the top of the container */
 }
 
 
@@ -155,7 +156,7 @@ body {
    - Legals on the left
    - Logo on the right
 */
-@media (min-width: 768px) {
+@media (min-width: 1000px) {
   .top-bar-container {
     justify-content: space-between;
   }
