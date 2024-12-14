@@ -50,6 +50,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.production
+      args:
+        VITE_BASE_URL: ${VITE_BASE_URL}
+        VITE_TILESET_URL: ${VITE_TILESET_URL}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY}
     volumes:
       - ./frontend:/app
       - /app/node_modules

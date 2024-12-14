@@ -1,4 +1,4 @@
-# Use a lightweight Node.js base image
+# Stage 1: Build the frontend application
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -12,13 +12,26 @@ RUN yarn install --frozen-lockfile
 # Copy the rest of the frontend code
 COPY . .
 
+# Accept build arguments
+ARG VITE_BASE_URL
+ARG VITE_TILESET_URL
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+
+# Set environment variables for Vite
+ENV VITE_BASE_URL=${VITE_BASE_URL}
+ENV VITE_TILESET_URL=${VITE_TILESET_URL}
+ENV VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY}
+
 # Build the production-ready static files
 RUN yarn build
 
-# Use a lightweight web server for serving the static files
+# Stage 2: Serve the built application using Nginx
 FROM nginx:stable-alpine
 
-# Copy the production build from the builder stage
+# Remove the default Nginx static assets
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy the built static files from the build stage to Nginx's html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy a custom nginx configuration to configure port 5173
