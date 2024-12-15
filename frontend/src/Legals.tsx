@@ -13,8 +13,7 @@ const LegalDocumentPanel: React.FC<{
     if (isOpen && !content) {
       const fetchContent = async () => {
         try {
-          const BASE_URL = import.meta.env.VITE_BASE_URL;
-          const response = await fetch(BASE_URL + `/docs/${documentType}.md`);
+          const response = await fetch(`/docs/${documentType}.md`);
           const text = await response.text();
           setContent(text);
         } catch (error) {
@@ -51,7 +50,7 @@ const LegalDocumentPanel: React.FC<{
           style={{
             position: 'absolute',
             top: '50px',
-            right: '10px',
+            left: '10px',
             maxWidth: '600px',
             width: '80vw',
             maxHeight: '50vh',
