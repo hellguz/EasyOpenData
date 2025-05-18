@@ -14,8 +14,7 @@ __pycache__/
 *.so
 
 #.gpt
-.gpt/dump.txt
-.gpt/response.txt
+.gpt/*.txt
 
 # tileset
 backend/tileset*/ # Keep if backend itself writes here temporarily during dev/ingestion
