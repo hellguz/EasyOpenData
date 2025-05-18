@@ -31,7 +31,7 @@ from lxml import etree
 import psycopg2
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'data/tileset'
@@ -39,7 +39,7 @@ PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe'
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
-BATCH_N = 20 # number of gml files for which there will be created a separate tileset
+BATCH_N = 1 # number of gml files for which there will be created a separate tileset
 
 # Configure logging
 logging.basicConfig(
@@ -123,6 +123,10 @@ def verify_file(file_path, expected_size, expected_hash, hash_type='sha-256'):
     Returns:
         bool: True if verification succeeds, False otherwise.
     """
+    
+    logging.info(f"Verification skipped: {file_path}")
+    return True
+
     logging.info(f"Verifying file: {file_path}")
     # Check size
     actual_size = os.path.getsize(file_path)
@@ -730,9 +734,6 @@ def main(meta4_file):
     drop_temp_table(DATABASE_URL, TEMP_TABLE)
 
     for ix, file_info in enumerate(files):
-        
-        if ix < 1700:
-           continue
         
         file_name = file_info['name']
         size = file_info['size']

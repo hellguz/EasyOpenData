@@ -10,9 +10,9 @@ services:
     # ports: # Avoid exposing DB port directly in production unless absolutely necessary
     #   - "8735:5432"
     environment:
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?err_DATABASE_PASSWORD_not_set}
-      POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_DB: ${DATABASE_NAME:-easyopendata_database}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_DB: ${DATABASE_NAME}
     volumes:
       - ./data/postgres_data:/var/lib/postgresql/data # Prod specific volume
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql

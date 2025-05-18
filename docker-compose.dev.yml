@@ -8,11 +8,11 @@ services:
     image: postgis/postgis:17-3.5
     restart: always
     ports:
-      - "${DEV_DB_PORT:-8735}:5432" # Use dev port from .env or default
+      - "8735:5432" # Use dev port from .env or default
     environment:
-      POSTGRES_PASSWORD: ${DATABASE_DEV_PASSWORD:-barcelona_dev} # Use specific dev password
-      POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_DB: ${DATABASE_DEV_NAME:-easyopendata_database_dev} # Use specific dev DB name
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD} # Use specific dev password
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_DB: ${DATABASE_NAME} # Use specific dev DB name
     volumes:
       - ./data/postgres_data_dev:/var/lib/postgresql/data # Dev specific volume path
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql # Can share init.sql

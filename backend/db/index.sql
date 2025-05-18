@@ -8,7 +8,7 @@ BEGIN
         AND tablename = 'building' 
         AND indexname = 'idx_makevalid_geom'
     ) THEN
-        CREATE INDEX buildings_geom_idx ON building USING GIST (ST_MakeValid(geom));
+        CREATE INDEX IF NOT EXISTS buildings_geom_idx ON building USING GIST (ST_MakeValid(geom));
     END IF;
 END $$;
 
