@@ -152,8 +152,7 @@ networks:
   easyopen_network:
     driver: bridge
 
-&&& FILE: ./README.md
-&&& CONTENT:
+<./README.md>
 # EasyOpenData
 
 ## Open Data Extractor for German Spatial Datasets
@@ -178,8 +177,7 @@ COPY . /app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 
-&&& FILE: ./backend\README.md
-&&& CONTENT:
+<./backend\README.md>
 # EasyOpenData Backend
 
 ## Overview
@@ -249,8 +247,7 @@ async def init_db():
 
 
 
-&&& FILE: ./backend\app\main.py
-&&& CONTENT:
+<./backend\app\main.py>
 # ./backend/main.py
 
 import asyncio
@@ -357,8 +354,7 @@ async def create_payment_intent(data: PaymentIntentRequest):
 app.mount("/tileset", StaticFiles(directory="../data/tileset"), name="tileset")
 
 
-&&& FILE: ./backend\app\models.py
-&&& CONTENT:
+<./backend\app\models.py>
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from geoalchemy2 import Geometry
@@ -378,8 +374,7 @@ class RegionRequest(BaseModel):
     region: dict  # Adjust the type if you have a more specific structure
 
 
-&&& FILE: ./backend\app\retrieve_geom.py
-&&& CONTENT:
+<./backend\app\retrieve_geom.py>
 # ./backend/retrieve_obj.py
 
 import asyncio
@@ -519,8 +514,7 @@ async def retrieve_obj_file(region_geojson, output_path):
         return
 
 
-&&& FILE: ./backend\db\index.sql
-&&& CONTENT:
+<./backend\db\index.sql>
 -- Create the index if it doesn't exist
 DO $$
 BEGIN
@@ -572,8 +566,7 @@ END $$;
 ANALYZE building;
 
 
-&&& FILE: ./backend\db\init.sql
-&&& CONTENT:
+<./backend\db\init.sql>
 -- Part 1: Database and extension creation (in transaction)
 CREATE DATABASE easyopendata_database;
 \c easyopendata_database;
@@ -648,6 +641,8 @@ process_meta4.py
 A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
 ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
 append to the main building table, and remove the original files.
+ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
+append to the main building table, and remove the original files.
 
 Usage:
     python process_meta4.py file.meta4
@@ -658,6 +653,7 @@ Requirements:
     - psycopg2
     - ogr2ogr (from GDAL)
     - pg2b3dm_new command available in PATH
+    - gltf-pipeline (for Draco compression)
     - gltf-pipeline (for Draco compression)
 """
 
@@ -820,6 +816,7 @@ def transform_gml(input_file, output_file):
     """
     # Parse the GML file
     logging.info(f"Parsing input GML file: {input_file}")
+    logging.info(f"Parsing input GML file: {input_file}")
     parser = etree.XMLParser(remove_blank_text=True)
     tree = etree.parse(input_file, parser)
     root = tree.getroot()
@@ -827,10 +824,13 @@ def transform_gml(input_file, output_file):
     # Extract all namespaces
     namespaces = get_all_namespaces(tree)
     # logging.debug("Namespaces detected:")
+    # logging.debug("Namespaces detected:")
     # for prefix, uri in namespaces.items():
+    #     logging.debug(f"  Prefix: '{prefix}' => URI: '{uri}'")
     #     logging.debug(f"  Prefix: '{prefix}' => URI: '{uri}'")
 
     # Build a dictionary of gml:id to Polygon elements for quick lookup
+    logging.info("Indexing all <gml:Polygon> elements by gml:id...")
     logging.info("Indexing all <gml:Polygon> elements by gml:id...")
     polygon_dict = {}
     for polygon in root.xpath('.//gml:Polygon', namespaces=namespaces):
@@ -838,10 +838,13 @@ def transform_gml(input_file, output_file):
         if polygon_id:
             polygon_dict[polygon_id] = polygon
     logging.info(f"Indexed {len(polygon_dict)} polygons.")
+    logging.info(f"Indexed {len(polygon_dict)} polygons.")
 
     # Find all <gml:surfaceMember> elements with xlink:href
     logging.info("Finding all <gml:surfaceMember> elements with xlink:href...")
+    logging.info("Finding all <gml:surfaceMember> elements with xlink:href...")
     surface_members = root.xpath('.//gml:surfaceMember[@xlink:href]', namespaces=namespaces)
+    logging.info(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
     logging.info(f"Found {len(surface_members)} <gml:surfaceMember> elements with xlink:href.")
 
     for sm in surface_members:
@@ -851,8 +854,10 @@ def transform_gml(input_file, output_file):
         # Extract the referenced polygon ID (remove the '#' prefix)
         polygon_id = href.lstrip('#')
         # logging.debug(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
+        # logging.debug(f"Processing surfaceMember referencing Polygon ID: {polygon_id}")
         polygon = polygon_dict.get(polygon_id)
         if not polygon:
+            logging.warning(f"Polygon with gml:id='{polygon_id}' not found. Skipping.")
             logging.warning(f"Polygon with gml:id='{polygon_id}' not found. Skipping.")
             continue
         # Deep copy the polygon element
@@ -863,8 +868,10 @@ def transform_gml(input_file, output_file):
         sm.clear()  # Remove existing children and attributes
         sm.append(polygon_copy)
         # logging.debug(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
+        # logging.debug(f"Embedded Polygon ID: {polygon_id} into surfaceMember.")
 
     # Optionally, remove standalone <gml:Polygon> elements that were referenced
+    # logging.info("Removing standalone <gml:Polygon> elements that were referenced...")
     # logging.info("Removing standalone <gml:Polygon> elements that were referenced...")
     # removed_count = 0
     # for polygon_id in polygon_dict.keys():
@@ -877,30 +884,40 @@ def transform_gml(input_file, output_file):
     #             removed_count += 1
     #             logging.debug(f"Removed standalone Polygon ID: {polygon_id}.")
     # logging.info(f"Removed {removed_count} standalone polygons.")
+    #             logging.debug(f"Removed standalone Polygon ID: {polygon_id}.")
+    # logging.info(f"Removed {removed_count} standalone polygons.")
 
     # Write the transformed GML to the output file
+    logging.info(f"Writing transformed GML to: {output_file}")
     logging.info(f"Writing transformed GML to: {output_file}")
     tree.write(output_file, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     logging.info("Transformation complete.")
 
 def ingest_gml_file(gml_file, database_url, table_name):
+    logging.info("Transformation complete.")
+
+def ingest_gml_file(gml_file, database_url, table_name):
     """
+    Ingests a GML file into a PostgreSQL database using ogr2ogr into a specified table.
     Ingests a GML file into a PostgreSQL database using ogr2ogr into a specified table.
 
     Args:
         gml_file (str): Path to the GML file.
         database_url (str): PostgreSQL connection URL.
         table_name (str): Target table name for ingestion.
+        table_name (str): Target table name for ingestion.
     """
+    logging.info(f"Ingesting GML file into database table '{table_name}': {gml_file}")
     logging.info(f"Ingesting GML file into database table '{table_name}': {gml_file}")
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
         '-nln', table_name,              # Specify the target table name
+        '-nln', table_name,              # Specify the target table name
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGONZ',
+        '-nlt', 'MULTIPOLYGON',
         '-dim', 'XYZ',
         '-s_srs', 'EPSG:25832',
         '-t_srs', 'EPSG:4326',
@@ -911,6 +928,7 @@ def ingest_gml_file(gml_file, database_url, table_name):
     if result.returncode != 0:
         logging.error(f"ogr2ogr failed for {gml_file}: {result.stderr}")
         raise RuntimeError(f"ogr2ogr failed: {result.stderr}")
+    logging.info(f"Ingested {gml_file} into table '{table_name}' successfully.")
     logging.info(f"Ingested {gml_file} into table '{table_name}' successfully.")
 
 def execute_sql_file(sql_file_path, database_url):
@@ -938,13 +956,17 @@ def execute_sql_file(sql_file_path, database_url):
         conn.close()
 
 def update_geometries(database_url, table_name):
+def update_geometries(database_url, table_name):
     """
+    Updates the geometries in the specified table to put them on ground level.
     Updates the geometries in the specified table to put them on ground level.
 
     Args:
         database_url (str): PostgreSQL connection URL.
         table_name (str): Table to update.
+        table_name (str): Table to update.
     """
+    logging.info(f"Updating geometries to ground level in table '{table_name}'.")
     logging.info(f"Updating geometries to ground level in table '{table_name}'.")
     url = urlparse(database_url)
     conn = psycopg2.connect(
@@ -958,12 +980,16 @@ def update_geometries(database_url, table_name):
         with conn.cursor() as cur:
             cur.execute(f"""
                 UPDATE {table_name}
+            cur.execute(f"""
+                UPDATE {table_name}
                 SET geom = ST_Translate(geom, 0, 0, -ST_ZMin(geom))
                 WHERE ST_ZMin(geom) != 0;
             """)
             conn.commit()
         logging.info(f"Geometries in table '{table_name}' updated successfully.")
+        logging.info(f"Geometries in table '{table_name}' updated successfully.")
     except Exception as e:
+        logging.error(f"Failed to update geometries in table '{table_name}': {e}")
         logging.error(f"Failed to update geometries in table '{table_name}': {e}")
         conn.rollback()
         raise
@@ -971,20 +997,25 @@ def update_geometries(database_url, table_name):
         conn.close()
 
 def convert_to_3d_tiles(cache_dir, database_url, table_name):
+def convert_to_3d_tiles(cache_dir, database_url, table_name):
     """
+    Converts buildings from the specified table in the database to 3D tiles using pg2b3dm.
     Converts buildings from the specified table in the database to 3D tiles using pg2b3dm.
 
     Args:
         cache_dir (str): Output directory for 3D tiles.
         database_url (str): PostgreSQL connection URL.
         table_name (str): Table to convert to 3D tiles.
+        table_name (str): Table to convert to 3D tiles.
     """
+    logging.info(f"Converting table '{table_name}' to 3D tiles with pg2b3dm.")
     logging.info(f"Converting table '{table_name}' to 3D tiles with pg2b3dm.")
     # Parse the database URL for parameters
     url = urlparse(database_url)
     dbname = url.path[1:]
     user = url.username
     host = url.hostname or 'localhost'
+    port = url.port
     port = url.port
     # Assume password is handled via environment or .pgpass
     cmd = [
@@ -993,8 +1024,10 @@ def convert_to_3d_tiles(cache_dir, database_url, table_name):
         '-U', user,
         '-c', 'geom',
         '-t', table_name,
+        '-t', table_name,
         '-d', dbname,
         '-o', cache_dir, 
+         '--use_implicit_tiling', 'false'  # Uncomment if needed
          '--use_implicit_tiling', 'false'  # Uncomment if needed
     ]
     # To handle password, set PGPASSWORD environment variable if available
@@ -1008,6 +1041,12 @@ def convert_to_3d_tiles(cache_dir, database_url, table_name):
     logging.info("3D tiles generated successfully.")
 
 def apply_draco_compression(cache_dir):
+    """
+    Applies Draco compression to all .glb files in the specified directory.
+
+    Args:
+        cache_dir (str): Directory containing .glb files.
+    """
     """
     Applies Draco compression to all .glb files in the specified directory.
 
@@ -1384,7 +1423,15 @@ def main(meta4_file):
         urls = file_info['urls']
 
         logging.info(f"▶️   FILE {ix+1}/{len(files)}")
+        logging.info(f"▶️   FILE {ix+1}/{len(files)}")
         logging.info(f"Processing file: {file_name}")
+
+
+        temp_tileset_dir = os.path.join(CACHE_DIR, 'sub', str(ix // BATCH_N))  
+        main_tileset_dir = CACHE_DIR
+           
+        os.makedirs(main_tileset_dir, exist_ok=True)   
+        os.makedirs(temp_tileset_dir, exist_ok=True)
 
 
         temp_tileset_dir = os.path.join(CACHE_DIR, 'sub', str(ix // BATCH_N))  
@@ -1417,6 +1464,8 @@ def main(meta4_file):
             # Transform the GML file
             transform_gml(download_path, transformed_path)
 
+            # Ingest the transformed GML into the temporary table
+            ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE)
             # Ingest the transformed GML into the temporary table
             ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE)
 
@@ -1470,10 +1519,15 @@ def main(meta4_file):
             transformed_gfs_path = os.path.splitext(transformed_path)[0] + ".gfs"
             if os.path.isfile(transformed_gfs_path):
                 remove_file(transformed_gfs_path)
+            # Remove the transformed GFS file if it exists
+            transformed_gfs_path = os.path.splitext(transformed_path)[0] + ".gfs"
+            if os.path.isfile(transformed_gfs_path):
+                remove_file(transformed_gfs_path)
 
             # Optionally, remove the original downloaded GML file
             remove_file(download_path)
 
+            logging.info(f"✅  Completed processing for {file_name}")
             logging.info(f"✅  Completed processing for {file_name}")
 
         except Exception as e:
@@ -1481,6 +1535,7 @@ def main(meta4_file):
             # Optionally, clean up files or continue
             continue
 
+    logging.info("🏁 All files processed.")
     logging.info("🏁 All files processed.")
 
 if __name__ == '__main__':
@@ -1491,8 +1546,7 @@ if __name__ == '__main__':
     main(meta4_file)
 
 
-&&& FILE: ./backend\ingestion\README.md
-&&& CONTENT:
+<./backend\ingestion\README.md>
 # EasyOpenData Data Ingestion
 
 ## Overview
@@ -1509,8 +1563,7 @@ The `ingestion` directory contains scripts and resources for downloading, transf
   <file name="636_5524.g
 ................................
 
-&&& FILE: ./backend\ingestion\data_sources\bayern.meta4
-&&& CONTENT:
+<./backend\ingestion\data_sources\bayern.meta4>
 <?xml version="1.0" encoding="UTF-8"?>
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
@@ -1518,8 +1571,7 @@ The `ingestion` directory contains scripts and resources for downloading, transf
   <file name="792_5432.g
 ................................
 
-&&& FILE: ./backend\ingestion\data_sources\munchen.meta4
-&&& CONTENT:
+<./backend\ingestion\data_sources\munchen.meta4>
 <?xml version="1.0" encoding="UTF-8"?>
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
@@ -1551,6 +1603,7 @@ dist
 dist-ssr
 *.local
 .vite/*
+.vite/*
 
 # Editor directories and files
 .vscode/*
@@ -1565,8 +1618,7 @@ dist-ssr
 
 yarn.lock
 
-&&& FILE: ./frontend\Dockerfile
-&&& CONTENT:
+<./frontend\Dockerfile>
 FROM node:18-alpine
 
 WORKDIR /app
@@ -1661,8 +1713,7 @@ export default [
 ]
 
 
-&&& FILE: ./frontend\index.html
-&&& CONTENT:
+<./frontend\index.html>
 <!doctype html>
 <html lang="en">
 
@@ -1722,8 +1773,7 @@ server {
 
 ................................
 
-&&& FILE: ./frontend\README.md
-&&& CONTENT:
+<./frontend\README.md>
 # EasyOpenData Frontend
 
 ## Overview
@@ -1743,8 +1793,7 @@ The frontend of EasyOpenData is a React application that provides an interactive
   }
 ................................
 
-&&& FILE: ./frontend\vite.config.js
-&&& CONTENT:
+<./frontend\vite.config.js>
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -1827,6 +1876,7 @@ const INITIAL_VIEW_STATE: MapViewState = {
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
+  zoom: 17,
   zoom: 17,
 };
 
@@ -2208,8 +2258,7 @@ interface DrawControlProps {
 export default Root;
 
 
-&&& FILE: ./frontend\src\CheckoutForm.tsx
-&&& CONTENT:
+<./frontend\src\CheckoutForm.tsx>
 import React, { useState } from "react";
 import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
 
@@ -2257,6 +2306,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       >
         .obj Herunterladen
       </button>
+      </>
       </>
     );
   }
@@ -2948,8 +2998,7 @@ DrawControl.defaultProps = {
   onDelete: () => {}
 };
 
-&&& FILE: ./frontend\src\FloatingPanel.tsx
-&&& CONTENT:
+<./frontend\src\FloatingPanel.tsx>
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
@@ -3103,6 +3152,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
           className="btn btn-danger btn mt-2"
           onClick={onRemovePolygon}
         >
+          Entfernen
           Entfernen
         </button>
       </div>
@@ -3277,6 +3327,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkGfm from 'remark-gfm';
 
 const LegalDocumentPanel: React.FC<{
   documentType: string;
@@ -3341,6 +3392,7 @@ const LegalDocumentPanel: React.FC<{
           <h5 className="mb-3">
             {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
           </h5>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       )}
