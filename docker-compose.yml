@@ -4,7 +4,7 @@
 
 services:
   easyopen_postgis:
-    container_name: easyopen_postgis_prod # Prod specific name
+    container_name: easyopen_postgis # Prod specific name
     image: postgis/postgis:17-3.5
     restart: always
     # ports: # Avoid exposing DB port directly in production unless absolutely necessary
@@ -14,18 +14,18 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-postgres}
       POSTGRES_DB: ${DATABASE_NAME:-easyopendata_database}
     volumes:
-      - ./data/postgres_data_prod:/var/lib/postgresql/data # Prod specific volume
+      - ./data/postgres_data:/var/lib/postgresql/data # Prod specific volume
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$DATABASE_NAME"]
-      interval: 10s
-      timeout: 5s
+      interval: 20s
+      timeout: 10s
       retries: 20
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_backend:
-    container_name: easyopen_backend_prod # Prod specific name
+    container_name: easyopen_backend # Prod specific name
     build:
       context: ./backend
       dockerfile: Dockerfile # Assumes this Dockerfile is suitable for prod (no dev tools)
@@ -47,10 +47,10 @@ services:
       easyopen_postgis:
         condition: service_healthy
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_frontend:
-    container_name: easyopen_frontend_prod # Prod specific name
+    container_name: easyopen_frontend # Prod specific name
     build:
       context: ./frontend
       dockerfile: Dockerfile.production # Use the new production Dockerfile
@@ -63,10 +63,10 @@ services:
     # No volumes for code/node_modules needed as it's a static build served by Nginx
     # Environment variables here are for Nginx if needed, Vite vars are build-time.
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_tileset: # Tileset server remains largely the same
-    container_name: easyopen_tileset_prod # Prod specific name
+    container_name: easyopen_tileset # Prod specific name
     image: nginx:alpine
     restart: always
     ports:
@@ -75,10 +75,10 @@ services:
       - ./data/tileset:/usr/share/nginx/html:ro # Serve from the main data directory
       - ./backend/tileset.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_backup_service: # Backup service remains largely the same
-    container_name: easyopen_backup_service_prod # Prod specific name
+    container_name: easyopen_backup_service # Prod specific name
     build: ./backend/db_backup
     depends_on:
       - easyopen_postgis
@@ -90,10 +90,10 @@ services:
       PGDATABASE: ${DATABASE_NAME:-easyopendata_database}
       PGPASSWORD: ${DATABASE_PASSWORD} # PGPASSWORD is used by pg_dump
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_pgadmin:
-    container_name: easyopen_pgadmin_prod # Prod specific name
+    container_name: easyopen_pgadmin # Prod specific name
     image: dpage/pgadmin4
     restart: always
     ports:
@@ -102,14 +102,14 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     volumes: # Add a volume for pgAdmin data persistence
-      - ./data/pgadmin_data_prod:/var/lib/pgadmin
+      - ./data/pgadmin_data:/var/lib/pgadmin
     depends_on:
       - easyopen_postgis
     networks:
-      - easyopen_prod_network
+      - easyopen_network
 
   easyopen_cloudflared: # Assumed needed for production as well
-    container_name: easyopen_cloudflared_prod # Prod specific name
+    container_name: easyopen_cloudflared # Prod specific name
     image: cloudflare/cloudflared:latest
     restart: always
     command: 'tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN:?err_CLOUDFLARED_TOKEN_not_set}'
@@ -118,15 +118,15 @@ services:
       - easyopen_frontend
       - easyopen_tileset # Add this if you are tunneling the tileset service as well
     networks:
-      - easyopen_prod_network # CORRECTED: Should be on the same bridge network
+      - easyopen_network # CORRECTED: Should be on the same bridge network
 
 volumes:
-  postgres_data_prod: # Renamed for production
-    name: easyopen_pgdata_prod_main
-  pgadmin_data_prod: # Added for pgAdmin persistence
-    name: easyopen_pgadmin_data_prod_main
+  postgres_data: # Renamed for production
+    name: easyopen_pgdata_main
+  pgadmin_data: # Added for pgAdmin persistence
+    name: easyopen_pgadmin_data_main
 
 networks:
-  easyopen_prod_network: # Renamed for production
-    name: easyopen_production_net
+  easyopen_network: # Renamed for production
+    name: easyopenuction_net
     driver: bridge
