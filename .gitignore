@@ -13,6 +13,10 @@ __pycache__/
 # Other ignores
 *.so
 
+#.gpt
+.gpt/dump.txt
+.gpt/response.txt
+
 # tileset
 backend/tileset*/ # Keep if backend itself writes here temporarily during dev/ingestion
 !backend/tileset/README.md
