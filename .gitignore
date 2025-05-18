@@ -1,5 +1,5 @@
 # Ignore local data files
-data_local/
+data_local/ # Old, can be removed if data/ is the new standard
 
 # Python cache
 __pycache__/
@@ -7,17 +7,15 @@ __pycache__/
 
 # Environment variables
 .env
+# For .env.dev, .env.prod
+*.env.* 
 
 # Other ignores
 *.so
 
 # tileset
-backend/tileset*/
+backend/tileset*/ # Keep if backend itself writes here temporarily during dev/ingestion
 !backend/tileset/README.md
-
-# Environment variables
-.env
-
 
 *.gml
 *.gfs
@@ -30,7 +28,5 @@ venv/
 
 node_modules/
 
-postgres_data/*
-postgres_backups/*
-
+# Main data directory
 data/

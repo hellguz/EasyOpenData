@@ -1,44 +1,56 @@
+# ./frontend/Dockerfile.production (For Nginx static serving)
+
 # Stage 1: Build the frontend application
 FROM node:18-alpine AS builder
-
+LABEL stage="frontend-builder-prod"
 WORKDIR /app
 
-# Copy package.json and yarn.lock first for dependency installation
-COPY package.json yarn.lock ./
+# Copy package.json and yarn.lock first for dependency caching
+COPY package.json yarn.lock* ./
 
 # Install dependencies
-RUN yarn install --frozen-lockfile
+# --production=false ensures devDependencies are available if build scripts need them
+RUN yarn install --frozen-lockfile --production=false --network-timeout 600000
 
 # Copy the rest of the frontend code
 COPY . .
 
-# Accept build arguments
+# These ARGs are passed from `docker-compose.yml` build section
 ARG VITE_BASE_URL
 ARG VITE_TILESET_URL
 ARG VITE_STRIPE_PUBLISHABLE_KEY
 
-# Set environment variables for Vite
+# Set them as ENV variables for Vite to pick up during the build process
 ENV VITE_BASE_URL=${VITE_BASE_URL}
 ENV VITE_TILESET_URL=${VITE_TILESET_URL}
 ENV VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY}
+
+# Verify environment variables are set (optional, for debugging build)
+RUN echo "VITE_BASE_URL: $VITE_BASE_URL"
+RUN echo "VITE_TILESET_URL: $VITE_TILESET_URL"
+RUN echo "VITE_STRIPE_PUBLISHABLE_KEY: $VITE_STRIPE_PUBLISHABLE_KEY"
 
 # Build the production-ready static files
 RUN yarn build
 
 # Stage 2: Serve the built application using Nginx
 FROM nginx:stable-alpine
+LABEL stage="frontend-runner-prod"
 
-# Remove the default Nginx static assets
+# Remove the default Nginx static assets and config
 RUN rm -rf /usr/share/nginx/html/*
+RUN rm -f /etc/nginx/conf.d/default.conf
 
 # Copy the built static files from the build stage to Nginx's html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy a custom nginx configuration to configure port 5173
+# Copy a custom nginx configuration.
+# This file should be in the same directory as this Dockerfile (./frontend)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose the custom port
-EXPOSE 5173
+# Nginx typically runs on port 80 by default inside the container.
+# The `ports` mapping in docker-compose.yml (e.g., "5173:80") handles host exposure.
+EXPOSE 80
 
-# Command to run nginx
+# Command to run nginx in the foreground
 CMD ["nginx", "-g", "daemon off;"]
