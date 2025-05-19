@@ -224,18 +224,19 @@ def ingest_gml_file(gml_file, database_url, table_name):
     cmd = [
         'ogr2ogr',
         '-f', 'PostgreSQL',
-        f'{database_url}', # Swapped order for clarity, PG:connstring first
+        f'{database_url}',
         gml_file,
         '-nln', table_name,
         '-progress',
         '-lco', 'GEOMETRY_NAME=geom',
-        '-lco', 'LAUNDER=NO', # Preserve original column names
+        # '-lco', 'LAUNDER=NO', # Preserve original column names
         '-skipfailures',
-        '-nlt', 'MULTIPOLYGONZ', # Explicitly target MULTIPOLYGONZ
-        '-dim', 'XYZ', # Ensure 3D
+        '-nlt', 'GEOMETRYZ', # Explicitly target MULTIPOLYGONZ
+        # '-dim', 'XYZ', # Ensure 3D
         '-s_srs', 'EPSG:25832', # Source CRS from GML (UTM32N)
         '-t_srs', 'EPSG:4326', # Target CRS for PostGIS (WGS84)
-        '-makevalid' # Ask ogr2ogr to attempt to make geometries valid
+        # '-makevalid', # Ask ogr2ogr to attempt to make geometries valid
+        # '-oo', 'GML_MULTI_SURFACE_AS_MULTI_POLYGON=YES',
     ]
     # If the table exists, ogr2ogr will try to append.
     # If it's the first time for this table_name, it will create it.
@@ -753,158 +754,153 @@ def ensure_main_table_exists(database_url, table_name):
         if conn:
             conn.close()
 
+
 def convert_geometries_to_multipolygonz(database_url, table_name):
-    logging.info(f"Attempting to convert geometries in table '{table_name}' to MULTIPOLYGONZ.")
+    logging.info(f"Attempting to convert geometries in table '{table_name}' (column 'geom') to MULTIPOLYGONZ.")
     url = urlparse(database_url)
     conn_params = {
-        "dbname": url.path.lstrip("/"), "user": url.username,
-        "host": url.hostname, "port": url.port
+        "dbname": url.path.lstrip("/"),
+        "user": url.username,
+        "host": url.hostname,
+        "port": url.port
     }
-    if url.password: conn_params["password"] = url.password
+    if url.password:
+        conn_params["password"] = url.password
 
     conn = None
+    updated_count = 0
+    sql_update_query = "" # Initialize for logging in case of early error
+
     try:
         conn = psycopg2.connect(**conn_params)
-        with conn.cursor() as cur:
-            cur.execute("CREATE TEMP TABLE temp_converted_geoms (gml_id VARCHAR PRIMARY KEY, converted_geom GEOMETRY(MULTIPOLYGONZ, 4326));")
-            # No need to commit after CREATE TEMP TABLE in autocommit off mode, but won't hurt in default autocommit on.
-            # If using psycopg2 default (autocommit off for transactions), commit after DDL is good.
-            conn.commit()
+        conn.autocommit = False # Start a transaction
+        cursor = conn.cursor()
 
+        cursor.execute("SELECT PostGIS_Version();")
+        pg_version = cursor.fetchone()[0]
+        logging.info(f"Connected to PostgreSQL with PostGIS version: {pg_version}")
 
-            # It's safer to ST_RemoveRepeatedPoints before ST_MakeValid
-            # And ensure ST_Multi wraps the ST_Collect for explicit MultiPolygonZ formation
-            insert_complex_sql = f"""
-                INSERT INTO temp_converted_geoms (gml_id, converted_geom)
-                SELECT
-                    t.gml_id,
-                    ST_Multi( -- Ensure the result is a MultiPolygon(Z)
-                        ST_Collect( -- Collect all valid 3D polygons for this gml_id
-                            ST_MakeValid(
-                                ST_RemoveRepeatedPoints( -- Add this to clean up minor issues
-                                    ST_Force3D(dumped.geom)
-                                )
-                            )
-                        )
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
+        total_rows = cursor.fetchone()[0]
+        logging.info(f"Total rows in table '{table_name}': {total_rows}")
+
+        if total_rows == 0:
+            logging.info(f"Table '{table_name}' is empty. No geometries to convert.")
+            return
+
+        # --- Diagnostic: Log current geometry types before conversion ---
+        logging.info(f"Querying current geometry types in '{table_name}' before conversion...")
+        # It's good to qualify geom with table_name if there's any ambiguity, though not strictly needed here.
+        # Also checking coordinate dimension and Z presence.
+        diagnostic_query = f"""
+            SELECT
+                ST_GeometryType(geom) as geom_type,
+                COUNT(*) as count,
+                ST_SRID(geom) as srid,
+                CASE WHEN ST_CoordDim(geom) IS NOT NULL THEN ST_CoordDim(geom)::text ELSE 'NULL' END as coord_dim,
+                CASE WHEN ST_HasZ(geom) IS NOT NULL THEN ST_HasZ(geom)::text ELSE 'NULL' END as has_z
+            FROM {table_name}
+            WHERE geom IS NOT NULL
+            GROUP BY geom_type, srid, coord_dim, has_z
+            ORDER BY count DESC;
+        """
+        cursor.execute(diagnostic_query)
+        initial_types = cursor.fetchall()
+        if not initial_types:
+            logging.info(f"No non-NULL geometries found in '{table_name}' to analyze.")
+        else:
+            logging.info(f"Initial geometry types, SRIDs, dimensions, and Z presence in '{table_name}':")
+            for geom_type, count, srid_val, dim, has_z_flag in initial_types:
+                logging.info(f"  - Type: {geom_type}, Count: {count}, SRID: {srid_val}, Dimensions: {dim}, Has Z: {has_z_flag}")
+        # --- End Diagnostic ---
+
+        # ST_GeometryType returns the base type (e.g., 'ST_MultiSurface' not 'ST_MultiSurfaceZ')
+        # ST_SRID(geom) is used to preserve SRID for empty geometries
+        # The CTE (WITH collection_parts) is to avoid multiple calls to ST_CollectionExtract(geom, 3)
+        # and to handle its result (which could be NULL, an empty geometry, a Polygon, or a MultiPolygon)
+        sql_update_query = f"""
+        UPDATE {table_name}
+        SET geom = CASE
+            -- Handle NULL inputs first
+            WHEN geom IS NULL THEN NULL
+
+            -- Handle EMPTY geometries: convert to an empty MULTIPOLYGONZ with original SRID
+            WHEN ST_IsEmpty(geom) THEN
+                ST_Force3DZ(ST_Multi(ST_SetSRID(ST_GeomFromText('POLYGON EMPTY'), ST_SRID(geom))))
+
+            -- If already ST_MultiPolygon, ensure Z coordinate (idempotent if already Z)
+            WHEN ST_GeometryType(geom) = 'ST_MultiPolygon' THEN
+                ST_Force3DZ(geom)
+
+            -- If ST_Polygon, convert to ST_MultiPolygon and ensure Z coordinate
+            WHEN ST_GeometryType(geom) = 'ST_Polygon' THEN
+                ST_Force3DZ(ST_Multi(geom))
+
+            -- Handle collections: ST_GeometryCollection, ST_MultiSurface, ST_PolyhedralSurface
+            -- These types can contain polygons that need to be extracted.
+            -- ST_GeometryType returns the base name, e.g., 'ST_PolyhedralSurface' for 'ST_PolyhedralSurfaceZ'.
+            WHEN ST_GeometryType(geom) IN ('ST_GeometryCollection', 'ST_MultiSurface', 'ST_PolyhedralSurface') THEN
+                (
+                    WITH collection_parts AS (
+                        -- Extract only POLYGON components (type 3) from the current row's geometry
+                        SELECT ST_CollectionExtract({table_name}.geom, 3) AS extracted_geom
                     )
-                FROM
-                    public."{table_name}" t,
-                    LATERAL ST_Dump(ST_CollectionExtract(t.geom, 3)) AS dumped
-                WHERE
-                    t.geom IS NOT NULL AND
-                    ST_GeometryType(t.geom) IN ('ST_PolyhedralSurface', 'ST_GeometryCollection', 'ST_Solid', 'ST_MultiSurface') AND
-                    ST_NRings(dumped.geom) > 0 AND ST_NPoints(dumped.geom) > 2 -- Basic check for non-degenerate polygons
-                GROUP BY
-                    t.gml_id
-                ON CONFLICT (gml_id) DO NOTHING;
-            """
-            cur.execute(insert_complex_sql)
-            logging.info(f"Processed {cur.rowcount} complex geometries (PolyhedralSurface, etc.) into temp_converted_geoms.")
-            conn.commit()
+                    SELECT
+                        CASE
+                            -- If no polygons were extracted, or the result of extraction is an empty geometry
+                            WHEN cp.extracted_geom IS NULL OR ST_IsEmpty(cp.extracted_geom) THEN
+                                NULL -- Cannot convert to MultiPolygonZ if no polygons are present or extracted
+                            -- If polygons were extracted, ensure they are MULTIPOLYGONZ
+                            -- ST_Multi will handle if extracted_geom is Polygon or MultiPolygon
+                            ELSE
+                                ST_Force3DZ(ST_Multi(cp.extracted_geom))
+                        END
+                    FROM collection_parts cp
+                )
+            -- For any other geometry type (Points, LineStrings, etc.), set to NULL
+            ELSE NULL
+        END;
+        """
 
-            insert_simple_sql = f"""
-                INSERT INTO temp_converted_geoms (gml_id, converted_geom)
-                SELECT
-                    t.gml_id,
-                    ST_Multi(
-                        ST_CollectionExtract(
-                            ST_MakeValid(
-                                ST_RemoveRepeatedPoints( -- Add this
-                                    ST_Force3D(t.geom)
-                                )
-                            ),
-                            3 
-                        )
-                    )
-                FROM
-                    public."{table_name}" t
-                WHERE
-                    t.geom IS NOT NULL AND
-                    ST_GeometryType(t.geom) IN ('ST_Polygon', 'ST_MultiPolygon') AND
-                    NOT EXISTS (SELECT 1 FROM temp_converted_geoms tcg WHERE tcg.gml_id = t.gml_id) AND
-                    ST_NRings(t.geom) > 0 AND ST_NPoints(t.geom) > 2 -- Basic check for non-degenerate input
-                ON CONFLICT (gml_id) DO NOTHING;
-            """
-            cur.execute(insert_simple_sql)
-            logging.info(f"Processed {cur.rowcount} simple geometries (Polygon, MultiPolygon) into temp_converted_geoms.")
-            conn.commit()
+        logging.info(f"Executing update on '{table_name}'. This might take a while for large tables...")
+        cursor.execute(sql_update_query)
+        updated_count = cursor.rowcount
+        
+        conn.commit()
+        logging.info(f"Successfully converted geometries in '{table_name}'. {updated_count} rows' 'geom' column potentially modified.")
 
-            insert_general_collection_sql = f"""
-                INSERT INTO temp_converted_geoms (gml_id, converted_geom)
-                SELECT
-                    t.gml_id,
-                    ST_Multi(
-                        ST_CollectionExtract(
-                            ST_MakeValid(
-                                ST_RemoveRepeatedPoints( -- Add this
-                                    ST_Force3D(t.geom)
-                                )
-                            ),
-                            3 
-                        )
-                    )
-                FROM
-                    public."{table_name}" t
-                WHERE
-                    t.geom IS NOT NULL AND
-                    ST_GeometryType(t.geom) = 'ST_GeometryCollection' AND 
-                    NOT EXISTS (SELECT 1 FROM temp_converted_geoms tcg WHERE tcg.gml_id = t.gml_id) AND
-                    ST_NPoints(t.geom) > 2 -- Basic check for non-degenerate input
-                ON CONFLICT (gml_id) DO NOTHING;
-            """
-            cur.execute(insert_general_collection_sql)
-            logging.info(f"Processed {cur.rowcount} general GeometryCollection types into temp_converted_geoms.")
-            conn.commit()
-
-
-            update_successful_sql = f"""
-                UPDATE public."{table_name}" t
-                SET geom = tcg.converted_geom
-                FROM temp_converted_geoms tcg
-                WHERE t.gml_id = tcg.gml_id AND tcg.converted_geom IS NOT NULL AND NOT ST_IsEmpty(tcg.converted_geom); -- Ensure not empty
-            """
-            cur.execute(update_successful_sql)
-            updated_count = cur.rowcount
-            logging.info(f"Updated {updated_count} geometries in '{table_name}' with converted MULTIPOLYGONZ.")
-            conn.commit()
-
-            # Check for geometries that were processed but resulted in empty geometries after conversion.
-            # Also, check for geometries that were not processed at all by the conversion logic
-            # (e.g. because they were filtered out by ST_NPoints/ST_NRings or didn't match type criteria).
-            update_failed_to_null_sql = f"""
-                UPDATE public."{table_name}" t
-                SET geom = NULL
-                WHERE 
-                    t.geom IS NOT NULL AND (
-                        NOT EXISTS ( -- Not successfully updated (either not in temp_converted_geoms or its converted_geom was NULL/Empty)
-                            SELECT 1 FROM temp_converted_geoms tcg
-                            WHERE tcg.gml_id = t.gml_id AND tcg.converted_geom IS NOT NULL AND NOT ST_IsEmpty(tcg.converted_geom)
-                        )
-                        OR
-                        ST_IsEmpty(t.geom) -- Or if the geom in the table itself is now empty post-update
-                    );
-            """
-            cur.execute(update_failed_to_null_sql)
-            nulled_count = cur.rowcount
-            if nulled_count > 0:
-                logging.warning(f"Set {nulled_count} geometries to NULL in '{table_name}' as they could not be converted to valid non-empty MULTIPOLYGONZ or were not processed by conversion logic.")
-            conn.commit()
-
-            cur.execute("DROP TABLE temp_converted_geoms;")
-            conn.commit()
-            logging.info(f"Geometry conversion to MultiPolygonZ for table '{table_name}' complete.")
+        logging.info(f"Querying geometry types in '{table_name}' after conversion...")
+        cursor.execute(f"""
+            SELECT ST_GeometryType(geom) as geom_type, COUNT(*) as count, ST_SRID(geom) as srid
+            FROM {table_name}
+            GROUP BY geom_type, srid
+            ORDER BY count DESC;
+        """)
+        type_counts_after = cursor.fetchall()
+        logging.info(f"Geometry types in '{table_name}' after conversion:")
+        if not type_counts_after:
+            logging.info("  - No geometries found (or all are NULL).")
+        for geom_type, count, srid_val in type_counts_after:
+            logging.info(f"  - Type: {geom_type if geom_type else 'NULL_GEOM_VALUE'}, Count: {count}, SRID: {srid_val}")
 
     except psycopg2.Error as e:
-        logging.error(f"PostgreSQL Error during geometry conversion for '{table_name}': {e.pgcode} - {e.pgerror}", exc_info=True)
-        if conn: conn.rollback()
+        if conn:
+            conn.rollback()
+        logging.error(f"Database error occurred: {e}")
+        logging.error(f"SQLSTATE: {e.pgcode}")
+        logging.error(f"Problematic SQL query might have been:\n{sql_update_query}")
         raise
     except Exception as e:
-        logging.error(f"Generic Error during geometry conversion for '{table_name}': {e}", exc_info=True)
-        if conn: conn.rollback()
+        if conn:
+            conn.rollback()
+        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(f"Problematic SQL query might have been:\n{sql_update_query}")
         raise
     finally:
-        if conn: conn.close()
-                  
+        if conn:
+            conn.close()
+            logging.info("Database connection closed.")
+                                      
 def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
     # Ensure DATA_DIR and CACHE_DIR exist
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -979,7 +975,7 @@ def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
         # After all files in the batch are attempted for ingestion into TEMP_TABLE
         if batch_had_ingested_data:
             try:
-                # convert_geometries_to_multipolygonz(DATABASE_URL, TEMP_TABLE) 
+                convert_geometries_to_multipolygonz(DATABASE_URL, TEMP_TABLE) 
                 update_geometries(DATABASE_URL, TEMP_TABLE)
                 
                 batch_tileset_dir = os.path.join(sub_tilesets_base_dir, str(current_batch_number))
