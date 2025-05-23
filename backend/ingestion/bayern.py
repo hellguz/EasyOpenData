@@ -34,7 +34,7 @@ import json
 # import math # math is not strictly needed by the merge logic from script 2, but good to have if complex calcs were added
 
 # Constants
-META4_PATH = 'backend/ingestion/data_sources/bamberg.meta4'
+META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
 DATA_DIR = 'backend/ingestion/data_local/bayern'
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:barcelona@localhost:8735/easyopendata_database')
 CACHE_DIR = 'data/tileset' # Root directory for all tileset outputs
