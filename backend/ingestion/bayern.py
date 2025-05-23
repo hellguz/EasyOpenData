@@ -42,7 +42,7 @@ PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe' # Path to pg2b3dm executable
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
-BATCH_N = 1 # number of gml files for which there will be created a separate tileset
+BATCH_N = 15 # number of gml files for which there will be created a separate tileset
 
 # Tileset merging parameters
 MAX_CHILDREN_PER_NODE = 8  # Max direct children before a node tries to subdivide in merged tileset
@@ -931,7 +931,7 @@ def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
     generated_sub_tileset_paths = []
 
     # for batch_start_index in range(0, total_files, BATCH_N):
-    for batch_start_index in range(0, 2, BATCH_N):
+    for batch_start_index in range(0, total_files, BATCH_N):
         batch_files = files[batch_start_index : batch_start_index + BATCH_N]
         current_batch_number = batch_start_index // BATCH_N
         
