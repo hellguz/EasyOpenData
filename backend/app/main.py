@@ -179,7 +179,7 @@ async def retrieve_obj(
         logger.info(f"OBJ file generated at: {temp_file_path}")
 
         # Schedule the temp file for deletion AFTER the response is sent
-        background_tasks.add_task(_background_remove_temp_file, temp_file_path)
+        # background_tasks.add_task(_background_remove_temp_file, temp_file_path)
 
         return FileResponse(
             temp_file_path,

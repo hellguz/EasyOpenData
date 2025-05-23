@@ -1,173 +1,173 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <metalink xmlns="urn:ietf:params:xml:ns:metalink">
   <generator>BVV-MetaLinker</generator>
-  <published>2024-11-26T22:13:07Z</published>
-  <file name="636_5524.gml">
-    <size>17451544</size>
-    <hash type="sha-256">a2a226df7ce76c817c5c112531104349fe6ed09735e1083a5b5644c2387f2f38</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
-  </file>
-  <file name="636_5522.gml">
-    <size>5602040</size>
-    <hash type="sha-256">b82c745b51646c5f28cd1f0c78bb9a3bce62b20495b0e0748d7dbc6cb9b7e5cc</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
-  </file>
-  <file name="630_5530.gml">
-    <size>30137377</size>
-    <hash type="sha-256">c2f0682332c699db30227f15b04de40a72d6a1158ef7ed4552ffb5fbe923920a</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5530.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5530.gml</url>
-  </file>
-  <file name="634_5530.gml">
-    <size>31278575</size>
-    <hash type="sha-256">a56499fdf8e1a46587d4072f1882e3d6a0bad823a27db9ff2a324adaf868924f</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5530.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5530.gml</url>
-  </file>
-  <file name="636_5532.gml">
-    <size>30428636</size>
-    <hash type="sha-256">05621b590cdd92025331c306af84de9584ea1112e581c820e7aabccf48a3c5ac</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5532.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5532.gml</url>
-  </file>
-  <file name="638_5532.gml">
-    <size>22102413</size>
-    <hash type="sha-256">4a1296d38c00c467d22b4785fcdd20c456e8be889b0038bd71b20b680d606d73</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5532.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5532.gml</url>
-  </file>
-  <file name="632_5526.gml">
-    <size>11407524</size>
-    <hash type="sha-256">627db860146ce7cf5fa9ae86c2b9ae7b3f9c576381fd82137afdd0082019121a</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5526.gml</url>
-  </file>
-  <file name="634_5526.gml">
-    <size>78034952</size>
-    <hash type="sha-256">02c08c5aa6ff63439c24a0a64231f63449aa548d5721a96a88ea509b584d0933</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5526.gml</url>
-  </file>
-  <file name="638_5522.gml">
-    <size>1794974</size>
-    <hash type="sha-256">3954399f506902ba6b4463ea39bd538169a3b9bab995cee5083edf9612058987</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5522.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5522.gml</url>
-  </file>
-  <file name="640_5524.gml">
-    <size>347633</size>
-    <hash type="sha-256">fdaa92b7f0c96e2fd9a0f7ae6e9b38a993e91ced6b0c6b36b75e320565f82e13</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5524.gml</url>
-  </file>
-  <file name="640_5528.gml">
-    <size>263757</size>
-    <hash type="sha-256">b90fd2c23a2fb033130e56192703294a8c0045fd03596fac5201f687b61f9d6d</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5528.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5528.gml</url>
-  </file>
-  <file name="638_5528.gml">
-    <size>25843245</size>
-    <hash type="sha-256">26efcd9cea16ff10e460a1862762dee7ed2c4210cee77c5b812e8eb668af7734</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5528.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5528.gml</url>
+  <published>2025-05-13T21:10:12Z</published>
+  <file name="638_5524.gml">
+    <size>130914</size>
+    <hash type="sha-256">bdb9c91a6640637d4db956174057eabfd2991f24870fafd0f688822a3f399c26</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5524.gml</url>
   </file>
   <file name="638_5530.gml">
-    <size>23220795</size>
-    <hash type="sha-256">fb9bafccfb716078f1f23ef82bb10af1a5cc0f9bcdf018b534a461408373cdf4</hash>
+    <size>23268975</size>
+    <hash type="sha-256">21a373dd0f2a7772cbcce7b36ec35af73abb68617ba8a20eff99b83b3544312e</hash>
     <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5530.gml</url>
     <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5530.gml</url>
   </file>
-  <file name="632_5530.gml">
-    <size>4747322</size>
-    <hash type="sha-256">0a5c41a37c04e6764bd3efe2303061e85bb851baa0fcff880455d57e33fa65db</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5530.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5530.gml</url>
-  </file>
-  <file name="630_5528.gml">
-    <size>14580458</size>
-    <hash type="sha-256">4e845b615e62010479a687fa93d09bfd8112447c5b844d7032e84b2bdcd81a8d</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5528.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5528.gml</url>
-  </file>
-  <file name="638_5526.gml">
-    <size>5509690</size>
-    <hash type="sha-256">b829a978384ec168cf173cddb2cf19b93485c965f66c54070eaed1258027aa54</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5526.gml</url>
+  <file name="634_5530.gml">
+    <size>31354431</size>
+    <hash type="sha-256">82721920798358d1f4910a578b2d4e9b3f305f5b6bb657218d261015398b3423</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5530.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5530.gml</url>
   </file>
   <file name="632_5528.gml">
-    <size>46476979</size>
-    <hash type="sha-256">eb79e01c1cec7a704178ea8d05e06ff36087195d8b854b7f7e862ecfb880c702</hash>
+    <size>46476915</size>
+    <hash type="sha-256">d51f3c885930519ab51a2f0424dcf007e025554a026ed6fa6a3460acd8fcf006</hash>
     <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5528.gml</url>
     <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5528.gml</url>
   </file>
-  <file name="634_5524.gml">
-    <size>16503145</size>
-    <hash type="sha-256">b9c496a52d880af80a5835798c14ab733f30a5e65f9d7e9a895225ae4340a70d</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5524.gml</url>
-  </file>
-  <file name="634_5528.gml">
-    <size>128889159</size>
-    <hash type="sha-256">f864808c13048e5195491a01d5d56fc3f7f6e14c493e2b69e863271e91ecf193</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5528.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5528.gml</url>
-  </file>
-  <file name="640_5522.gml">
-    <size>36859650</size>
-    <hash type="sha-256">21cdb2d399eee8fe14461f0476fc49676c1bf02425f9758b0c6ad17b12ebaaab</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5522.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5522.gml</url>
-  </file>
-  <file name="640_5526.gml">
-    <size>33576</size>
-    <hash type="sha-256">9470d1389d583eab805cd15c48a719a1ea3d6dca41c21becde9941875a97b13f</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5526.gml</url>
-  </file>
-  <file name="632_5524.gml">
-    <size>39436139</size>
-    <hash type="sha-256">d5d55cd5b5aa3026cdc2955aa101cbf84888c007579f74373aeee2ae1be0567d</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5524.gml</url>
-  </file>
-  <file name="636_5530.gml">
-    <size>44373960</size>
-    <hash type="sha-256">8464728b5f980f687aab2580d6efc20acd64290c8f5ecd57dbf0ca657c29b156</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5530.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5530.gml</url>
-  </file>
-  <file name="630_5526.gml">
-    <size>872975</size>
-    <hash type="sha-256">4a52f0106991a1b2ad03a4e714ca7c0fb197e3d06218f69b809e7d9f30b625cf</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5526.gml</url>
-  </file>
-  <file name="636_5526.gml">
-    <size>35794788</size>
-    <hash type="sha-256">d4fc155f51480e740f79acfbc8cd9a1fabb6549785c806be83a1d84c18adc4f8</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5526.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5526.gml</url>
-  </file>
   <file name="634_5522.gml">
-    <size>2860278</size>
-    <hash type="sha-256">599a172f615a78f74e68e2df9caad29a6336d1cff0645ffecafcb92ee252d604</hash>
+    <size>2860219</size>
+    <hash type="sha-256">86e330976790aace5dfbfedfeb5dc42e6d6e4098928d3e5a1fc7ffc920e22ca4</hash>
     <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5522.gml</url>
     <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5522.gml</url>
   </file>
+  <file name="636_5526.gml">
+    <size>35746094</size>
+    <hash type="sha-256">4d60404283409f4bb50d249473200f64df65f64931f1afb13536a5e912cc75f6</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5526.gml</url>
+  </file>
+  <file name="638_5532.gml">
+    <size>22118371</size>
+    <hash type="sha-256">1e36855f742c926c69b94bc7a002999849a22b63e1cd39a8a9b7f2a6e7ee4ec3</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5532.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5532.gml</url>
+  </file>
+  <file name="638_5522.gml">
+    <size>1794737</size>
+    <hash type="sha-256">90f2487b3b356c12ee897ee0f0cc7ca8b913e2184cc651fef080d7e130140ba1</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5522.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5522.gml</url>
+  </file>
+  <file name="632_5530.gml">
+    <size>4741891</size>
+    <hash type="sha-256">a4dd54c5f03afc15df33f820a780dc5f41749fa8bc2930cac393c80447537f97</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5530.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5530.gml</url>
+  </file>
+  <file name="634_5526.gml">
+    <size>78024147</size>
+    <hash type="sha-256">a0785f4b80786d408207658b5282d333c6049f93616e23123092c3f32e72c758</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5526.gml</url>
+  </file>
+  <file name="636_5522.gml">
+    <size>5600418</size>
+    <hash type="sha-256">37e435e4a58f5322528c2da654d6db19eb7662ab675c6bce0d2329b827a70f24</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5522.gml</url>
+  </file>
+  <file name="632_5524.gml">
+    <size>39411604</size>
+    <hash type="sha-256">44565f5935edca3141a44951448c7b9906d911378ebaaefddedfb37449cc1f3d</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5524.gml</url>
+  </file>
+  <file name="636_5524.gml">
+    <size>17434710</size>
+    <hash type="sha-256">8049858fbde47a0491321b564dc7a8d01b3dcf3f62bebb82f9c97c2ce3b8209e</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5524.gml</url>
+  </file>
+  <file name="630_5528.gml">
+    <size>14580458</size>
+    <hash type="sha-256">546a11fe6f9033f561f7bae6382c2a0d07f47f6b9adf776cc871c2e25ed9114c</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5528.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5528.gml</url>
+  </file>
+  <file name="632_5526.gml">
+    <size>11407524</size>
+    <hash type="sha-256">7bd5a70983eaba5df72efccd38328adf2ee40f2ff958f6d083e12eea1a1c8061</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/632_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/632_5526.gml</url>
+  </file>
+  <file name="634_5524.gml">
+    <size>16503107</size>
+    <hash type="sha-256">244a69cc57ad4de890999c9c44232e5536ab23b95adf02ecc814e81a3b83b44e</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5524.gml</url>
+  </file>
+  <file name="636_5530.gml">
+    <size>44401974</size>
+    <hash type="sha-256">721d848e288d470c8716a7383e439cd2029b0cf863b1d324155a292aca966b35</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5530.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5530.gml</url>
+  </file>
+  <file name="640_5522.gml">
+    <size>36831621</size>
+    <hash type="sha-256">3befa30ea37c6997892305d868c11a0033b533053399bce78abd9de4594abdda</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5522.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5522.gml</url>
+  </file>
+  <file name="640_5528.gml">
+    <size>271037</size>
+    <hash type="sha-256">cda1649948021ff2bb8c59b1fa597788217a0d1040face2d9c4fc1d9cb4e53bc</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5528.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5528.gml</url>
+  </file>
+  <file name="640_5526.gml">
+    <size>33420</size>
+    <hash type="sha-256">1708b9166450e5b8a06fdb1ad39eda1dfd8077c10f2ef395c644299823c92176</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5526.gml</url>
+  </file>
+  <file name="630_5526.gml">
+    <size>872975</size>
+    <hash type="sha-256">c8f56592f334ff42ae8a850a3d4ed2e0ca67c1feff3a8fac235d71b9f4222dfc</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5526.gml</url>
+  </file>
+  <file name="630_5530.gml">
+    <size>30111178</size>
+    <hash type="sha-256">0170de3cf3398ef1beebafe6acccc3673d50082e96899f1eddb9477f086db4f1</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/630_5530.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/630_5530.gml</url>
+  </file>
+  <file name="634_5528.gml">
+    <size>128801194</size>
+    <hash type="sha-256">be054b8a22b743a10f805722b668b5d402f1d513772e2d8c326838f87084aacb</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/634_5528.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/634_5528.gml</url>
+  </file>
   <file name="636_5528.gml">
-    <size>113771627</size>
-    <hash type="sha-256">d4a9a77aaa284b5d5aa195b6acf35cfc7ec2be3228744c920e6f40c790b208b9</hash>
+    <size>113779525</size>
+    <hash type="sha-256">b37e9c2cfe376c85daa1955f0631c632a0ac18da695317965115e2c3324f2c42</hash>
     <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5528.gml</url>
     <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5528.gml</url>
   </file>
-  <file name="638_5524.gml">
-    <size>131157</size>
-    <hash type="sha-256">1dfa8e7208dd8d79cc4321c0428dec5831da6fa79dbf7c7de2ba104bbe181d07</hash>
-    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5524.gml</url>
-    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5524.gml</url>
+  <file name="636_5532.gml">
+    <size>30368434</size>
+    <hash type="sha-256">a8e992a429bef09a9c08ff30f9da928dab0d5cc4a141901d6f7b44d9a93fd7a5</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/636_5532.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/636_5532.gml</url>
+  </file>
+  <file name="638_5526.gml">
+    <size>5497420</size>
+    <hash type="sha-256">7345ef51702f95ab56ffb178392ec09229ca5533ac0133986fd099a85a3cf709</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5526.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5526.gml</url>
+  </file>
+  <file name="638_5528.gml">
+    <size>25829684</size>
+    <hash type="sha-256">73d8c40846699fa87b38dd6ac3cf7207435a1510d412daa32ac6dd6d70d7cb8e</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/638_5528.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/638_5528.gml</url>
+  </file>
+  <file name="640_5524.gml">
+    <size>330853</size>
+    <hash type="sha-256">1ac2781f048c2b5b4afd4a09b1b99ea4e788ce1950438272a5a8595e7869d9f1</hash>
+    <url>https://download1.bayernwolke.de/a/lod2/citygml/640_5524.gml</url>
+    <url>https://download2.bayernwolke.de/a/lod2/citygml/640_5524.gml</url>
   </file>
 </metalink>
