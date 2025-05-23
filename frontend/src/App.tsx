@@ -293,19 +293,19 @@ function Root() {
       // For ScenegraphLayer (b3dm or i3dm format)
       //_lighting: 'pbr',
       //effects: [lightingEffect],
-      loadOptions: {
-        tileset: {
-          maxRequests: 16,
-          updateTransforms: false,
-          maximumMemoryUsage: 512
-          //maximumScreenSpaceError: 16, // Adjust this value as needed
-          //viewDistanceScale: 1.5 // Adjust this value as needed
-        }
-      },
+      // loadOptions: {
+      //   tileset: {
+      //     maxRequests: 16,
+      //     updateTransforms: false,
+      //     maximumMemoryUsage: 512
+      //     //maximumScreenSpaceError: 16, // Adjust this value as needed
+      //     //viewDistanceScale: 1.5 // Adjust this value as needed
+      //   }
+      // },
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [255, 255, 255, 150], // Blue color for scenegraph models (alternative method)
+          getColor: (d) => [255, 255, 255, 255], // Blue color for scenegraph models (alternative method)
           //effects: [lightingEffect]
         }
       }

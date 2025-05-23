@@ -370,11 +370,15 @@ def apply_draco_compression(cache_dir):
                 compressed_file = os.path.join(root_dir, f"{os.path.splitext(file)[0]}_draco_temp.glb")
                 
                 cmd = [
-                    "gltf-pipeline.cmd", # Assuming gltf-pipeline is in PATH
+                    "gltf-pipeline.cmd",
                     '-i', gltf_file,
                     '-o', compressed_file,
-                    '--draco.compressionLevel', '7', # As per original
-                    '-d' # Ensure Draco options are used if source has none
+                    '--draco.compressionLevel', '7',
+                    '--draco.quantizePositionBits', '16',   # Increased from 14 to 16 (higher precision)
+                    '--draco.quantizeNormalBits', '14',     # Increased from 10 to 14 (higher precision)
+                    '--draco.quantizeTexcoordBits', '14',   # Increased from 12 to 14 (higher precision)
+                    '--draco.uncompressedFallback',         # Keep fallback for compatibility
+                    '--draco.unifiedQuantization'           # Use unified quantization for better quality
                 ]
                 logging.debug(f"Draco command: {' '.join(cmd)}")
                 try:
@@ -982,7 +986,7 @@ def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
                 os.makedirs(batch_tileset_dir, exist_ok=True)
                 
                 convert_to_3d_tiles(batch_tileset_dir, DATABASE_URL, TEMP_TABLE)
-                # apply_draco_compression(batch_tileset_dir) # Compress GLBs in this batch's tileset
+                apply_draco_compression(batch_tileset_dir) # Compress GLBs in this batch's tileset
                 append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
                 
                 # Add path of this batch's tileset.json for final merge
