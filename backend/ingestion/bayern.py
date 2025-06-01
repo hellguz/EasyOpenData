@@ -70,7 +70,8 @@ PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe' # Path to pg2b3dm executable
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
-# BATCH_N = 15 # Removed: No longer processing in batches for tileset creation during ingestion
+CELL_SIZE_KM = 50.0 # Define cell size in kilometers
+NO_INGEST = False # Skip the data ingestion phase (download, transform, load to DB).
 
 # Tileset merging parameters (will be used later, keep for now if relevant for overall tiling strategy)
 MAX_CHILDREN_PER_NODE = 8
@@ -933,8 +934,7 @@ def convert_geometries_to_multipolygonz(database_url, table_name):
             conn.close()
             logging.info("Database connection closed.")
                                       
-def main(args): # Modified to accept parsed arguments
-    meta4_file_path_arg = args.meta4_file_path_arg
+def main(armeta4_file_to_usegs): # Modified to accept parsed arguments
 
     # Ensure DATA_DIR (for temporary GML downloads) and CACHE_DIR (for tileset outputs) exist
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -950,14 +950,14 @@ def main(args): # Modified to accept parsed arguments
     else:
         logging.warning(f"SQL index file not found at {SQL_INDEX_PATH}, skipping execution.")
 
-    if args.no_ingest:
+    if NO_INGEST:
         logging.info("Skipping ingestion process due to --no-ingest flag.")
         # The main loop for processing and ingesting files will be skipped.
         # If there's a need to generate tilesets from already existing data in MAIN_TABLE
         # even when --no-ingest is true, that logic would need to be added here.
         # For now, per the subtask, we are just skipping the ingestion part.
     else:
-        files = parse_meta4(meta4_file_path_arg)
+        files = parse_meta4(meta4_file_to_use)
         total_files = len(files)
         processed_files_count_overall = 0
         # generated_sub_tileset_paths = [] # Removed: No longer creating sub-tilesets during ingestion
@@ -1038,7 +1038,6 @@ def main(args): # Modified to accept parsed arguments
     grid_cells = [] # Initialize in case bounds calculation fails or table is empty
 
     if dataset_bounds:
-        CELL_SIZE_KM = 50.0 # Define cell size in kilometers
         logging.info(f"Attempting to calculate grid cells of size {CELL_SIZE_KM}x{CELL_SIZE_KM} km.")
         grid_cells = calculate_grid_cells(dataset_bounds, CELL_SIZE_KM)
     else:
@@ -1368,17 +1367,5 @@ if __name__ == '__main__':
         )
 
     meta4_file_to_use = META4_PATH
-    # Setup command-line argument parsing
-    parser = argparse.ArgumentParser(description="Process Meta4 GML files for 3D building tiling for Bayern.")
-    parser.add_argument('meta4_file_path_arg', help="Path to the Meta4 file (e.g., backend/ingestion/data_sources/bayern.meta4).")
-    parser.add_argument('--no-ingest', action='store_true',
-                        help="Skip the data ingestion phase (download, transform, load to DB). "
-                             "Useful if data is already in the main table and only tiling is needed.")
-    
-    args = parser.parse_args()
-
-    if not os.path.isfile(args.meta4_file_path_arg):
-        logging.error(f"Meta4 file '{args.meta4_file_path_arg}' does not exist.")
-        sys.exit(1)
         
-    main(args)
+    main(meta4_file_to_use)
