@@ -2,25 +2,52 @@
 """
 process_meta4.py
 
-A script to sequentially download GML files from a Meta4 file, transform them by embedding polygons,
-ingest them into a PostgreSQL database using a temporary table, convert them to 3D tiles,
-append to the main building table, and remove the original files.
-This version uses hierarchical tileset merging for better performance.
+Script for processing 3D building data for Bavaria (Bayern), Germany.
+
+Workflow:
+1.  **Data Ingestion (Optional):**
+    *   Parses a Meta4 file to get links to GML data files.
+    *   Downloads GML files.
+    *   Transforms GMLs by embedding polygon geometries directly (resolving xlink:href).
+    *   Ingests transformed GML data into a temporary PostgreSQL table (`TEMP_TABLE`).
+    *   Processes geometries in the temporary table (e.g., converts to MultiPolygonZ, adjusts Z-levels).
+    *   Appends data from the temporary table to the main data table (`MAIN_TABLE`).
+    *   This phase can be skipped using the `--no-ingest` flag.
+
+2.  **Grid Calculation & Tiling:**
+    *   Calculates the overall bounding box (EPSG:4326) of the data in `MAIN_TABLE`.
+    *   Divides this bounding box into a grid of approximately 50x50 km cells using a projected CRS (EPSG:25832) for accuracy.
+    *   For each grid cell that contains data:
+        *   Creates a temporary table (`temp_grid_cell_X_Y`) for that cell's data, selecting from `MAIN_TABLE`.
+        *   Generates a 3D tileset (sub-tileset) for this cell's data using `pg2b3dm`.
+        *   Applies Draco compression to the generated GLB/GLTF files using `gltf-pipeline`.
+        *   The newly created sub-tileset's `tileset.json` is then progressively merged into a main hierarchical `tileset.json` located in `CACHE_DIR`.
+    *   Removes downloaded/transformed GMLs and temporary cell tables.
 
 Usage:
-    python process_meta4.py file.meta4
+    python backend/ingestion/bayern.py <path_to_meta4_file> [--no-ingest]
+
+Example:
+    python backend/ingestion/bayern.py backend/ingestion/data_sources/bayern.meta4
+    python backend/ingestion/bayern.py backend/ingestion/data_sources/bayern.meta4 --no-ingest
+
+Output:
+    - Main 3D tileset: `data/tileset/tileset.json`
+    - Sub-tilesets for each grid cell: `data/tileset/sub/cell_X_Y/`
+    - Downloaded and intermediate GML files are stored temporarily in `DATA_DIR` and then removed.
 
 Requirements:
     - Python 3.x
-    - lxml
-    - psycopg2
-    - ogr2ogr (from GDAL)
-    - pg2b3dm (pg2b3dm.exe on Windows) command available in PATH or specified
-    - gltf-pipeline (for Draco compression)
+    - Python Libraries: psycopg2-binary, lxml, pyproj (see backend/requirements.txt)
+    - External Tools:
+        - ogr2ogr (from GDAL toolkit)
+        - pg2b3dm (pg2b3dm.exe for Windows, or build from source)
+        - gltf-pipeline (Node.js package: npm install -g gltf-pipeline)
 """
 
 import sys
 import os
+import argparse # Added for command line argument parsing
 import subprocess
 import hashlib
 import logging
@@ -31,7 +58,8 @@ from urllib.error import URLError, HTTPError
 from lxml import etree
 import psycopg2
 import json
-# import math # math is not strictly needed by the merge logic from script 2, but good to have if complex calcs were added
+import math
+import pyproj # For coordinate transformations
 
 # Constants
 META4_PATH = 'backend/ingestion/data_sources/bayern.meta4'
@@ -42,11 +70,11 @@ PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe' # Path to pg2b3dm executable
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
-BATCH_N = 15 # number of gml files for which there will be created a separate tileset
+# BATCH_N = 15 # Removed: No longer processing in batches for tileset creation during ingestion
 
-# Tileset merging parameters
-MAX_CHILDREN_PER_NODE = 8  # Max direct children before a node tries to subdivide in merged tileset
-MIN_GEOMETRIC_ERROR_FOR_LEAF = 500  # Sub-tilesets with geometric error below this won't be further subdivided by merge
+# Tileset merging parameters (will be used later, keep for now if relevant for overall tiling strategy)
+MAX_CHILDREN_PER_NODE = 8
+MIN_GEOMETRIC_ERROR_FOR_LEAF = 500
 
 # Configure logging
 logging.basicConfig(
@@ -905,12 +933,14 @@ def convert_geometries_to_multipolygonz(database_url, table_name):
             conn.close()
             logging.info("Database connection closed.")
                                       
-def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
-    # Ensure DATA_DIR and CACHE_DIR exist
+def main(args): # Modified to accept parsed arguments
+    meta4_file_path_arg = args.meta4_file_path_arg
+
+    # Ensure DATA_DIR (for temporary GML downloads) and CACHE_DIR (for tileset outputs) exist
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-    sub_tilesets_base_dir = os.path.join(CACHE_DIR, 'sub')
-    os.makedirs(sub_tilesets_base_dir, exist_ok=True) # For batch-specific tilesets
+    # sub_tilesets_base_dir = os.path.join(CACHE_DIR, 'sub') # Removed: No longer creating sub-tilesets during ingestion
+    # os.makedirs(sub_tilesets_base_dir, exist_ok=True) # Removed
     
     ensure_main_table_exists(DATABASE_URL, MAIN_TABLE)
     # Original script runs index.sql once at the start if ix == 0.
@@ -920,31 +950,27 @@ def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
     else:
         logging.warning(f"SQL index file not found at {SQL_INDEX_PATH}, skipping execution.")
 
-    files = parse_meta4(meta4_file_path_arg)
-    total_files = len(files)
+    if args.no_ingest:
+        logging.info("Skipping ingestion process due to --no-ingest flag.")
+        # The main loop for processing and ingesting files will be skipped.
+        # If there's a need to generate tilesets from already existing data in MAIN_TABLE
+        # even when --no-ingest is true, that logic would need to be added here.
+        # For now, per the subtask, we are just skipping the ingestion part.
+    else:
+        files = parse_meta4(meta4_file_path_arg)
+        total_files = len(files)
+        processed_files_count_overall = 0
+        # generated_sub_tileset_paths = [] # Removed: No longer creating sub-tilesets during ingestion
 
-    # The original script dropped TEMP_TABLE once before loop.
-    # It's better to drop/ensure clean state at the start of each batch processing cycle for TEMP_TABLE.
-    
-    # Loop through files, processing them in batches
-    processed_files_count_overall = 0
-    generated_sub_tileset_paths = []
+        logging.info(f"Starting ingestion of {total_files} GML files into '{MAIN_TABLE}'.")
 
-    # for batch_start_index in range(0, total_files, BATCH_N):
-    for batch_start_index in range(0, total_files, BATCH_N):
-        batch_files = files[batch_start_index : batch_start_index + BATCH_N]
-        current_batch_number = batch_start_index // BATCH_N
-        
-        logging.info(f"\n--- Processing Batch {current_batch_number} (Files {batch_start_index + 1} to {min(batch_start_index + BATCH_N, total_files)} of {total_files}) ---\n")
-
-        # Ensure TEMP_TABLE is clean for this batch
-        drop_temp_table(DATABASE_URL, TEMP_TABLE) # ogr2ogr will create it if it doesn't exist upon first insert
-
-        batch_had_ingested_data = False
-        for file_info in batch_files:
+        for ix, file_info in enumerate(files):
             processed_files_count_overall += 1
             file_name = file_info['name']
-            logging.info(f"▶️ File {processed_files_count_overall}/{total_files} (Batch {current_batch_number}): {file_name}")
+            logging.info(f"--- Processing file {processed_files_count_overall}/{total_files}: {file_name} ---")
+
+            # Ensure TEMP_TABLE is clean for this GML file
+            drop_temp_table(DATABASE_URL, TEMP_TABLE)
 
             download_path = os.path.join(DATA_DIR, file_name)
             transformed_file_name = os.path.splitext(file_name)[0] + '_trs.gml'
@@ -958,65 +984,369 @@ def main(meta4_file_path_arg): # Renamed arg to avoid conflict with global
                         break
                     else:
                         logging.warning(f"Verification failed for {download_path} from {url}. Trying next.")
-                        remove_file(download_path) # Clean up failed download
+                        remove_file(download_path)
             if not downloaded:
-                logging.error(f"Failed to download and verify {file_name} from all URLs. Skipping.")
+                logging.error(f"Failed to download and verify {file_name} from all URLs. Skipping this file.")
                 continue
 
+            gml_processed_successfully = False
             try:
                 transform_gml(download_path, transformed_path)
-                ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE) # Ingest into TEMP_TABLE
-                batch_had_ingested_data = True # Mark that this batch has data
+                ingest_gml_file(transformed_path, DATABASE_URL, TEMP_TABLE)
+
+                # Process data in TEMP_TABLE and append to MAIN_TABLE
+                convert_geometries_to_multipolygonz(DATABASE_URL, TEMP_TABLE)
+                update_geometries(DATABASE_URL, TEMP_TABLE)
+                append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
+
+                gml_processed_successfully = True
+                logging.info(f"Successfully processed and ingested {file_name} into {MAIN_TABLE}.")
+
             except Exception as e:
-                logging.error(f"Error during transform/ingest of {file_name}: {e}", exc_info=True)
+                logging.error(f"Error during processing or ingesting of {file_name}: {e}", exc_info=True)
             finally:
                 # Clean up individual GML files after processing
                 remove_file(transformed_path)
-                transformed_gfs_path = transformed_path.replace(".gml", ".gfs") # ogr2ogr might create .gfs
+                transformed_gfs_path = transformed_path.replace(".gml", ".gfs")
                 remove_file(transformed_gfs_path)
-                remove_file(download_path) # Original downloaded file
+                remove_file(download_path)
 
-        # After all files in the batch are attempted for ingestion into TEMP_TABLE
-        if batch_had_ingested_data:
+            if not gml_processed_successfully:
+                 logging.warning(f"File {file_name} was not successfully ingested into {MAIN_TABLE}.")
+
+        logging.info(f"--- All {total_files} GML files processed for ingestion. ---")
+
+        # Tileset generation and merging will be handled separately after all data is in MAIN_TABLE.
+        # The merge_tilesets_hierarchically call and related logic are removed from here.
+        # If apply_draco_compression and convert_to_3d_tiles are to be run on the entire MAIN_TABLE
+        # at once, those calls would happen outside this ingestion loop, likely in a new section of main()
+        # or as separate functions called after this loop.
+
+    # --- Grid Calculation and Tiling Phase ---
+    # This phase calculates the dataset's total bounds, divides it into a grid (e.g., 50x50km cells),
+    # then processes each cell to generate a 3D tileset. These cell-specific tilesets (sub-tilesets)
+    # are progressively merged into a main hierarchical tileset.
+    # This phase runs regardless of --no-ingest, operating on data present in MAIN_TABLE.
+
+    logging.info("--- Starting Grid Calculation and Tiling Phase ---")
+
+    # Ensure the base directory for sub-tilesets exists within CACHE_DIR
+    sub_tilesets_root_dir = os.path.join(CACHE_DIR, 'sub')
+    os.makedirs(sub_tilesets_root_dir, exist_ok=True)
+
+    dataset_bounds = get_dataset_bounds(DATABASE_URL, MAIN_TABLE)
+    grid_cells = [] # Initialize in case bounds calculation fails or table is empty
+
+    if dataset_bounds:
+        CELL_SIZE_KM = 50.0 # Define cell size in kilometers
+        logging.info(f"Attempting to calculate grid cells of size {CELL_SIZE_KM}x{CELL_SIZE_KM} km.")
+        grid_cells = calculate_grid_cells(dataset_bounds, CELL_SIZE_KM)
+    else:
+        logging.error(f"Could not calculate dataset bounds for '{MAIN_TABLE}'. Skipping grid-based tiling.")
+
+    if grid_cells:
+        logging.info(f"Successfully calculated {len(grid_cells)} grid cells. Proceeding with tiling for each cell.")
+        generated_sub_tileset_paths = [] # List to keep track of successfully generated sub-tileset.json paths
+        main_hierarchical_tileset_path = os.path.join(CACHE_DIR, 'tileset.json') # Path for the main merged tileset
+
+        for i, cell_info in enumerate(grid_cells):
+            grid_x_idx = cell_info['grid_x_idx']
+            grid_y_idx = cell_info['grid_y_idx']
+            logging.info(f"--- Processing Grid Cell {i+1}/{len(grid_cells)} (Index X:{grid_x_idx}, Y:{grid_y_idx}) ---")
+
+            # Define a unique name for the temporary table for this cell's data
+            temp_cell_table_name = f"temp_grid_cell_{grid_x_idx}_{grid_y_idx}"
+
             try:
-                convert_geometries_to_multipolygonz(DATABASE_URL, TEMP_TABLE) 
-                update_geometries(DATABASE_URL, TEMP_TABLE)
+                # Create a temporary table containing only data for the current grid cell
+                has_data = create_temp_table_for_grid_cell(DATABASE_URL, MAIN_TABLE, temp_cell_table_name, cell_info)
+
+                if not has_data:
+                    logging.info(f"No data found in '{MAIN_TABLE}' for cell (X:{grid_x_idx}, Y:{grid_y_idx}). Skipping tiling for this cell.")
+                    continue # Move to the next cell
+
+                # Define output directory for this cell's tileset
+                cell_tileset_output_dir = os.path.join(sub_tilesets_root_dir, f"cell_{grid_x_idx}_{grid_y_idx}")
+                os.makedirs(cell_tileset_output_dir, exist_ok=True)
+
+                logging.info(f"Generating 3D tiles for cell (X:{grid_x_idx}, Y:{grid_y_idx}). Output to: {cell_tileset_output_dir}")
+                convert_to_3d_tiles(cell_tileset_output_dir, DATABASE_URL, temp_cell_table_name)
                 
-                batch_tileset_dir = os.path.join(sub_tilesets_base_dir, str(current_batch_number))
-                os.makedirs(batch_tileset_dir, exist_ok=True)
-                
-                convert_to_3d_tiles(batch_tileset_dir, DATABASE_URL, TEMP_TABLE)
-                apply_draco_compression(batch_tileset_dir) # Compress GLBs in this batch's tileset
-                append_temp_to_main(DATABASE_URL, TEMP_TABLE, MAIN_TABLE)
-                
-                # Add path of this batch's tileset.json for final merge
-                batch_tileset_json_path = os.path.join(batch_tileset_dir, 'tileset.json')
-                if os.path.exists(batch_tileset_json_path):
-                    generated_sub_tileset_paths.append(batch_tileset_json_path)
+                logging.info(f"Applying Draco compression for cell (X:{grid_x_idx}, Y:{grid_y_idx}) tiles.")
+                apply_draco_compression(cell_tileset_output_dir)
+
+                # Path to the sub-tileset's main JSON file
+                sub_tileset_json_path = os.path.join(cell_tileset_output_dir, 'tileset.json')
+                if os.path.exists(sub_tileset_json_path):
+                    generated_sub_tileset_paths.append(sub_tileset_json_path)
+                    logging.info(f"Sub-tileset generated: {sub_tileset_json_path}. Merging into main hierarchical tileset.")
+
+                    # Progressively merge after each successful sub-tileset generation
+                    merge_tilesets_hierarchically(main_hierarchical_tileset_path, generated_sub_tileset_paths)
+                    logging.info(f"Progressively merged {len(generated_sub_tileset_paths)} sub-tilesets into {main_hierarchical_tileset_path}")
                 else:
-                    logging.warning(f"Tileset.json not found for batch {current_batch_number} at {batch_tileset_json_path}")
+                    logging.warning(f"Tileset.json not found for cell (X:{grid_x_idx}, Y:{grid_y_idx}) at {sub_tileset_json_path}. This cell will not be included in the main tileset.")
 
             except Exception as e:
-                logging.error(f"Error processing data in TEMP_TABLE for batch {current_batch_number}: {e}", exc_info=True)
-        else:
-            logging.info(f"Batch {current_batch_number} had no successfully ingested data. Skipping tileset generation and DB append for this batch.")
+                logging.error(f"An error occurred while processing cell (X:{grid_x_idx}, Y:{grid_y_idx}): {e}", exc_info=True)
+                # Decide if to continue with other cells or stop. For robustness, continue.
+            finally:
+                # Always attempt to drop the temporary cell table to keep the database clean
+                drop_temp_table(DATABASE_URL, temp_cell_table_name)
         
-        # TEMP_TABLE is dropped at the start of the next batch iteration.
-        logging.info(f"--- Finished Batch {current_batch_number} ---")
+        if generated_sub_tileset_paths:
+            logging.info(f"Finished processing all grid cells. The final main hierarchical tileset is located at: {main_hierarchical_tileset_path}")
+        else:
+            logging.warning("No sub-tilesets were generated in this run. The main tileset may be empty or unchanged from a previous run.")
+            # If no sub-tilesets were made and the main tileset doesn't exist, create an empty one.
+            if not os.path.exists(main_hierarchical_tileset_path):
+                 merge_tilesets_hierarchically(main_hierarchical_tileset_path, []) # Creates an empty tileset structure
 
-    # After all batches are processed, create the final hierarchical tileset
-    if generated_sub_tileset_paths:
-        logging.info(f"All batches processed. Merging {len(generated_sub_tileset_paths)} sub-tilesets into a final hierarchical tileset.")
-        final_tileset_path = os.path.join(CACHE_DIR, 'tileset.json')
+    else: # This 'else' corresponds to 'if grid_cells:' after attempting to calculate them
+        logging.warning("No grid cells were generated (e.g., dataset was empty or bounds could not be determined). Tiling process cannot proceed.")
+
+    logging.info("🏁 Main script execution finished.")
+
+
+# --- Grid Cell Data Handling and Tiling Functions ---
+def create_temp_table_for_grid_cell(database_url, main_table_name, temp_table_name, cell_bounds):
+    """
+    Creates a temporary table for a grid cell by selecting data from the main table
+    that intersects with the cell's bounds.
+
+    Args:
+        database_url (str): Connection string for the database.
+        main_table_name (str): Name of the main table containing all geometries.
+        temp_table_name (str): Name for the temporary table to be created.
+        cell_bounds (dict): {'min_lon', 'min_lat', 'max_lon', 'max_lat'} for the cell.
+
+    Returns:
+        bool: True if the temporary table was created and contains data, False otherwise.
+    """
+    logging.info(f"Creating temporary table '{temp_table_name}' for cell: {cell_bounds}")
+    url = urlparse(database_url)
+    conn_params = {
+        "dbname": url.path.lstrip("/"),
+        "user": url.username,
+        "host": url.hostname,
+        "port": url.port,
+    }
+    if url.password:
+        conn_params["password"] = url.password
+
+    conn = None
+    try:
+        conn = psycopg2.connect(**conn_params)
+        with conn.cursor() as cur:
+            # Drop the temporary table if it already exists
+            cur.execute(f'DROP TABLE IF EXISTS public."{temp_table_name}";')
+
+            # Create the temporary table with data intersecting the cell bounds
+            # Using ST_MakeEnvelope with SRID 4326, assuming 'geom' in main_table_name is also 4326
+            # The && operator is a BBOX-only intersection check, potentially faster as a first pass
+            # ST_Intersects is a more precise geometry intersection check.
+            # For simplicity and correctness with pg2b3dm, often a full intersection is better if performance allows.
+            # Let's use ST_Intersects as it's generally safer for ensuring data truly falls within the cell for tiling.
+            create_sql = f"""
+                CREATE TABLE public."{temp_table_name}" AS
+                SELECT * FROM public."{main_table_name}"
+                WHERE ST_Intersects(geom, ST_MakeEnvelope(
+                    {cell_bounds['min_lon']}, {cell_bounds['min_lat']},
+                    {cell_bounds['max_lon']}, {cell_bounds['max_lat']},
+                    4326
+                ));
+            """
+            logging.debug(f"Executing SQL for temp table: {create_sql}")
+            cur.execute(create_sql)
+
+            # Check if any rows were inserted
+            cur.execute(f"SELECT COUNT(*) FROM public.\"{temp_table_name}\";")
+            count = cur.fetchone()[0]
+
+            if count > 0:
+                logging.info(f"Temporary table '{temp_table_name}' created with {count} records.")
+                # Add a spatial index to the temporary table's geometry column
+                # This can significantly speed up pg2b3dm processing.
+                # Ensure the geometry column name 'geom' is correct.
+                index_sql = f'CREATE INDEX "idx_{temp_table_name}_geom" ON public."{temp_table_name}" USING GIST (geom);'
+                logging.debug(f"Executing SQL for index: {index_sql}")
+                cur.execute(index_sql)
+                conn.commit()
+                logging.info(f"Spatial index created on '{temp_table_name}.geom'.")
+                return True
+            else:
+                logging.info(f"No data found for cell. Temporary table '{temp_table_name}' is empty or not created if CREATE AS SELECT found no rows and didn't error.")
+                # Explicitly drop if it was created but is empty, to keep DB clean
+                cur.execute(f'DROP TABLE IF EXISTS public."{temp_table_name}";')
+                conn.commit()
+                return False
+
+    except Exception as e:
+        logging.error(f"Error creating temp table '{temp_table_name}' for cell: {e}", exc_info=True)
+        if conn:
+            conn.rollback() # Rollback any partial transaction
+        # Attempt to drop the table again in case of failure during creation after it was formed
         try:
-            merge_tilesets_hierarchically(final_tileset_path, generated_sub_tileset_paths)
-            logging.info(f"Final hierarchical tileset created at {final_tileset_path}")
-        except Exception as e:
-            logging.error(f"Failed to create final hierarchical tileset: {e}", exc_info=True)
-    else:
-        logging.warning("No sub-tilesets were generated. Skipping final merge.")
+            if conn: # Re-establish simple connection if original one is bad
+                 with conn.cursor() as cur_cleanup:
+                    cur_cleanup.execute(f'DROP TABLE IF EXISTS public."{temp_table_name}";')
+                    conn.commit()
+        except Exception as e_cleanup:
+            logging.error(f"Failed to cleanup temp table '{temp_table_name}' after error: {e_cleanup}")
+        return False
+    finally:
+        if conn:
+            conn.close()
 
-    logging.info("🏁 All files processed.")
+# --- Grid Calculation Functions ---
+def get_dataset_bounds(database_url, table_name):
+    """
+    Calculates the overall bounding box of geometries in the specified table.
+
+    Args:
+        database_url (str): Connection string for the database.
+        table_name (str): Name of the table containing geometries.
+
+    Returns:
+        dict: A dictionary with {'min_lon': ..., 'min_lat': ..., 'max_lon': ..., 'max_lat': ...}
+              or None if the table is empty or an error occurs.
+    """
+    logging.info(f"Calculating dataset bounds for table '{table_name}'.")
+    url = urlparse(database_url)
+    conn_params = {
+        "dbname": url.path.lstrip("/"),
+        "user": url.username,
+        "host": url.hostname,
+        "port": url.port,
+    }
+    if url.password:
+        conn_params["password"] = url.password
+
+    conn = None
+    try:
+        conn = psycopg2.connect(**conn_params)
+        with conn.cursor() as cur:
+            # Ensure SRID is 4326 for bounds
+            # ST_Extent aggregates geometries and returns a box2d, ST_Transform ensures it's in 4326
+            # ST_Envelope creates a geometry from the box2d for ST_AsText or further processing
+            # Using ST_XMin etc. directly on ST_Extent might be more direct if SRID is guaranteed.
+            # Let's assume geom is in 4326 as per prior ingestion steps.
+            query = f"""
+                SELECT
+                    ST_XMin(ST_Extent(geom)),
+                    ST_YMin(ST_Extent(geom)),
+                    ST_XMax(ST_Extent(geom)),
+                    ST_YMax(ST_Extent(geom))
+                FROM public."{table_name}"
+                WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom);
+            """
+            cur.execute(query)
+            result = cur.fetchone()
+
+            if result and all(val is not None for val in result):
+                bounds = {
+                    'min_lon': result[0],
+                    'min_lat': result[1],
+                    'max_lon': result[2],
+                    'max_lat': result[3]
+                }
+                logging.info(f"Calculated bounds for '{table_name}': {bounds}")
+                return bounds
+            else:
+                logging.warning(f"No valid geometries found in table '{table_name}' to calculate bounds.")
+                return None
+    except Exception as e:
+        logging.error(f"Error calculating bounds for table '{table_name}': {e}", exc_info=True)
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def calculate_grid_cells(bounds, cell_size_km):
+    """
+    Calculates grid cells based on dataset bounds and a cell size.
+
+    Args:
+        bounds (dict): Dictionary with {'min_lon', 'min_lat', 'max_lon', 'max_lat'}.
+        cell_size_km (float): Desired cell size in kilometers.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary represents a grid cell
+              with its lon/lat bounds and grid indices.
+    """
+    if not bounds:
+        logging.error("Invalid bounds provided for grid calculation.")
+        return []
+
+    logging.info(f"Calculating grid cells with cell size {cell_size_km} km.")
+
+    # Define transformers
+    # EPSG:25832 is ETRS89 / UTM zone 32N, suitable for Germany/Bayern
+    # EPSG:4326 is WGS84 (lon/lat)
+    try:
+        transformer_to_proj = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:25832", always_xy=True)
+        transformer_to_wgs84 = pyproj.Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+    except pyproj.exceptions.CRSError as e:
+        logging.error(f"Failed to initialize coordinate transformers: {e}. Ensure pyproj CRS data is available.")
+        return []
+
+
+    # Transform overall dataset bounds from WGS84 to the projected CRS
+    try:
+        min_x_proj, min_y_proj = transformer_to_proj.transform(bounds['min_lon'], bounds['min_lat'])
+        max_x_proj, max_y_proj = transformer_to_proj.transform(bounds['max_lon'], bounds['max_lat'])
+    except pyproj.exceptions.ProjError as e:
+        logging.error(f"Error transforming bounds to projected CRS: {e}")
+        return []
+
+    logging.info(f"Projected bounds (EPSG:25832): min_x={min_x_proj}, min_y={min_y_proj}, max_x={max_x_proj}, max_y={max_y_proj}")
+
+    cell_size_m = cell_size_km * 1000.0
+
+    # Calculate number of cells
+    # Ensure we cover the entire extent, hence math.ceil
+    if (max_x_proj - min_x_proj) <= 0 or (max_y_proj - min_y_proj) <= 0 :
+        logging.warning("Projected bounds have zero or negative extent. Cannot create grid.")
+        return []
+
+    num_cells_x = math.ceil((max_x_proj - min_x_proj) / cell_size_m)
+    num_cells_y = math.ceil((max_y_proj - min_y_proj) / cell_size_m)
+
+    if num_cells_x == 0 or num_cells_y == 0:
+        logging.warning(f"Calculated zero cells in one or both dimensions ({num_cells_x}x{num_cells_y}). Check bounds and cell size.")
+        return []
+
+    logging.info(f"Grid dimensions: {num_cells_x} cells in X, {num_cells_y} cells in Y.")
+
+    grid_cells = []
+    for i in range(num_cells_x):
+        for j in range(num_cells_y):
+            # Calculate cell's projected bounds
+            cell_min_x = min_x_proj + i * cell_size_m
+            cell_max_x = min_x_proj + (i + 1) * cell_size_m
+            cell_min_y = min_y_proj + j * cell_size_m
+            cell_max_y = min_y_proj + (j + 1) * cell_size_m
+
+            # Transform cell bounds back to WGS84 (lon/lat)
+            try:
+                cell_min_lon, cell_min_lat = transformer_to_wgs84.transform(cell_min_x, cell_min_y)
+                cell_max_lon, cell_max_lat = transformer_to_wgs84.transform(cell_max_x, cell_max_y)
+            except pyproj.exceptions.ProjError as e:
+                logging.error(f"Error transforming cell {i},{j} bounds back to WGS84: {e}")
+                continue # Skip this cell or handle error as appropriate
+
+            grid_cells.append({
+                'min_lon': cell_min_lon,
+                'min_lat': cell_min_lat,
+                'max_lon': cell_max_lon,
+                'max_lat': cell_max_lat,
+                'grid_x_idx': i,
+                'grid_y_idx': j
+            })
+
+    logging.info(f"Calculated {len(grid_cells)} grid cells.")
+    return grid_cells
+# --- End Grid Calculation Functions ---
 
 
 if __name__ == '__main__':
@@ -1038,12 +1368,17 @@ if __name__ == '__main__':
         )
 
     meta4_file_to_use = META4_PATH
-    if len(sys.argv) > 1:
-        meta4_file_to_use = sys.argv[1]
-        logging.info(f"Using Meta4 file from command line argument: {meta4_file_to_use}")
+    # Setup command-line argument parsing
+    parser = argparse.ArgumentParser(description="Process Meta4 GML files for 3D building tiling for Bayern.")
+    parser.add_argument('meta4_file_path_arg', help="Path to the Meta4 file (e.g., backend/ingestion/data_sources/bayern.meta4).")
+    parser.add_argument('--no-ingest', action='store_true',
+                        help="Skip the data ingestion phase (download, transform, load to DB). "
+                             "Useful if data is already in the main table and only tiling is needed.")
     
-    if not os.path.isfile(meta4_file_to_use):
-        logging.error(f"Meta4 file '{meta4_file_to_use}' does not exist.")
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.meta4_file_path_arg):
+        logging.error(f"Meta4 file '{args.meta4_file_path_arg}' does not exist.")
         sys.exit(1)
         
-    main(meta4_file_to_use)
+    main(args)
