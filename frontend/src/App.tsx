@@ -249,7 +249,7 @@ function Root() {
     setViewState(event.viewState);
 
     // Toggle visibility based on zoom level
-    if (newZoom < 1) {
+    if (newZoom < 12) {
       setIsLod2Visible(false);
     } else {
       setIsLod2Visible(true);
