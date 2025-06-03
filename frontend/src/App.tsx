@@ -54,6 +54,7 @@ function Root() {
   const [polygonArea, setPolygonArea] = useState<number | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(false); 
   const mapRef = useRef<any>(null); // Reference to the map instance
+  const abortControllerRef = useRef<AbortController | null>(null); // For request cancellation
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
 
@@ -329,6 +330,12 @@ function Root() {
   };
 
   const handleZoomChange = (event: any) => {
+    // Cancel pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     const newZoom = event.viewState.zoom;
     setViewState(event.viewState);
 
@@ -377,15 +384,18 @@ function Root() {
       // For ScenegraphLayer (b3dm or i3dm format)
       //_lighting: 'pbr',
       //effects: [lightingEffect],
-      // loadOptions: {
-      //   tileset: {
-      //     maxRequests: 16,
-      //     updateTransforms: false,
-      //     maximumMemoryUsage: 512
-      //     //maximumScreenSpaceError: 16, // Adjust this value as needed
-      //     //viewDistanceScale: 1.5 // Adjust this value as needed
-      //   }
-      // },
+      loadOptions: {
+        fetch: {
+          signal: abortControllerRef.current?.signal,
+        },
+        tileset: {
+          maxRequests: 32,
+          updateTransforms: false,
+          maximumMemoryUsage: 512,
+          maximumScreenSpaceError: 16, // Adjust this value as needed
+          //viewDistanceScale: 1.5 // Adjust this value as needed
+        }
+      },
       // Additional sublayer props for fine-grained control
       _subLayerProps: {
         scenegraph: {
