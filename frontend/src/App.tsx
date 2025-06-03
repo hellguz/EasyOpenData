@@ -1,4 +1,3 @@
-// App.tsx
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -53,6 +52,7 @@ function Root() {
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [isLod2Visible, setIsLod2Visible] = useState(true);
   const [polygonArea, setPolygonArea] = useState<number | null>(null);
+  const [showBoundaries, setShowBoundaries] = useState(false); 
   const mapRef = useRef<any>(null); // Reference to the map instance
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
@@ -144,12 +144,96 @@ function Root() {
       map.addControl(drawRef.current);
     }
 
-  // Bind event listeners for onUpdate and onDelete
-  map.on('draw.create', onUpdate); // Bind onUpdate callback
-  map.on('draw.update', onUpdate); // Bind onUpdate callback
-  map.on('draw.delete', onDelete); // Bind onDelete callback
+    // Bind event listeners for onUpdate and onDelete
+    map.on('draw.create', onUpdate); // Bind onUpdate callback
+    map.on('draw.update', onUpdate); // Bind onUpdate callback
+    map.on('draw.delete', onDelete); // Bind onDelete callback
 
-}, []);
+    // Fetch the tileset JSON, extract subtiles regions, and add a GeoJSON layer for boundaries
+    fetch(TILESET_URL)
+      .then(res => res.json())
+      .then((data: any) => {
+        const regions: number[][] = [];
+        // Recursive traversal to collect regions from any node that has content (i.e., subtiles)
+        function traverse(node: any) {
+          if (node.boundingVolume && node.boundingVolume.region && node.content) {
+            regions.push(node.boundingVolume.region);
+          }
+          if (node.children) {
+            node.children.forEach((child: any) => traverse(child));
+          }
+        }
+        traverse(data.root);
+        // Convert each region (in radians) to a GeoJSON polygon in degrees
+        const features = regions.map(region => {
+          const [west, south, east, north] = region;
+          const westDeg = (west * 180) / Math.PI;
+          const southDeg = (south * 180) / Math.PI;
+          const eastDeg = (east * 180) / Math.PI;
+          const northDeg = (north * 180) / Math.PI;
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [westDeg, southDeg],
+                [eastDeg, southDeg],
+                [eastDeg, northDeg],
+                [westDeg, northDeg],
+                [westDeg, southDeg],
+              ]],
+            },
+            properties: {},
+          };
+        });
+        const geojson = { type: 'FeatureCollection', features };
+
+        // Add the source and layer for subtiles boundaries
+        if (!map.getSource('subtiles-boundaries')) {
+          map.addSource('subtiles-boundaries', {
+            type: 'geojson',
+            data: geojson,
+          });
+          map.addLayer({
+            id: 'subtiles-boundaries-layer',
+            type: 'line',
+            source: 'subtiles-boundaries',
+            layout: {
+              visibility: showBoundaries ? 'visible' : 'none',
+            },
+            paint: {
+              'line-color': '#0000FF',
+              'line-width': 1,
+            },
+          });
+        }
+      })
+      .catch(err => console.error("Error fetching tileset JSON", err));
+  }, [showBoundaries]);
+
+  // Update layer visibility whenever showBoundaries changes
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (map && map.getLayer('subtiles-boundaries-layer')) {
+      map.setLayoutProperty(
+        'subtiles-boundaries-layer',
+        'visibility',
+        showBoundaries ? 'visible' : 'none'
+      );
+    }
+  }, [showBoundaries]);
+
+  // Listen for the 'B' key to toggle boundaries
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'b' || event.key === 'B') {
+        setShowBoundaries(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // const onTilesetLoad = (tileset: Tileset3D) => {
   //   const { cartographicCenter, zoom } = tileset;
   //   setViewState((prev) => ({
