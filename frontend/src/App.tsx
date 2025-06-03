@@ -29,14 +29,14 @@ const TILESET_URL = import.meta.env.VITE_TILESET_URL;
 
 
 const INITIAL_VIEW_STATE: MapViewState = {
-  latitude: 49.8917,
-  longitude: 10.8863,
-  pitch: 45,
+  latitude: 49.97445,
+  longitude: 9.1464,
+  pitch: 28,
   maxPitch: 60,
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
-  zoom: 17,
+  zoom: 15,
 };
 
 const MAP_STYLE = "/basemap.json";
