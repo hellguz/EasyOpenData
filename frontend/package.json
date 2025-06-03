@@ -25,6 +25,7 @@
     "bootstrap": "^5.3.3",
     "deck.gl": "^9.0.0",
     "dotenv": "^16.4.7",
+    "gl-matrix": "^3.4.3",
     "mapbox-gl": "^3.8.0",
     "maplibre-gl": "^3.0.0",
     "react": "^18.3.1",

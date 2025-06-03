@@ -1,5 +1,6 @@
 // App.tsx
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react"; // Removed useMemo if not used
+import { mat4, vec3 } from 'gl-matrix'; // For vector and matrix math
 import { createRoot } from "react-dom/client";
 import {
   Map,
@@ -7,7 +8,7 @@ import {
   Popup,
   useControl,
 } from "react-map-gl/maplibre";
-import { Tile3DLayer, MapViewState, AmbientLight, DirectionalLight, LightingEffect } from "deck.gl";
+import { Tile3DLayer, MapViewState, AmbientLight, DirectionalLight, LightingEffect, PolygonLayer } from "deck.gl"; // Added PolygonLayer
 import { MapboxOverlay as DeckOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Tileset3D } from "@loaders.gl/tiles";
@@ -51,6 +52,9 @@ function Root() {
   const [selected, setSelected] = useState<any>(null);
   const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
   const [features, setFeatures] = useState<Record<string, any>>({});
+  const [allTiles, setAllTiles] = useState<any[]>([]); // Existing from step 1
+  const [subtilesetBoundaryPolygons, setSubtilesetBoundaryPolygons] = useState<any[]>([]); // New state
+  const [showSubtilesetBoundaries, setShowSubtilesetBoundaries] = useState(false); // New state
   const [isLod2Visible, setIsLod2Visible] = useState(true);
   const [polygonArea, setPolygonArea] = useState<number | null>(null);
   const mapRef = useRef<any>(null); // Reference to the map instance
@@ -160,6 +164,178 @@ function Root() {
   //   }));
   // };
 
+  const onTilesetLoad = (tileset: Tileset3D) => {
+    // Option 2: Store only root and its direct children, or tiles with content.uri
+    // This is a more targeted approach if "subtilesets" are expected to be direct children
+    // or explicitly defined by a content URI pointing to another tileset.json
+    const relevantTiles: any[] = []; // Use any[] for now, refine if needed
+
+    // function findRelevantTiles(tile, depth = 0) {
+    //   if (!tile) return;
+
+    //   // Heuristic: A tile that has content with a URI is a candidate for a "subtileset root"
+    //   // Or, any direct child of the main root might be considered a subtileset.
+    //   // For now, let's collect all tiles and their content URIs to allow flexible processing later.
+    //   relevantTiles.push({
+    //     id: tile.id,
+    //     boundingVolume: tile.boundingVolume, // This is what we need for the box
+    //     contentUri: tile.content?.uri, // URI of the content (e.g., b3dm, or another tileset.json)
+    //     lodMetricValue: tile.lodMetricValue,
+    //     transform: tile.transform, // Matrix to transform the boundingVolume to world space
+    //     children: tile.children // Keep children to potentially traverse deeper if needed
+    //   });
+
+    //   // If we only want direct children of the root, or tiles that are external tilesets:
+    //   // if (depth === 0 || (tile.content?.uri && tile.content.uri.endsWith('.json'))) {
+    //   //   relevantTiles.push({ id: tile.id, boundingVolume: tile.boundingVolume, contentUri: tile.content?.uri });
+    //   // }
+    //   // if (tile.children && depth < 1) { // Only go one level deep from root for example
+    //   // tile.children.forEach(child => findRelevantTiles(child, depth + 1));
+    //   // }
+    // }
+
+    if (tileset && tileset.root) {
+      // To get all tiles, we need to traverse the tree:
+      const queue = [tileset.root];
+      while (queue.length > 0) {
+          const tile = queue.pop();
+          if (tile) {
+              relevantTiles.push({
+                  id: tile.id,
+                  boundingVolume: tile.boundingVolume,
+                  contentUri: tile.content?.uri,
+                  lodMetricValue: tile.lodMetricValue,
+                  transform: tile.transform,
+                  // Store a simplified children array or just their IDs if the full objects are too much
+                  // For now, let's not store children in this flattened list to avoid circular refs in state,
+                  // unless we process them carefully. The main `tileset` object itself can be traversed if needed.
+                  // We are primarily interested in the bounding volumes of tiles that represent subtilesets.
+              });
+              if (tile.children) {
+                  tile.children.forEach(child => queue.push(child));
+              }
+          }
+      }
+    }
+    setAllTiles(relevantTiles);
+
+    // Original onTilesetLoad logic for camera positioning (if it was there)
+    // const { cartographicCenter, zoom } = tileset;
+    // setViewState((prev) => ({
+    //   ...prev,
+    //   longitude: cartographicCenter[0],
+    //   latitude: cartographicCenter[1],
+    //   zoom,
+    // }));
+  };
+
+  useEffect(() => {
+    if (!allTiles || allTiles.length === 0) {
+      setSubtilesetBoundaryPolygons([]);
+      return;
+    }
+
+    const newPolygons: any[] = [];
+    allTiles.forEach(tile => {
+      // Filter for tiles that might be subtilesets.
+      // Given user feedback, tiles with content.uri ending in .json are subtilesets.
+      // Also, these subtilesets in the example use `boundingVolume.region`.
+      if (tile.contentUri && tile.contentUri.endsWith('.json') && tile.boundingVolume) {
+        let polygonCoordinates: number[][] | null = null;
+
+        if (tile.boundingVolume.region) {
+          // Region: [west, south, east, north, minHeight, maxHeight] in radians
+          const region = tile.boundingVolume.region;
+          const radToDeg = (rad: number) => rad * 180 / Math.PI;
+
+          polygonCoordinates = [
+            [radToDeg(region[0]), radToDeg(region[1])], // west, south
+            [radToDeg(region[2]), radToDeg(region[1])], // east, south
+            [radToDeg(region[2]), radToDeg(region[3])], // east, north
+            [radToDeg(region[0]), radToDeg(region[3])], // west, north
+            [radToDeg(region[0]), radToDeg(region[1])]  // close polygon (repeating first point)
+          ];
+        } else if (tile.boundingVolume.box) {
+          // Fallback for boxes, though user example uses regions
+          const boxData = tile.boundingVolume.box; // [cx, cy, cz, uxx, uxy, uxz, uyx, uyy, uyz, uzx, uzy, uzz]
+
+          const center = vec3.fromValues(boxData[0], boxData[1], boxData[2]);
+          // Half-axis vectors for x, y, z
+          const halfX = vec3.fromValues(boxData[3], boxData[4], boxData[5]);
+          const halfY = vec3.fromValues(boxData[6], boxData[7], boxData[8]);
+          // const halfZ = vec3.fromValues(boxData[9], boxData[10], boxData[11]);
+
+
+          // Calculate the 8 corners of the box in its local coordinate system
+          // For a 2D footprint, we're interested in the projection onto the XY plane.
+          // Let's define corners based on the center and half-axis vectors.
+          // These are corners of the base of the box if Z points up.
+          const localCorners = [
+            vec3.create(), vec3.create(), vec3.create(), vec3.create()
+          ];
+
+          // Corner 1: center - halfX - halfY
+          vec3.sub(localCorners[0], center, halfX);
+          vec3.sub(localCorners[0], localCorners[0], halfY);
+
+          // Corner 2: center + halfX - halfY
+          vec3.add(localCorners[1], center, halfX);
+          vec3.sub(localCorners[1], localCorners[1], halfY);
+
+          // Corner 3: center + halfX + halfY
+          vec3.add(localCorners[2], center, halfX);
+          vec3.add(localCorners[2], localCorners[2], halfY);
+
+          // Corner 4: center - halfX + halfY
+          vec3.sub(localCorners[3], center, halfX);
+          vec3.add(localCorners[3], localCorners[3], halfY);
+
+          const worldCorners = localCorners.map(lc => {
+            const wc = vec3.create();
+            if (tile.transform && tile.transform.length === 16) {
+              vec3.transformMat4(wc, lc, tile.transform);
+            } else {
+              vec3.copy(wc, lc); // No transform, use local coordinates directly
+            }
+            return wc;
+          });
+
+          // Assuming the X and Y coordinates of the transformed corners represent Lon/Lat
+          // This is a placeholder and might need adjustment if the CRS is not geographic
+          const lonLatCorners = worldCorners.map(wc => [wc[0], wc[1]]);
+
+          if (lonLatCorners.length === 4) {
+             polygonCoordinates = [...lonLatCorners, lonLatCorners[0]]; // Close the polygon
+          }
+        }
+
+        if (polygonCoordinates) {
+          newPolygons.push({
+            id: tile.id || tile.contentUri, // Use contentUri as a fallback id
+            tileInfo: { id: tile.id, contentUri: tile.contentUri, boundingVolume: tile.boundingVolume },
+            polygon: polygonCoordinates
+          });
+        }
+      }
+    });
+    setSubtilesetBoundaryPolygons(newPolygons);
+  }, [allTiles]);
+
+  // useEffect for keyboard listener to toggle boundary visibility
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'b') {
+        setShowSubtilesetBoundaries(prevShowBoundaries => !prevShowBoundaries);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup function to remove the event listener
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -288,7 +464,7 @@ function Root() {
       // autoHighlight: false,
       // onClick: (info, event) => console.log("Clicked:", info, event),
       // getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
-      // onTilesetLoad,
+      onTilesetLoad, // Add this
       visible: isLod2Visible,
       // For ScenegraphLayer (b3dm or i3dm format)
       //_lighting: 'pbr',
@@ -310,6 +486,32 @@ function Root() {
         }
       }
     }),
+    // Add the new PolygonLayer for boundaries
+    new PolygonLayer({
+      id: 'subtileset-boundaries-layer',
+      data: subtilesetBoundaryPolygons, // Data from state
+      pickable: false,
+      stroked: true,
+      filled: false,
+      lineWidthUnits: 'pixels', // Use pixels for line width
+      lineWidthMinPixels: 1,
+      getPolygon: (d: any) => {
+        // Check if d and d.polygon exist and d.polygon is an array
+        if (d && d.polygon && Array.isArray(d.polygon)) {
+          // Ensure each point in the polygon is also an array (lon, lat)
+          // This helps prevent errors if data is malformed.
+          const isPolygonValid = d.polygon.every((point: any) => Array.isArray(point) && point.length >= 2);
+          if (isPolygonValid) {
+            return d.polygon;
+          }
+        }
+        // Return a dummy or empty polygon if data is invalid to avoid layer crashing
+        return [];
+      },
+      getLineColor: [0, 0, 255, 255], // Blue color (R, G, B, A)
+      getLineWidth: 1,
+      visible: showSubtilesetBoundaries, // Control visibility with the new state
+    })
   ];
 
   const handleSearch = async (query: string) => {
