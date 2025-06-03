@@ -70,12 +70,12 @@ PG2B3DM_PATH = 'backend/ingestion/libs/pg2b3dm.exe' # Path to pg2b3dm executable
 SQL_INDEX_PATH = 'backend/db/index.sql'
 TEMP_TABLE = 'idx_building'  # Temporary table name
 MAIN_TABLE = 'building'      # Main building table name
-CELL_SIZE_KM = 50.0 # Define cell size in kilometers
-NO_INGEST = False # Skip the data ingestion phase (download, transform, load to DB).
+CELL_SIZE_KM = 30.0 # Define cell size in kilometers
+NO_INGEST = True # Skip the data ingestion phase (download, transform, load to DB).
 
 # Tileset merging parameters (will be used later, keep for now if relevant for overall tiling strategy)
 MAX_CHILDREN_PER_NODE = 8
-MIN_GEOMETRIC_ERROR_FOR_LEAF = 500
+MIN_GEOMETRIC_ERROR_FOR_LEAF = 100
 
 # Configure logging
 logging.basicConfig(
@@ -403,9 +403,9 @@ def apply_draco_compression(cache_dir):
                     '-i', gltf_file,
                     '-o', compressed_file,
                     '--draco.compressionLevel', '7',
-                    '--draco.quantizePositionBits', '16',   # Increased from 14 to 16 (higher precision)
-                    '--draco.quantizeNormalBits', '14',     # Increased from 10 to 14 (higher precision)
-                    '--draco.quantizeTexcoordBits', '14',   # Increased from 12 to 14 (higher precision)
+                    '--draco.quantizePositionBits', '16',   
+                    '--draco.quantizeNormalBits', '14',     
+                    '--draco.quantizeTexcoordBits', '14',   
                     '--draco.uncompressedFallback',         # Keep fallback for compatibility
                     '--draco.unifiedQuantization'           # Use unified quantization for better quality
                 ]
