@@ -72,7 +72,8 @@ def reconstruct_project_from_dump(input_dump_file_path):
             # Found a binary/error file marker &&& FILE:
             # If there was a previous text file being processed, write it
             if is_writing_active_text_file and current_processing_file_path and current_file_content_lines:
-                write_content_to_file(current_processing_file_path, "".join(current_file_content_lines))
+                clean_content = "".join(current_file_content_lines).replace("\\_", "_")
+                write_content_to_file(current_processing_file_path, clean_content)
 
             # This is a binary/error marker, so we stop processing the current_file_path as a writable text file
             binary_file_path_info = binary_marker_match.group(1)
@@ -102,7 +103,8 @@ def reconstruct_project_from_dump(input_dump_file_path):
 
     # After the loop, write the last processed file if any content was collected
     if is_writing_active_text_file and current_processing_file_path and current_file_content_lines:
-        write_content_to_file(current_processing_file_path, "".join(current_file_content_lines))
+        clean_content = "".join(current_file_content_lines).replace("\\_", "_")
+        write_content_to_file(current_processing_file_path, clean_content)
 
     print("\nProject reconstruction attempt complete.")
 

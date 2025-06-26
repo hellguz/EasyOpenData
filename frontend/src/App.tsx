@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect, useMemo } from "react"; // ← added useMemo
 import { createRoot } from "react-dom/client";
 import {
   Map,
@@ -26,7 +26,6 @@ import './colors.css'
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 const TILESET_URL = import.meta.env.VITE_TILESET_URL;
 
-
 const INITIAL_VIEW_STATE: MapViewState = {
   latitude: 49.97445,
   longitude: 9.1464,
@@ -35,7 +34,7 @@ const INITIAL_VIEW_STATE: MapViewState = {
   bearing: 0,
   minZoom: 2,
   maxZoom: 30,
-  zoom: 15,
+  zoom: 17,
 };
 
 const MAP_STYLE = "/basemap.json";
@@ -52,7 +51,7 @@ function Root() {
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [isLod2Visible, setIsLod2Visible] = useState(true);
   const [polygonArea, setPolygonArea] = useState<number | null>(null);
-  const [showBoundaries, setShowBoundaries] = useState(false); 
+  const [showBoundaries, setShowBoundaries] = useState(false);
   const mapRef = useRef<any>(null); // Reference to the map instance
 
   const drawRef = useRef<MapboxDraw | null>(null); // Reference to the MapboxDraw instance
@@ -165,7 +164,7 @@ function Root() {
         }
         traverse(data.root);
         // Convert each region (in radians) to a GeoJSON polygon in degrees
-        const features = regions.map(region => {
+        const geojsonFeatures = regions.map(region => {
           const [west, south, east, north] = region;
           const westDeg = (west * 180) / Math.PI;
           const southDeg = (south * 180) / Math.PI;
@@ -186,7 +185,7 @@ function Root() {
             properties: {},
           };
         });
-        const geojson = { type: 'FeatureCollection', features };
+        const geojson = { type: 'FeatureCollection', features: geojsonFeatures };
 
         // Add the source and layer for subtiles boundaries
         if (!map.getSource('subtiles-boundaries')) {
@@ -233,17 +232,6 @@ function Root() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // const onTilesetLoad = (tileset: Tileset3D) => {
-  //   const { cartographicCenter, zoom } = tileset;
-  //   setViewState((prev) => ({
-  //     ...prev,
-  //     longitude: cartographicCenter[0],
-  //     latitude: cartographicCenter[1],
-  //     zoom,
-  //   }));
-  // };
-
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -333,7 +321,7 @@ function Root() {
     setViewState(event.viewState);
 
     // Toggle visibility based on zoom level
-    if (newZoom < 12) {
+    if (newZoom < 16) {
       setIsLod2Visible(false);
     } else {
       setIsLod2Visible(true);
@@ -363,38 +351,30 @@ function Root() {
   // Create lighting effect
   const lightingEffect = new LightingEffect({ ambientLight, directionalLight1, directionalLight2 });
 
-
-  const layers = [
+  // ─── M E M O I Z E   T I L E   L A Y E R ──────────────────────────────────
+  const layers = useMemo(() => [
     new Tile3DLayer({
       id: "tile-3d-layer",
       data: TILESET_URL,
-      // pickable: true,
-      // autoHighlight: false,
-      // onClick: (info, event) => console.log("Clicked:", info, event),
-      // getPickingInfo: (pickParams) => console.log("PickInfo", pickParams),
-      // onTilesetLoad,
       visible: isLod2Visible,
-      // For ScenegraphLayer (b3dm or i3dm format)
-      //_lighting: 'pbr',
-      //effects: [lightingEffect],
-      // loadOptions: {
-      //   tileset: {
-      //     maxRequests: 16,
-      //     updateTransforms: false,
-      //     maximumMemoryUsage: 512
-      //     //maximumScreenSpaceError: 16, // Adjust this value as needed
-      //     //viewDistanceScale: 1.5 // Adjust this value as needed
-      //   }
-      // },
-      // Additional sublayer props for fine-grained control
+      loadOptions: {
+        // FORWARD the options.signal (Deck.gl’s AbortSignal) into fetch.
+        // Do NOT create a new AbortController here!
+        fetch: (url, options) => {
+          return fetch(url, options);
+        },
+        tileset: {
+          maxRequests: 32, // ← allow up to 32 parallel tile requests
+        }
+      },
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [255, 255, 255, 255], // Blue color for scenegraph models (alternative method)
-          //effects: [lightingEffect]
+          getColor: (d) => [255, 255, 255, 255], // Blue color for scenegraph models
         }
       }
     }),
-  ];
+  ], [TILESET_URL, isLod2Visible]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   const handleSearch = async (query: string) => {
     const response = await fetch(
@@ -497,5 +477,5 @@ interface DrawControlProps {
   onUpdate: (e: any) => void;
   onDelete: (e: any) => void;
 }
-
+ 
 export default Root;
