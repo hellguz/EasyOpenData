@@ -43,7 +43,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
         onClick={onFetchObjFile}
         className="btn btn-secondary btn mt-2"
       >
-       .obj Herunterladen
+        .obj Herunterladen
       </button>
       </>
     );
@@ -69,13 +69,14 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
     setLoading(true);
 
     try {
-      const response = await fetch(import.meta.env.VITE_BASE_URL + "/create-payment-intent", {
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           amount: price
         }),
       });
+
       if (!response.ok) throw new Error("Failed to create PaymentIntent.");
 
       const { clientSecret } = await response.json();
@@ -199,7 +200,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
       <CardElement
       
       onFocus={handleFocus}
-      onFocusOut={handleFocusOut}
+      onBlur={handleFocusOut}
         options={{
           style: {
             base: {

@@ -1,125 +1,152 @@
-# EasyOpenData
+# EasyOpenData 🗺️
 
-## Open Data Extractor for German Spatial Datasets
+*A user-friendly platform for accessing and downloading German 3D building models.*
 
-### Overview
+Tired of wrestling with complex German spatial data formats? **EasyOpenData** simplifies the process by providing an intuitive map-based interface to select, purchase, and download high-quality 3D building models for any region in Germany.
 
-EasyOpenData is a platform that provides an easy-to-use interface for accessing and downloading spatial data from German open data sources, covering all Bundesländer. It standardizes the diverse formats in which these datasets are available and presents them to users via an intuitive web interface.
 
-Users can interact with a map, select areas of interest (via polygons), and choose the data layers they wish to download. Available data types include:
-
-- **3D Buildings (LOD1/LOD2)**
-
-The platform processes the selected data and provides it in the user's desired format after payment, either as a direct download or via email.
 
 ---
 
-### Key Features
+## ✨ Key Features
 
-- **Map-Based User Interface**: Allows users to interact with spatial data visually by selecting areas on a map.
-- **Multi-Format Support**: Data is standardized into a unified format, enabling seamless querying and export.
-- **Dynamic Data Processing**: Fetches and processes data only for the area selected by the user, ensuring efficiency.
-- **Real-Time Visualization**: Users can preview data layers on the map as they select their areas of interest.
-- **Payment Integration**: Secure payment processing via Stripe.
-- **Scalable Backend**: Built for performance, capable of handling large datasets from multiple regions.
-
----
-
-### Technologies Used
-
-#### Backend
-
-- **PostGIS**: Spatial database for storing and querying geographic data efficiently.
-- **Python FastAPI**: Backend framework for building APIs to handle user requests and interact with PostGIS.
-- **GDAL**: Used for data conversion between formats.
-- **Docker**: Containerized deployment for portability and scalability.
-- **Stripe API**: For handling payment transactions.
-
-#### Frontend
-
-- **React**: JavaScript library for building user interfaces.
-- **MapLibre GL JS**: Interactive map interface for visualization and area selection.
-- **Deck.gl**: For rendering 3D data on the map.
-- **Mapbox Draw**: Allows users to draw shapes on the map.
+* **🗺️ Interactive Map Interface**: Visually select your area of interest using powerful drawing tools.
+* **⚙️ On-Demand Processing**: Data is fetched and processed only for your selected area, ensuring efficiency and speed.
+* **💻 3D Visualization**: Preview 3D building data directly on the map using Deck.gl.
+* **💳 Secure Stripe Payments**: A seamless and secure payment process for paid datasets.
+* **🏗️ Simple Single-Port Architecture**: The entire application runs behind a reverse proxy, exposing just one port for easy deployment.
 
 ---
 
-### Getting Started
+## 🚀 Quick Start Guide
 
-#### Prerequisites
+Get the application running in just a few steps.
 
-- **Docker** and **Docker Compose** installed on your system.
-- **Node.js** and **npm/yarn** (for frontend development).
-- **Python 3.10+** (for backend development).
+### 1. Prerequisites
 
-#### Setup Instructions
+You'll need **Docker** and **Docker Compose** installed on your system.
 
-##### Clone the Repository
+### 2. Configuration
+
+Before you start, create a configuration file.
+
+1.  Copy the sample environment file:
+    ```bash
+    cp .env.sample .env
+    ```
+2.  Open the new **.env** file and fill in your specific details (like database passwords and Stripe API keys).
+
+### 3. Running the Application
+
+You can run the app in either development or production mode.
+
+#### For Development 👩‍💻
+
+This mode enables **hot-reloading** for both the frontend and backend and runs helpful tools like **pgAdmin**. Services are exposed on separate ports for easy debugging.
 
 ```bash
-git clone https://github.com/your-repo/easyopendata.git
-cd easyopendata
-```
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+````
 
-##### Environment Variables
+  * **Frontend**: http://localhost:5173
+  * **Backend API**: http://localhost:5400
+  * **pgAdmin**: http://localhost:5050
 
-Create a `.env` file in both the `backend` and `frontend` directories if needed to set environment variables.
+#### For Production 🚢
 
-##### Run with Docker Compose
+This command builds and runs the optimized production containers. The entire application is served through a **single port** via the reverse proxy.
 
 ```bash
-docker-compose up --build
+docker-compose up --build -d
 ```
 
-This command will:
+  * **Application**: http://localhost:5173
 
-- Start the PostGIS database.
-- Build and run the backend FastAPI server.
-- Build and run the frontend React application.
+-----
 
-##### Access the Application
+## 🖥️ How to Use the App
 
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
-- **Backend API**: [http://localhost:5400](http://localhost:5400)
+1.  **Open the Web Application**: Navigate to the application in your browser.
+2.  **Find a Location**: Use the search bar to find a specific location.
+3.  **Select an Area**: Use the drawing tools to draw a polygon on the map. The area in km² will be calculated automatically.
+4.  **Proceed to Download**: Use the "Herunterladen" (Download) panel to proceed.
+5.  **Payment**: If the area is large enough to require payment, fill in the secure Stripe payment form.
+6.  **Download Data**: After payment, your `.obj` file download will begin automatically.
 
----
+-----
 
-### Usage
+## 🛠️ Tech Stack
 
-1. **Open the Web Application**: Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
-2. **Select an Area**: Use the drawing tools to select an area on the map.
-3. **Choose Data Layers**: Select the data layers you wish to download.
-4. **Payment**: Proceed to payment if required.
-5. **Download Data**: After processing, download your data in the desired format.
+The project uses a modern, containerized tech stack.
 
----
+  * **Frontend**: React, MapLibre GL JS, Deck.gl
+  * **Backend**: Python, FastAPI
+  * **Database**: PostgreSQL with PostGIS
+  * **Infrastructure**: Docker, Nginx (as Reverse Proxy and Web Server)
 
-### Project Structure
+-----
 
-- **backend/**: Contains the FastAPI backend application.
-  - `app/`: FastAPI application code.
-  - `db/`: Database initialization scripts.
-  - `ingestion/`: Scripts for data ingestion and processing.
-- **frontend/**: Contains the React frontend application.
-  - `src/`: React application source code.
-  - `public/`: Static assets.
+## 📂 Project Structure
 
----
+The repository is organized into three main directories.
 
-### Contributing
+```
+/
+├── backend/        # FastAPI application and data ingestion scripts
+├── frontend/       # React user interface
+└── nginx/          # Configuration for the main reverse proxy
+```
 
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Ensure all code adheres to the style guide and includes proper documentation.
+-----
 
----
+## ⚙️ Management & Operations
 
-### License
+### Deployment
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+The production setup uses an Nginx reverse proxy to route traffic to the appropriate services. All traffic is handled through the single port exposed by the `nginx_proxy` service.
 
----
+  * Requests to `/api/*` are forwarded to the backend service.
+  * All other requests are served by the frontend service.
 
-### Contact
+For a live deployment, you would point your domain's DNS records to the server running Docker and ensure the proxy's port (e.g., 5173) is accessible. For HTTPS, you would configure the `nginx_proxy` service to handle SSL termination.
 
-For questions, feedback, or support, contact us at:
+### Backup and Restore
 
-- **Email**: support@easyopendata.com
+You can perform backups and restores using `docker-compose exec`.
+
+#### Create a Backup
+
+Execute this command to create a backup of your database. The file will be saved in the `./data/postgres_backups/` directory.
+
+```bash
+mkdir -p ./data/postgres_backups && \
+docker-compose exec -T easyopen_postgis pg_dump -U ${DATABASE_USER} -d ${DATABASE_NAME} -F c > ./data/postgres_backups/backup_$(date +%Y-%m-%d_%H-%M-%S).dump
+```
+
+#### Restore from a Backup
+
+To restore the database, place your `.dump` file in `./data/postgres_backups/` and run:
+
+```bash
+docker-compose exec -T easyopen_postgis pg_restore -U ${DATABASE_USER} -d ${DATABASE_NAME} --clean --if-exists < ./data/postgres_backups/your_backup_file.dump
+```
+
+Make sure to replace `your_backup_file.dump` with the actual name of your backup file.
+
+-----
+
+## 🤝 Contributing
+
+Contributions are welcome\! Please fork the repository and submit a pull request with your changes.
+
+-----
+
+## 📄 License
+
+This project is licensed under the MIT License. See the `LICENSE` file for more details.
+
+-----
+
+## 📧 Contact
+
+For questions or feedback, please contact us at **hellguz@gmail.com**.

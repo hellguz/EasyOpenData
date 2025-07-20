@@ -184,7 +184,7 @@ async def retrieve_obj(
         return FileResponse(
             temp_file_path,
             media_type="application/octet-stream",
-            filename=f"easyopendata_export_{uuid.uuid4().hex[:6]}.obj",  # Shorter unique part
+            filename=f"easyopendata_{uuid.uuid4().hex[:6]}.obj",  # Shorter unique part
         )
     except ValueError as ve:  # Specific error from retrieve_obj_file
         logger.warning(f"Value error during OBJ retrieval: {str(ve)}")

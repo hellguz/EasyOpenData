@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect, useMemo } from "react"; // ← added useMemo
+import React, { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Map,
@@ -233,7 +233,7 @@ function Root() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const onUpdate = useCallback((e) => {
+  const onUpdate = useCallback((e: { features: any[]; }) => {
     setFeatures((currFeatures) => {
       const newFeatures = { ...currFeatures };
       for (const f of e.features) {
@@ -250,7 +250,7 @@ function Root() {
     }
   }, []);
 
-  const onDelete = useCallback((e) => {
+  const onDelete = useCallback((e: { features: any[]; }) => {
     setFeatures((currFeatures) => {
       const newFeatures = { ...currFeatures };
       for (const f of e.features) {
@@ -275,12 +275,11 @@ function Root() {
   };
 
   const handleFetchObjFile = async () => {
-    console.info("getFetchObjFile")
     if (drawRef.current) {
       const data = drawRef.current.getAll();
       if (data.features.length > 0) {
         try {
-          const response = await fetch(BASE_URL + "/retrieve_obj", {
+          const response = await fetch(`${BASE_URL}/retrieve_obj`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -294,7 +293,6 @@ function Root() {
             const a = document.createElement("a");
             a.style.display = "none";
             a.href = url;
-            // Use the filename from the Content-Disposition header if available
             const contentDisposition = response.headers.get("Content-Disposition");
             const filenameMatch =
               contentDisposition && contentDisposition.match(/filename="?(.+)"?/i);
@@ -320,7 +318,6 @@ function Root() {
     const newZoom = event.viewState.zoom;
     setViewState(event.viewState);
 
-    // Toggle visibility based on zoom level
     if (newZoom < 16) {
       setIsLod2Visible(false);
     } else {
@@ -328,53 +325,45 @@ function Root() {
     }
   };
 
-  // Create ambient light
   const ambientLight = new AmbientLight({
     color: [240, 255, 255],
     intensity: 1.0
   });
 
-  // Create directional light
   const directionalLight1 = new DirectionalLight({
     color: [220, 255, 255],
     intensity: 0.6,
     direction: [-1, -3, -1]
   });
 
-  // Create directional light
   const directionalLight2 = new DirectionalLight({
     color: [255, 220, 255],
     intensity: 1,
     direction: [1, -3, 1]
   });
 
-  // Create lighting effect
   const lightingEffect = new LightingEffect({ ambientLight, directionalLight1, directionalLight2 });
 
-  // ─── M E M O I Z E   T I L E   L A Y E R ──────────────────────────────────
   const layers = useMemo(() => [
     new Tile3DLayer({
       id: "tile-3d-layer",
       data: TILESET_URL,
       visible: isLod2Visible,
       loadOptions: {
-        // FORWARD the options.signal (Deck.gl’s AbortSignal) into fetch.
-        // Do NOT create a new AbortController here!
         fetch: (url, options) => {
           return fetch(url, options);
         },
         tileset: {
-          maxRequests: 32, // ← allow up to 32 parallel tile requests
+          maxRequests: 32,
         }
       },
       _subLayerProps: {
         scenegraph: {
-          getColor: (d) => [255, 255, 255, 255], // Blue color for scenegraph models
+          getColor: () => [255, 255, 255, 255],
         }
       }
     }),
   ], [TILESET_URL, isLod2Visible]);
-  // ────────────────────────────────────────────────────────────────────────────
 
   const handleSearch = async (query: string) => {
     const response = await fetch(
@@ -385,9 +374,7 @@ function Root() {
   };
 
   const handleSelectResult = (result: any) => {
-    // Fly to the selected location
     const map = mapRef.current.getMap();
-
     map.flyTo({
       center: [parseFloat(result.lon), parseFloat(result.lat)],
       zoom: 14
@@ -399,7 +386,7 @@ function Root() {
       <Map
         initialViewState={viewState}
         mapStyle={MAP_STYLE}
-        onLoad={handleMapLoad} // Ensure map is passed here
+        onLoad={handleMapLoad}
         onMove={handleZoomChange}
         ref={mapRef}
         style={{ width: "100%", height: "100%" }}
@@ -416,39 +403,7 @@ function Root() {
             {selected.properties.name} ({selected.properties.abbrev})
           </Popup>
         )}
-        <DeckGLOverlay layers={layers}   //effects={[lightingEffect]} // Apply the custom lighting effect globally
-        />
-        {/* <DrawControl
-          ref={drawRef}
-          onCreate={onUpdate}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-        /> */}
-        {/* <div
-          style={{
-            position: 'absolute',
-            bottom: '240px', // Adjust as needed to ensure a 20px gap above Auswahl panel
-            left: '20px',
-            zIndex: 2000,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ pointerEvents: 'auto' }}>
-            <NavigationControl />
-          </div>
-        </div> */}
-        {/* <DrawControl
-          position="top-right"
-          displayControlsDefault={false}
-          controls={{
-            polygon: false,
-            trash: false
-          }}
-          defaultMode="draw_polygon"
-          onCreate={onUpdate}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-        /> */}
+        <DeckGLOverlay layers={layers} />
       </Map>
       <FloatingPanel
         onDrawPolygon={handleDrawPolygon}
@@ -458,7 +413,6 @@ function Root() {
         onSearch={handleSearch}
         onSelectResult={handleSelectResult}
       />
-
       <div className="top-bar-container">
         <div className="top-bar-section legals">
           <LegalDocuments />
@@ -467,15 +421,8 @@ function Root() {
           <Logo />
         </div>
       </div>
-
     </div>
   );
-}
-
-interface DrawControlProps {
-  onCreate: (e: any) => void;
-  onUpdate: (e: any) => void;
-  onDelete: (e: any) => void;
 }
  
 export default Root;
