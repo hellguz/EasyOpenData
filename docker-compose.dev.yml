@@ -37,7 +37,7 @@ services:
     ports:
       - "${DEV_BACKEND_PORT:-5400}:5400"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${DATABASE_USER:-postgres}:${DATABASE_DEV_PASSWORD:-barcelona_dev}@easyopen_postgis_dev:5432/${DATABASE_DEV_NAME:-easyopendata_database_dev}
+      DATABASE_URL: postgresql+asyncpg://${DATABASE_USER}:${DATABASE_PASSWORD}@easyopen_postgis_dev:5432/${DATABASE_NAME}
       STRIPE_SECRET_KEY: ${VITE_STRIPE_SECRET_KEY} # Should be a TEST key for dev from .env
       FRONTEND_URL: ${FRONTEND_DEV_URL:-http://localhost:${DEV_FRONTEND_PORT:-5173}}
       PYTHONUNBUFFERED: "1"
@@ -54,7 +54,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile # Original Dockerfile is for Vite dev server
-      # No build args needed here as Vite dev server uses runtime env vars
+    # No build args needed here as Vite dev server uses runtime env vars
     volumes:
       - ./frontend:/app # Mount for live code changes
       - /app/node_modules # Keep node_modules in container to avoid host conflicts

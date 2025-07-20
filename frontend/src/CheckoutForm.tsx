@@ -43,7 +43,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
         onClick={onFetchObjFile}
         className="btn btn-secondary btn mt-2"
       >
-        .obj Herunterladen
+       .obj Herunterladen
       </button>
       </>
     );
@@ -73,11 +73,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ price, onFetchObjFile }) =>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          amount: Math.round(price * 100),
-          customer: customerData
+          amount: price
         }),
       });
-
       if (!response.ok) throw new Error("Failed to create PaymentIntent.");
 
       const { clientSecret } = await response.json();
